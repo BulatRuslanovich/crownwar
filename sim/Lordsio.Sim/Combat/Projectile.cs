@@ -9,8 +9,9 @@ namespace Lordsio.Sim.Combat;
 /// </summary>
 public sealed class Projectile
 {
-    internal Projectile(int factionId, int damage, float speed, Vector2 from, Entity target)
+    internal Projectile(int sourceId, int factionId, int damage, float speed, Vector2 from, Entity target)
     {
+        SourceId = sourceId;
         FactionId = factionId;
         Damage = damage;
         Speed = speed;
@@ -19,6 +20,8 @@ public sealed class Projectile
         PreviousPosition = from;
     }
 
+    /// <summary>Id of the archer or tower that shot it (it may be gone by the time the arrow lands).</summary>
+    public int SourceId { get; }
     public int FactionId { get; }
     public int Damage { get; }
     public float Speed { get; }

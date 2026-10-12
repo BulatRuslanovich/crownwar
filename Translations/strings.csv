@@ -72,3 +72,4 @@ BUILDING_CASTLE,Castle,Замок
 BUILDING_MINE,Gold Mine,Шахта
 BUILDING_BARRACKS,Barracks,Казармы
 BUILDING_TOWER,Archer Tower,Башня лучников
+MSG_UNDER_ATTACK,You are under attack! (Space — go there),Вас атакуют! (Пробел — к месту боя)

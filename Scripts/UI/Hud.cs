@@ -42,6 +42,7 @@ public partial class Hud : CanvasLayer
     private Label _queue = null!;
     private ProgressBar _progress = null!;
     private Label _message = null!;
+    private AlertIndicator _alert = null!;
     private int? _panelBuildingId;
     private float _messageTimeLeft;
 
@@ -60,6 +61,8 @@ public partial class Hud : CanvasLayer
         _queue = GetNode<Label>("BuildingPanel/Rows/Queue");
         _progress = GetNode<ProgressBar>("BuildingPanel/Rows/Progress");
         _message = GetNode<Label>("Message");
+        _alert = GetNode<AlertIndicator>("AlertIndicator");
+        _alert.Initialize(match);
         _buildingPanel.Visible = false;
         _message.Visible = false;
         CreateBuildButtons(GetNode<HBoxContainer>("BuildBar/Rows/Buttons"));
@@ -139,6 +142,13 @@ public partial class Hud : CanvasLayer
                 ShowMessage(string.Format(Tr("MSG_FACTION_FELL"), Names.Faction(eliminated.FactionId)));
                 break;
         }
+    }
+
+    /// <summary>Warns that the player is under attack and points at the place.</summary>
+    public void ShowAlert(System.Numerics.Vector2 simPosition)
+    {
+        ShowMessage(Tr("MSG_UNDER_ATTACK"));
+        _alert.PointAt(simPosition);
     }
 
     private string BuildButtonText(BuildingType type)

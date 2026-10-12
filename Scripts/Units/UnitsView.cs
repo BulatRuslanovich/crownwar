@@ -54,6 +54,17 @@ public partial class UnitsView : Node2D
         QueueRedraw(); // route overlay follows the units every frame
     }
 
+    /// <summary>Strike and hit animations; the damage itself was already dealt by the simulation.</summary>
+    public void OnSimEvent(Sim.Core.SimEvent e)
+    {
+        if (e is not Sim.Core.AttackLanded hit)
+            return;
+        if (!hit.Ranged && _views.TryGetValue(hit.AttackerId, out var attacker))
+            attacker.Lunge(SimConvert.ToWorld(hit.Position) - attacker.Position);
+        if (_views.TryGetValue(hit.TargetId, out var target))
+            target.Flash();
+    }
+
     public override void _Draw()
     {
         float alpha = _match.InterpolationAlpha;

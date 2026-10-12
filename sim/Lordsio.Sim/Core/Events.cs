@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace Lordsio.Sim.Core;
 
 /// <summary>Something that happened during a tick, for the view (messages, sounds, effects) and bots.</summary>
@@ -40,13 +42,24 @@ public sealed record BuildingPlaced(int FactionId, int BuildingId) : SimEvent(Fa
 public sealed record BuildingCompleted(int FactionId, int BuildingId) : SimEvent(FactionId);
 
 /// <summary><see cref="SimEvent.FactionId"/> is the former owner.</summary>
-public sealed record BuildingDestroyed(int FactionId, int BuildingId, string BuildingTypeId, int KillerFactionId) : SimEvent(FactionId);
+public sealed record BuildingDestroyed(int FactionId, int BuildingId, string BuildingTypeId, int KillerFactionId, Vector2 Position, int Size)
+    : SimEvent(FactionId);
 
 /// <summary><see cref="SimEvent.FactionId"/> is the dead unit's faction; the killer may be -1 (unknown).</summary>
-public sealed record UnitDied(int FactionId, int UnitId, int KillerFactionId) : SimEvent(FactionId);
+public sealed record UnitDied(int FactionId, int UnitId, int KillerFactionId, Vector2 Position) : SimEvent(FactionId);
 
 /// <summary>The faction's capital fell: its army disbands and its buildings collapse.</summary>
 public sealed record FactionEliminated(int FactionId) : SimEvent(FactionId);
 
 /// <summary><see cref="SimEvent.FactionId"/> is the winner, or -1 if nobody survived.</summary>
 public sealed record MatchEnded(int FactionId) : SimEvent(FactionId);
+
+/// <summary>
+/// A hit was applied (melee blow or arrow impact). Purely informational, for sounds and effects:
+/// the damage is already done. <see cref="SimEvent.FactionId"/> is the attacker's faction.
+/// </summary>
+public sealed record AttackLanded(int FactionId, int AttackerId, int TargetId, int TargetFactionId, Vector2 Position, bool Ranged)
+    : SimEvent(FactionId);
+
+/// <summary>An archer or tower loosed an arrow from <paramref name="Position"/>.</summary>
+public sealed record ProjectileFired(int FactionId, Vector2 Position) : SimEvent(FactionId);

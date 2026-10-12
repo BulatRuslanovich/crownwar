@@ -68,6 +68,26 @@ public class CombatTests
     }
 
     [Test]
+    public void HitsAreReportedForSoundsAndEffects()
+    {
+        var sim = EmptySim();
+        var archer = sim.SpawnUnit("archer", 0, new Vector2(2.5f, 2.5f));
+        var soldier = sim.SpawnUnit("infantry", 0, new Vector2(8.5f, 6.5f));
+        var dummy = sim.SpawnUnit("dummy", 1, new Vector2(5.5f, 2.5f));
+        var other = sim.SpawnUnit("dummy", 1, new Vector2(9.1f, 6.5f));
+
+        for (int i = 0; i < 20; i++)
+            sim.Step();
+        var events = sim.TakeEvents();
+
+        Assert.That(events.OfType<ProjectileFired>().First().FactionId, Is.EqualTo(0));
+        var arrow = events.OfType<AttackLanded>().First(e => e.Ranged);
+        Assert.That((arrow.AttackerId, arrow.TargetId, arrow.TargetFactionId), Is.EqualTo((archer.Id, dummy.Id, 1)));
+        var blow = events.OfType<AttackLanded>().First(e => !e.Ranged);
+        Assert.That((blow.AttackerId, blow.TargetId), Is.EqualTo((soldier.Id, other.Id)));
+    }
+
+    [Test]
     public void ArrowFizzlesWhenTargetDiesFirst()
     {
         var sim = EmptySim();

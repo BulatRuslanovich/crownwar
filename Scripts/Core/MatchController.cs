@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using Godot;
+using Lordsio.Audio;
 using Lordsio.Interaction;
 using Lordsio.Sim.AI;
 using Lordsio.Sim.Core;
@@ -30,6 +31,11 @@ public partial class MatchController : Node2D
     private Hud _hud = null!;
     private EndScreen _endScreen = null!;
     private PauseMenu _pauseMenu = null!;
+    private UnitsView _unitsView = null!;
+    private EffectsView _groundEffects = null!;
+    private EffectsView _airEffects = null!;
+    private MatchSounds _sounds = null!;
+    private readonly AttackAlerts _alerts = new(PlayerFactionId);
 
     private readonly List<BotBrain> _bots = new();
 
@@ -75,8 +81,15 @@ public partial class MatchController : Node2D
         GetNode<MapView>("MapView").Build(Sim.Map);
         GetNode<DepositsView>("DepositsView").Initialize(this);
         GetNode<BuildingsView>("Actors/BuildingsView").Initialize(this);
-        GetNode<UnitsView>("Actors/UnitsView").Initialize(this);
+        _unitsView = GetNode<UnitsView>("Actors/UnitsView");
+        _unitsView.Initialize(this);
         GetNode<ProjectilesView>("ProjectilesView").Initialize(this);
+        _groundEffects = GetNode<EffectsView>("GroundEffects");
+        _groundEffects.Initialize(this);
+        _airEffects = GetNode<EffectsView>("AirEffects");
+        _airEffects.Initialize(this);
+        _sounds = GetNode<MatchSounds>("Sounds");
+        _sounds.Initialize(this);
         GetNode<SelectionController>("SelectionController").Initialize(this);
         var placement = GetNode<BuildPlacement>("BuildPlacement");
         placement.Initialize(this);
@@ -87,6 +100,24 @@ public partial class MatchController : Node2D
         _endScreen.Initialize(this);
         _pauseMenu = GetNode<PauseMenu>("PauseMenu");
         _pauseMenu.Initialize(this, placement);
+
+        _alerts.Alerted += position =>
+        {
+            _hud.ShowAlert(position);
+            _airEffects.Ping(position);
+            _sounds.PlayAlert();
+        };
+    }
+
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        // Space jumps the camera to the latest attack on the player.
+        if (@event is InputEventKey { PhysicalKeycode: Key.Space, Pressed: true, Echo: false }
+            && _alerts.LastPosition is { } position)
+        {
+            Camera.CenterOn(SimConvert.ToWorld(position));
+            GetViewport().SetInputAsHandled();
+        }
     }
 
     public bool IsPaused => GetTree().Paused;
@@ -140,6 +171,11 @@ public partial class MatchController : Node2D
         {
             Stats.OnSimEvent(e);
             _hud.OnSimEvent(e);
+            _unitsView.OnSimEvent(e);
+            _groundEffects.OnSimEvent(e);
+            _airEffects.OnSimEvent(e);
+            _sounds.OnSimEvent(e);
+            _alerts.OnSimEvent(e, Sim.Tick);
             _endScreen.OnSimEvent(e);
         }
     }

@@ -45,7 +45,7 @@ public sealed partial class Simulation
         Map = map.Grid;
         Rules = rules;
         _pathfinder = new Pathfinder(Map);
-        _combat = new CombatSystem(Map, _pathfinder, _projectiles);
+        _combat = new CombatSystem(Map, _pathfinder, _projectiles, e => _events.Add(e));
 
         foreach (var deposit in map.Deposits)
             _deposits.Add(new GoldDeposit(_deposits.Count + 1, deposit.Anchor, deposit.Yield));
@@ -334,7 +334,7 @@ public sealed partial class Simulation
                 continue;
             _units.RemoveAt(i);
             _entitiesById.Remove(unit.Id);
-            _events.Add(new UnitDied(unit.FactionId, unit.Id, unit.KilledByFactionId));
+            _events.Add(new UnitDied(unit.FactionId, unit.Id, unit.KilledByFactionId, unit.Position));
         }
     }
 }

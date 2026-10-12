@@ -13,6 +13,8 @@
 [ext_resource type="Script" path="res://Scripts/Interaction/BuildPlacement.cs" id="11_placement"]
 [ext_resource type="PackedScene" path="res://Scenes/UI/EndScreen.tscn" id="12_end"]
 [ext_resource type="PackedScene" path="res://Scenes/UI/PauseMenu.tscn" id="13_pause"]
+[ext_resource type="Script" path="res://Scripts/World/EffectsView.cs" id="14_effects"]
+[ext_resource type="Script" path="res://Scripts/Audio/MatchSounds.cs" id="15_sounds"]
 
 [node name="Match" type="Node2D"]
 script = ExtResource("1_match")
@@ -22,6 +24,10 @@ script = ExtResource("2_map")
 
 [node name="DepositsView" type="Node2D" parent="."]
 script = ExtResource("9_deposits")
+
+[node name="GroundEffects" type="Node2D" parent="."]
+script = ExtResource("14_effects")
+Ground = true
 
 [node name="Actors" type="Node2D" parent="."]
 y_sort_enabled = true
@@ -36,6 +42,12 @@ script = ExtResource("3_units")
 
 [node name="ProjectilesView" type="Node2D" parent="."]
 script = ExtResource("10_projectiles")
+
+[node name="AirEffects" type="Node2D" parent="."]
+script = ExtResource("14_effects")
+
+[node name="Sounds" type="Node" parent="."]
+script = ExtResource("15_sounds")
 
 [node name="SelectionController" type="Node2D" parent="."]
 script = ExtResource("4_select")

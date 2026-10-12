@@ -20,10 +20,21 @@ public partial class UnitView : Node2D
     private static readonly Color Hood = new("4d6b34");
     private static readonly Color BarBack = new(0f, 0f, 0f, 0.7f);
 
+    private const float LungeDuration = 0.18f;
+    private const float LungeDistance = 3f;
+    private const float FlashDuration = 0.1f;
+    private const float StepsPerSecond = 6f;
+
     private Unit _unit = null!;
     private Color _factionColor;
     private bool _selected;
     private int _drawnHealth;
+    private Vector2 _lungeDirection;
+    private float _lungeTime;
+    private float _flashTime;
+    private float _walkTime;
+    private Vector2 _bodyOffset;
+    private int _liftLeft, _liftRight;
 
     public void Initialize(Unit unit)
     {
@@ -31,6 +42,16 @@ public partial class UnitView : Node2D
         _factionColor = FactionColors.Get(unit.FactionId);
         _drawnHealth = unit.Health;
     }
+
+    /// <summary>Plays the strike animation towards <paramref name="worldDirection"/> (visual only).</summary>
+    public void Lunge(Vector2 worldDirection)
+    {
+        _lungeDirection = worldDirection.Normalized();
+        _lungeTime = LungeDuration;
+    }
+
+    /// <summary>Briefly flashes white after being hit (visual only).</summary>
+    public void Flash() => _flashTime = FlashDuration;
 
     public bool Selected
     {
@@ -45,10 +66,33 @@ public partial class UnitView : Node2D
 
     public override void _Process(double delta)
     {
-        if (_unit.Health == _drawnHealth)
-            return;
-        _drawnHealth = _unit.Health;
-        QueueRedraw();
+        float dt = (float)delta;
+        bool animating = _lungeTime > 0f || _flashTime > 0f || _unit.State == UnitState.Moving;
+
+        _lungeTime = Mathf.Max(0f, _lungeTime - dt);
+        _flashTime = Mathf.Max(0f, _flashTime - dt);
+        Modulate = _flashTime > 0f ? new Color(2.2f, 2.2f, 2.2f) : Colors.White;
+
+        // Walking: alternate the legs; striking: jab towards the target.
+        if (_unit.State == UnitState.Moving)
+        {
+            _walkTime += dt * StepsPerSecond;
+            int phase = (int)(_walkTime * 2f) % 4;
+            _liftLeft = phase == 1 ? 1 : 0;
+            _liftRight = phase == 3 ? 1 : 0;
+        }
+        else
+        {
+            _liftLeft = _liftRight = 0;
+        }
+        float lunge = _lungeTime > 0f ? Mathf.Sin(Mathf.Pi * (1f - _lungeTime / LungeDuration)) : 0f;
+        _bodyOffset = (_lungeDirection * LungeDistance * lunge).Round();
+
+        if (animating || _unit.Health != _drawnHealth)
+        {
+            _drawnHealth = _unit.Health;
+            QueueRedraw();
+        }
     }
 
     public override void _Draw()
@@ -61,7 +105,7 @@ public partial class UnitView : Node2D
         DrawCircle(Vector2.Zero, ring - 2f, Shadow);
         if (_selected)
             DrawArc(Vector2.Zero, ring, 0f, Mathf.Tau, 24, SelectionColor, 1f);
-        DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+        DrawSetTransform(_bodyOffset, 0f, Vector2.One);
 
         switch (_unit.Type.Id)
         {
@@ -69,6 +113,7 @@ public partial class UnitView : Node2D
             case "heavy": DrawHeavy(); break;
             default: DrawInfantry(); break;
         }
+        DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
 
         if (_unit.Health < _unit.Type.MaxHealth || _selected)
             DrawHealthBar(heavy ? -19 : -17);
@@ -76,8 +121,8 @@ public partial class UnitView : Node2D
 
     private void DrawInfantry()
     {
-        DrawRect(new Rect2(-3, -3, 2, 3), Legs);
-        DrawRect(new Rect2(1, -3, 2, 3), Legs);
+        DrawRect(new Rect2(-3, -3 - _liftLeft, 2, 3), Legs);
+        DrawRect(new Rect2(1, -3 - _liftRight, 2, 3), Legs);
         DrawRect(new Rect2(-3, -8, 6, 5), _factionColor);
         DrawRect(new Rect2(-2, -12, 4, 4), Skin);
         DrawRect(new Rect2(-2, -12, 4, 1), Steel);
@@ -87,8 +132,8 @@ public partial class UnitView : Node2D
 
     private void DrawArcher()
     {
-        DrawRect(new Rect2(-3, -3, 2, 3), Legs);
-        DrawRect(new Rect2(1, -3, 2, 3), Legs);
+        DrawRect(new Rect2(-3, -3 - _liftLeft, 2, 3), Legs);
+        DrawRect(new Rect2(1, -3 - _liftRight, 2, 3), Legs);
         DrawRect(new Rect2(-3, -8, 6, 5), _factionColor);
         DrawRect(new Rect2(-2, -12, 4, 4), Skin);
         DrawRect(new Rect2(-3, -13, 6, 2), Hood);
@@ -102,8 +147,8 @@ public partial class UnitView : Node2D
 
     private void DrawHeavy()
     {
-        DrawRect(new Rect2(-4, -3, 3, 3), Legs);
-        DrawRect(new Rect2(1, -3, 3, 3), Legs);
+        DrawRect(new Rect2(-4, -3 - _liftLeft, 3, 3), Legs);
+        DrawRect(new Rect2(1, -3 - _liftRight, 3, 3), Legs);
         DrawRect(new Rect2(-4, -10, 8, 7), SteelDark);
         DrawRect(new Rect2(-1, -10, 2, 7), _factionColor);
         DrawRect(new Rect2(-3, -15, 6, 5), Steel);

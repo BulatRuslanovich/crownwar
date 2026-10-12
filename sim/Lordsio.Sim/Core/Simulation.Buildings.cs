@@ -283,7 +283,8 @@ public sealed partial class Simulation
             if (building.IsAlive)
                 continue;
             RemoveBuilding(building);
-            _events.Add(new BuildingDestroyed(building.FactionId, building.Id, building.Type.Id, building.KilledByFactionId));
+            _events.Add(new BuildingDestroyed(building.FactionId, building.Id, building.Type.Id, building.KilledByFactionId,
+                building.Position, building.Type.Size));
         }
     }
 

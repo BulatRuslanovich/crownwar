@@ -20,6 +20,7 @@ namespace Lordsio.Core;
 ///   --demo-build             order a barracks and a tower next to the player's castle
 ///   --demo-recruit=&lt;n&gt;       select the player's castle and order n recruits there
 ///   --demo-move=&lt;x&gt;,&lt;y&gt;      select all player units and order them to advance to tile (x, y)
+///   --demo-camera=&lt;x&gt;,&lt;y&gt;    center the camera on tile (x, y)
 ///   --pause                  open the pause menu right away
 ///   --debug-hud              show the developer overlay (F3 toggles it in game)
 ///   --demo-end=victory|defeat show the end screen (view only, the match goes on)
@@ -44,6 +45,11 @@ public static class DevTools
             DemoBuild(match);
         if (Arg(args, "--demo-recruit") is { } recruit)
             DemoRecruit(match, int.Parse(recruit, CultureInfo.InvariantCulture));
+        if (Arg(args, "--demo-camera") is { } camera)
+        {
+            var xy = camera.Split(',');
+            match.Camera.CenterOn(SimConvert.ToWorld(new SimVector2(float.Parse(xy[0], CultureInfo.InvariantCulture), float.Parse(xy[1], CultureInfo.InvariantCulture))));
+        }
         if (Arg(args, "--demo-move") is { } move)
             DemoMove(match, move);
         if (args.Contains("--pause"))

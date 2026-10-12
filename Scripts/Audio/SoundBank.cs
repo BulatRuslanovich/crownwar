@@ -1,0 +1,143 @@
+using System;
+using System.Collections.Generic;
+using Godot;
+
+namespace Lordsio.Audio;
+
+public enum Sound
+{
+    SwordHit,
+    ArrowShot,
+    ArrowHit,
+    BuildingHit,
+    UnitDeath,
+    BuildingDestroyed,
+    BuildingPlaced,
+    BuildingCompleted,
+    UnitReady,
+    Alert,
+    Victory,
+    Defeat,
+}
+
+/// <summary>
+/// Placeholder sound effects synthesised in code (sines, noise and envelopes) at startup, so the game
+/// needs no audio assets yet. Each sound can later be replaced by a recorded file without touching callers.
+/// </summary>
+public static class SoundBank
+{
+    private const int Rate = 22050;
+
+    private static Dictionary<Sound, AudioStreamWav>? _cache;
+
+    public static AudioStreamWav Get(Sound sound)
+    {
+        _cache ??= Build();
+        return _cache[sound];
+    }
+
+    /// <summary>Dev-only: writes every sound to <paramref name="directory"/> as a .wav file for listening.</summary>
+    public static void ExportAll(string directory)
+    {
+        foreach (Sound sound in Enum.GetValues<Sound>())
+        {
+            var error = Get(sound).SaveToWav(System.IO.Path.Combine(directory, sound + ".wav"));
+            GD.Print($"{sound}: {error}");
+        }
+    }
+
+    private static Dictionary<Sound, AudioStreamWav> Build() => new()
+    {
+        [Sound.SwordHit] = Make(0.14f, (t, n) =>
+            (Sine(1850, t) * 0.5f + Sine(2630, t) * 0.35f + Sine(3710, t) * 0.25f) * Decay(t, 0.035f)
+            + n * Decay(t, 0.01f) * 0.6f),
+        [Sound.ArrowShot] = Make(0.2f, Whoosh),
+        [Sound.ArrowHit] = Make(0.09f, (t, n) => Sine(170 - 400 * t, t) * Decay(t, 0.03f) + n * Decay(t, 0.008f) * 0.4f),
+        [Sound.BuildingHit] = Make(0.18f, (t, n) => Sine(95, t) * Decay(t, 0.05f) * 0.9f + LowNoise(n) * Decay(t, 0.03f) * 0.6f),
+        [Sound.UnitDeath] = Make(0.38f, (t, n) =>
+            Soft(Square(300 - 420 * t, t)) * Decay(t, 0.12f) * 0.45f + n * Decay(t, 0.05f) * 0.25f),
+        [Sound.BuildingDestroyed] = Make(1.3f, (t, n) =>
+            LowNoise(n) * Decay(t, 0.45f) * Attack(t, 0.02f) + Sine(48, t) * Decay(t, 0.5f) * 0.7f),
+        [Sound.BuildingPlaced] = Make(0.16f, (t, n) => Sine(220, t) * Decay(t, 0.04f) + n * Decay(t, 0.01f) * 0.3f),
+        [Sound.BuildingCompleted] = Make(0.5f, (t, _) => Notes(t, 0.12f, 880, 1320) * 0.5f),
+        [Sound.UnitReady] = Make(0.32f, (t, _) =>
+            Soft(Saw(440 * (1f + 0.01f * MathF.Sin(t * 40f)), t)) * Attack(t, 0.03f) * Decay(t, 0.2f) * 0.4f),
+        [Sound.Alert] = Make(0.7f, (t, _) =>
+            Soft(Square((int)(t / 0.15f) % 2 == 0 ? 660 : 440, t)) * 0.35f * (1f - t / 0.7f)),
+        [Sound.Victory] = Make(1.4f, (t, _) => Notes(t, 0.18f, 523, 659, 784, 1046) * 0.5f),
+        [Sound.Defeat] = Make(1.6f, (t, _) => Notes(t, 0.3f, 392, 349, 311, 262) * 0.5f),
+    };
+
+    /// <summary>Renders <paramref name="seconds"/> of audio from a sample function f(time, white noise).</summary>
+    private static AudioStreamWav Make(float seconds, Func<float, float, float> sample)
+    {
+        const float TargetPeak = 0.8f;
+        int count = (int)(seconds * Rate);
+        var samples = new float[count];
+        _lowpass = 0f; // filter state of the previous sound must not leak into this one
+        var rng = new Random(count);
+        float fade = 0.005f; // short fade-out avoids a click at the end
+        float peak = 1e-6f;
+        for (int i = 0; i < count; i++)
+        {
+            float t = (float)i / Rate;
+            float noise = (float)(rng.NextDouble() * 2 - 1);
+            samples[i] = sample(t, noise) * MathF.Min(1f, (seconds - t) / fade);
+            peak = MathF.Max(peak, MathF.Abs(samples[i]));
+        }
+
+        // Normalise every sound to the same peak: no clipping, and loudness is set where it is played.
+        float gain = TargetPeak / peak;
+        var bytes = new byte[count * 2];
+        for (int i = 0; i < count; i++)
+        {
+            short s = (short)(samples[i] * gain * short.MaxValue);
+            bytes[i * 2] = (byte)(s & 0xFF);
+            bytes[i * 2 + 1] = (byte)((s >> 8) & 0xFF);
+        }
+        return new AudioStreamWav
+        {
+            Data = bytes,
+            Format = AudioStreamWav.FormatEnum.Format16Bits,
+            MixRate = Rate,
+            Stereo = false,
+        };
+    }
+
+    private static float _lowpass;
+
+    private static float Whoosh(float t, float noise)
+    {
+        // Noise through a filter that opens and closes: a short "fwip".
+        float open = MathF.Sin(MathF.PI * MathF.Min(1f, t / 0.18f));
+        _lowpass += (noise - _lowpass) * (0.05f + 0.5f * open);
+        return _lowpass * open * 0.8f;
+    }
+
+    private static float LowNoise(float noise)
+    {
+        _lowpass += (noise - _lowpass) * 0.08f;
+        return _lowpass * 3f;
+    }
+
+    /// <summary>A melody of decaying sine notes, <paramref name="step"/> seconds apart.</summary>
+    private static float Notes(float t, float step, params float[] frequencies)
+    {
+        float v = 0f;
+        for (int i = 0; i < frequencies.Length; i++)
+        {
+            float local = t - i * step;
+            if (local < 0f)
+                break;
+            v += (Sine(frequencies[i], local) + 0.3f * Sine(frequencies[i] * 2, local)) * Decay(local, 0.25f) * Attack(local, 0.01f);
+        }
+        return v;
+    }
+
+    private static float Sine(float hz, float t) => MathF.Sin(MathF.Tau * hz * t);
+    private static float Square(float hz, float t) => Sine(hz, t) >= 0f ? 1f : -1f;
+    private static float Saw(float hz, float t) => 2f * (hz * t - MathF.Floor(hz * t + 0.5f));
+    private static float Soft(float v) => MathF.Tanh(v * 0.8f);
+    private static float Decay(float t, float tau) => MathF.Exp(-t / tau);
+    private static float Attack(float t, float time) => MathF.Min(1f, t / time);
+}

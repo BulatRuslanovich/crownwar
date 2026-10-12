@@ -24,6 +24,12 @@ public partial class Main : Node
     public override void _Ready()
     {
         var args = OS.GetCmdlineUserArgs();
+        if (DevTools.Arg(args, "--export-sounds") is { } soundDirectory)
+        {
+            Audio.SoundBank.ExportAll(soundDirectory);
+            GetTree().Quit();
+            return;
+        }
         if (DevTools.WantsDirectStart(args))
             DevTools.Apply(StartMatch(MatchConfig.Default with { Seed = DevTools.Seed(args) }), args);
         else

@@ -29,12 +29,14 @@ internal sealed class CombatSystem
     private readonly TileGrid _map;
     private readonly Pathfinder _pathfinder;
     private readonly List<Projectile> _projectiles;
+    private readonly Action<SimEvent> _emit;
 
-    public CombatSystem(TileGrid map, Pathfinder pathfinder, List<Projectile> projectiles)
+    public CombatSystem(TileGrid map, Pathfinder pathfinder, List<Projectile> projectiles, Action<SimEvent> emit)
     {
         _map = map;
         _pathfinder = pathfinder;
         _projectiles = projectiles;
+        _emit = emit;
     }
 
     public static bool InAttackRange(Unit attacker, Entity target) =>
@@ -122,7 +124,7 @@ internal sealed class CombatSystem
             return;
 
         tower.AttackCooldownTicks = CooldownTicks(attack.Cooldown);
-        _projectiles.Add(new Projectile(tower.FactionId, attack.Damage, attack.ProjectileSpeed, tower.Position, target));
+        Fire(tower.Id, tower.FactionId, attack.Damage, attack.ProjectileSpeed, tower.Position, target);
     }
 
     public void AdvanceProjectiles(float dt)
@@ -141,6 +143,7 @@ internal sealed class CombatSystem
             if (p.Target.SurfaceDistance(p.Position) <= step)
             {
                 ApplyDamage(p.Target, p.Damage, ranged: true, p.FactionId);
+                _emit(new AttackLanded(p.FactionId, p.SourceId, p.Target.Id, p.Target.FactionId, p.Position, Ranged: true));
                 _projectiles.RemoveAt(i);
                 continue;
             }
@@ -213,9 +216,20 @@ internal sealed class CombatSystem
     {
         attacker.AttackCooldownTicks = CooldownTicks(attacker.Type.AttackCooldown);
         if (attacker.Type.IsRanged)
-            _projectiles.Add(new Projectile(attacker.FactionId, attacker.Type.Damage, attacker.Type.ProjectileSpeed, attacker.Position, target));
+        {
+            Fire(attacker.Id, attacker.FactionId, attacker.Type.Damage, attacker.Type.ProjectileSpeed, attacker.Position, target);
+        }
         else
+        {
             ApplyDamage(target, attacker.Type.Damage, ranged: false, attacker.FactionId);
+            _emit(new AttackLanded(attacker.FactionId, attacker.Id, target.Id, target.FactionId, target.Position, Ranged: false));
+        }
+    }
+
+    private void Fire(int sourceId, int factionId, int damage, float speed, Vector2 from, Entity target)
+    {
+        _projectiles.Add(new Projectile(sourceId, factionId, damage, speed, from, target));
+        _emit(new ProjectileFired(factionId, from));
     }
 
     private static int CooldownTicks(float seconds) => Math.Max(1, (int)MathF.Round(seconds * Simulation.TicksPerSecond));
