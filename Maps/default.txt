@@ -67,5 +67,5 @@
 ...............................................~~~..............................................
 
 [objects]
-# unit <typeId> <faction> <x> <y>
-unit infantry 0 9 15
+# unit <typeId> <faction> <x> <y> [count]
+unit infantry 0 12 18 30

@@ -151,6 +151,54 @@ public sealed class TileGrid
         return IsSegmentClear(from + side, to + side) && IsSegmentClear(from - side, to - side);
     }
 
+    /// <summary>True when a circle of <paramref name="radius"/> (&lt; 1) at <paramref name="p"/> touches no blocked cell.</summary>
+    public bool HasClearance(Vector2 p, float radius)
+    {
+        var center = Cell.FromPosition(p);
+        if (!IsWalkable(center))
+            return false;
+        for (int y = center.Y - 1; y <= center.Y + 1; y++)
+        {
+            for (int x = center.X - 1; x <= center.X + 1; x++)
+            {
+                if (!IsWalkable(x, y) && DistanceSqToCell(p, x, y) < radius * radius)
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Moves a circle centered in a walkable cell out of the neighbouring blocked cells (and the map edge),
+    /// so bodies slide along walls instead of overlapping them. A center inside a blocked cell is returned unchanged.
+    /// </summary>
+    public Vector2 PushOutOfWalls(Vector2 p, float radius)
+    {
+        var center = Cell.FromPosition(p);
+        if (!IsWalkable(center))
+            return p;
+        for (int y = center.Y - 1; y <= center.Y + 1; y++)
+        {
+            for (int x = center.X - 1; x <= center.X + 1; x++)
+            {
+                if (IsWalkable(x, y))
+                    continue;
+                var closest = new Vector2(Math.Clamp(p.X, x, x + 1), Math.Clamp(p.Y, y, y + 1));
+                Vector2 away = p - closest;
+                float dist = away.Length();
+                if (dist > 1e-6f && dist < radius)
+                    p += away / dist * (radius - dist);
+            }
+        }
+        return p;
+    }
+
+    private static float DistanceSqToCell(Vector2 p, int x, int y)
+    {
+        var closest = new Vector2(Math.Clamp(p.X, x, x + 1), Math.Clamp(p.Y, y, y + 1));
+        return Vector2.DistanceSquared(p, closest);
+    }
+
     internal int Index(int x, int y) => y * Width + x;
 
     private void LabelComponents()

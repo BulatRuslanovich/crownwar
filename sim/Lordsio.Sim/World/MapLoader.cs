@@ -2,7 +2,8 @@ using System.Globalization;
 
 namespace Lordsio.Sim.World;
 
-public sealed record UnitSpawn(string TypeId, int FactionId, Cell Cell);
+/// <summary><paramref name="Count"/> units of one type, spread in formation around <paramref name="Cell"/>.</summary>
+public sealed record UnitSpawn(string TypeId, int FactionId, Cell Cell, int Count = 1);
 
 public sealed record MapDefinition(TileGrid Grid, IReadOnlyList<UnitSpawn> UnitSpawns);
 
@@ -13,7 +14,7 @@ public sealed record MapDefinition(TileGrid Grid, IReadOnlyList<UnitSpawn> UnitS
 /// [tiles]
 /// ..ff~~^^==        one character per tile, all rows the same length
 /// [objects]
-/// unit &lt;typeId&gt; &lt;faction&gt; &lt;x&gt; &lt;y&gt;
+/// unit &lt;typeId&gt; &lt;faction&gt; &lt;x&gt; &lt;y&gt; [count]
 /// </code>
 /// </summary>
 public static class MapLoader
@@ -86,10 +87,13 @@ public static class MapLoader
         switch (parts[0])
         {
             case "unit":
-                if (parts.Length != 5)
-                    throw Error(lineNo, "expected: unit <typeId> <faction> <x> <y>");
+                if (parts.Length is not (5 or 6))
+                    throw Error(lineNo, "expected: unit <typeId> <faction> <x> <y> [count]");
+                int count = parts.Length == 6 ? ParseInt(parts[5], lineNo) : 1;
+                if (count < 1)
+                    throw Error(lineNo, "unit count must be at least 1");
                 return new UnitSpawn(parts[1], ParseInt(parts[2], lineNo),
-                    new Cell(ParseInt(parts[3], lineNo), ParseInt(parts[4], lineNo)));
+                    new Cell(ParseInt(parts[3], lineNo), ParseInt(parts[4], lineNo)), count);
             default:
                 throw Error(lineNo, $"unknown object '{parts[0]}'");
         }

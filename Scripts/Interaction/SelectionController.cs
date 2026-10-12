@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Lordsio.Core;
@@ -7,20 +9,30 @@ using Lordsio.Sim.Units;
 namespace Lordsio.Interaction;
 
 /// <summary>
-/// Turns mouse input into selection changes and simulation commands:
-/// left click selects a unit (or clears the selection), right click orders the selection to move.
+/// Turns mouse and keyboard input into selection changes and simulation commands.
+/// LMB click / drag: select a unit / box-select (Shift adds, Shift+click toggles);
+/// double click: all units of that type on screen; Ctrl+A: all own units; RMB: move order.
 /// </summary>
 public partial class SelectionController : Node2D
 {
     /// <summary>How close (in tiles) a click must be to a unit's feet to pick it.</summary>
     private const float PickRadius = 0.6f;
+    /// <summary>Screen pixels the mouse must travel before a click becomes a box selection.</summary>
+    private const float DragThreshold = 5f;
     private const float MarkerDuration = 0.45f;
 
     private static readonly Color MarkerColor = new("7cff6b");
+    private static readonly Color BoxFill = new(0.48f, 1f, 0.42f, 0.12f);
+    private static readonly Color BoxOutline = new(0.48f, 1f, 0.42f, 0.9f);
 
     private MatchController _match = null!;
     private Vector2 _markerPosition;
     private float _markerTimeLeft;
+
+    private bool _leftDown;
+    private bool _boxActive;
+    private Vector2 _pressScreen;
+    private Vector2 _pressWorld;
 
     public void Initialize(MatchController match)
     {
@@ -29,33 +41,103 @@ public partial class SelectionController : Node2D
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        if (@event is not InputEventMouseButton { Pressed: true } click)
-            return;
-
-        switch (click.ButtonIndex)
+        switch (@event)
         {
-            case MouseButton.Left:
-                var unit = PickUnit(GetGlobalMousePosition());
-                if (unit != null)
-                    _match.Selection.Select(unit.Id);
-                else
-                    _match.Selection.Clear();
+            case InputEventMouseButton { ButtonIndex: MouseButton.Left } left:
+                OnLeftButton(left);
                 GetViewport().SetInputAsHandled();
                 break;
 
-            case MouseButton.Right when _match.Selection.Count > 0:
-                Vector2 world = GetGlobalMousePosition();
-                _match.Sim.Issue(new MoveCommand(
-                    MatchController.PlayerFactionId, _match.Selection.Ids.ToArray(), SimConvert.ToSim(world)));
-                _markerPosition = world;
-                _markerTimeLeft = MarkerDuration;
+            case InputEventMouseMotion motion when _leftDown:
+                if (!_boxActive && motion.Position.DistanceTo(_pressScreen) > DragThreshold)
+                    _boxActive = true;
+                if (_boxActive)
+                    QueueRedraw();
+                break;
+
+            case InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } when _match.Selection.Count > 0:
+                IssueMove(GetGlobalMousePosition());
+                GetViewport().SetInputAsHandled();
+                break;
+
+            case InputEventKey { Pressed: true, Echo: false, PhysicalKeycode: Key.A, CtrlPressed: true }:
+                _match.Selection.Select(OwnUnits().Select(u => u.Id), additive: false);
                 GetViewport().SetInputAsHandled();
                 break;
         }
     }
 
+    private void OnLeftButton(InputEventMouseButton e)
+    {
+        bool additive = e.ShiftPressed;
+        if (e.Pressed)
+        {
+            if (e.DoubleClick)
+            {
+                SelectSameTypeOnScreen(additive);
+                _leftDown = false;
+                return;
+            }
+            _leftDown = true;
+            _boxActive = false;
+            _pressScreen = e.Position;
+            _pressWorld = GetGlobalMousePosition();
+            return;
+        }
+
+        if (!_leftDown)
+            return; // release of a double click, already handled
+        _leftDown = false;
+
+        if (_boxActive)
+        {
+            _boxActive = false;
+            QueueRedraw();
+            var box = new Rect2(_pressWorld, Vector2.Zero).Expand(GetGlobalMousePosition());
+            _match.Selection.Select(OwnUnits().Where(u => box.HasPoint(SimConvert.ToWorld(u.Position))).Select(u => u.Id), additive);
+            return;
+        }
+
+        var unit = PickUnit(GetGlobalMousePosition());
+        if (unit == null)
+        {
+            if (!additive)
+                _match.Selection.Clear();
+        }
+        else if (additive)
+        {
+            _match.Selection.Toggle(unit.Id);
+        }
+        else
+        {
+            _match.Selection.Select(unit.Id);
+        }
+    }
+
+    private void SelectSameTypeOnScreen(bool additive)
+    {
+        var clicked = PickUnit(GetGlobalMousePosition());
+        if (clicked == null)
+            return;
+        var visible = VisibleWorldRect();
+        _match.Selection.Select(OwnUnits()
+            .Where(u => u.Type == clicked.Type && visible.HasPoint(SimConvert.ToWorld(u.Position)))
+            .Select(u => u.Id), additive);
+    }
+
+    private void IssueMove(Vector2 world)
+    {
+        _match.Sim.Issue(new MoveCommand(
+            MatchController.PlayerFactionId, _match.Selection.Ids.ToArray(), SimConvert.ToSim(world)));
+        _markerPosition = world;
+        _markerTimeLeft = MarkerDuration;
+    }
+
     public override void _Process(double delta)
     {
+        // The box is anchored in the world, so it must follow the camera even without mouse motion.
+        if (_boxActive)
+            QueueRedraw();
         if (_markerTimeLeft <= 0f)
             return;
         _markerTimeLeft -= (float)delta;
@@ -64,12 +146,30 @@ public partial class SelectionController : Node2D
 
     public override void _Draw()
     {
-        if (_markerTimeLeft <= 0f)
-            return;
-        float t = _markerTimeLeft / MarkerDuration;
-        DrawSetTransform(_markerPosition, 0f, new Vector2(1f, 0.6f));
-        DrawArc(Vector2.Zero, 3f + 6f * t, 0f, Mathf.Tau, 20, MarkerColor with { A = t }, 1f);
-        DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+        if (_boxActive)
+        {
+            var box = new Rect2(_pressWorld, Vector2.Zero).Expand(GetGlobalMousePosition());
+            DrawRect(box, BoxFill);
+            // Width 1 / zoom keeps the outline one screen pixel thick at every zoom level.
+            DrawRect(box, BoxOutline, filled: false, width: 1f / _match.Camera.ZoomLevel);
+        }
+
+        if (_markerTimeLeft > 0f)
+        {
+            float t = _markerTimeLeft / MarkerDuration;
+            DrawSetTransform(_markerPosition, 0f, new Vector2(1f, 0.6f));
+            DrawArc(Vector2.Zero, 3f + 6f * t, 0f, Mathf.Tau, 20, MarkerColor with { A = t }, 1f);
+            DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+        }
+    }
+
+    private IEnumerable<Unit> OwnUnits() =>
+        _match.Sim.Units.Where(u => u.FactionId == MatchController.PlayerFactionId);
+
+    private Rect2 VisibleWorldRect()
+    {
+        var inverse = GetCanvasTransform().AffineInverse();
+        return new Rect2(inverse * Vector2.Zero, Vector2.Zero).Expand(inverse * GetViewportRect().Size);
     }
 
     private Unit? PickUnit(Vector2 worldPoint)
@@ -77,11 +177,12 @@ public partial class SelectionController : Node2D
         var point = SimConvert.ToSim(worldPoint);
         Unit? best = null;
         float bestDistSq = PickRadius * PickRadius;
-        foreach (var unit in _match.Sim.Units)
+        foreach (var unit in OwnUnits())
         {
-            if (unit.FactionId != MatchController.PlayerFactionId)
-                continue;
-            float distSq = System.Numerics.Vector2.DistanceSquared(unit.Position, point);
+            // Units are drawn upwards from their feet, so aim slightly above the position too.
+            float distSq = MathF.Min(
+                System.Numerics.Vector2.DistanceSquared(unit.Position, point),
+                System.Numerics.Vector2.DistanceSquared(unit.Position - new System.Numerics.Vector2(0f, 0.4f), point));
             if (distSq <= bestDistSq)
             {
                 bestDistSq = distSq;

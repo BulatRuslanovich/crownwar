@@ -59,8 +59,11 @@ public partial class CameraController : Camera2D
 
     public override void _Process(double delta)
     {
-        Vector2 dir = Godot.Input.GetVector(
-            InputActions.CameraLeft, InputActions.CameraRight, InputActions.CameraUp, InputActions.CameraDown);
+        // Ctrl+key combinations are hotkeys (Ctrl+A selects all), not camera movement.
+        Vector2 dir = Godot.Input.IsKeyPressed(Key.Ctrl)
+            ? Vector2.Zero
+            : Godot.Input.GetVector(
+                InputActions.CameraLeft, InputActions.CameraRight, InputActions.CameraUp, InputActions.CameraDown);
 
         if (EdgePanEnabled && _mouseInWindow && !_dragging && GetWindow().HasFocus())
         {

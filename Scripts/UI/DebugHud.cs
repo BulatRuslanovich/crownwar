@@ -1,7 +1,11 @@
+using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using Godot;
 using Lordsio.Core;
+using Lordsio.Sim.Units;
 using Lordsio.Sim.World;
 
 namespace Lordsio.UI;
@@ -24,7 +28,8 @@ public partial class DebugHud : CanvasLayer
         var sim = _match.Sim;
         var inv = CultureInfo.InvariantCulture;
         _text.Clear();
-        _text.Append(inv, $"FPS {Engine.GetFramesPerSecond():0}   tick {sim.Tick}   zoom {_match.Camera.ZoomLevel:0.#}x\n");
+        _text.Append(inv, $"FPS {Engine.GetFramesPerSecond():0}   tick {sim.Tick} ({_match.StepMilliseconds:0.00} ms)   ");
+        _text.Append(inv, $"units {sim.Units.Count}   zoom {_match.Camera.ZoomLevel:0.#}x\n");
 
         var cell = Cell.FromPosition(SimConvert.ToSim(_match.GetGlobalMousePosition()));
         if (sim.Map.InBounds(cell))
@@ -38,18 +43,37 @@ public partial class DebugHud : CanvasLayer
             _text.Append("Cursor: outside the map\n");
         }
 
-        foreach (int id in _match.Selection.Ids)
-        {
-            if (sim.GetUnit(id) is not { } unit)
-                continue;
-            int waypoints = unit.Path.Count - unit.PathIndex;
-            _text.Append(inv, $"\nUnit #{unit.Id} {unit.Type.Name}  faction {unit.FactionId}\n");
-            _text.Append(inv, $"  state {unit.State}, last order {unit.LastOrder}\n");
-            _text.Append(inv, $"  cell {Cell.FromPosition(unit.Position)}  pos ({unit.Position.X:0.00}, {unit.Position.Y:0.00})\n");
-            _text.Append(inv, $"  path: {waypoints} waypoints, {unit.RemainingPathLength:0.0} tiles left\n");
-        }
+        if (_match.Selection.Count == 1)
+            AppendUnitDetails(sim.GetUnit(_match.Selection.Ids.First()));
+        else if (_match.Selection.Count > 1)
+            AppendGroupSummary();
 
-        _text.Append("\nLMB select  ·  RMB move  ·  WASD / arrows / screen edge pan  ·  MMB drag  ·  wheel zoom");
+        _text.Append("\nLMB select / drag box  ·  Shift add  ·  double click same type  ·  Ctrl+A all  ·  RMB move\n");
+        _text.Append("WASD / arrows / screen edge pan  ·  MMB drag  ·  wheel zoom");
         _label.Text = _text.ToString();
     }
+
+    private void AppendUnitDetails(Unit? unit)
+    {
+        if (unit == null)
+            return;
+        var inv = CultureInfo.InvariantCulture;
+        int waypoints = unit.Path.Count - unit.PathIndex;
+        _text.Append(inv, $"\nUnit #{unit.Id} {unit.Type.Name}  faction {unit.FactionId}\n");
+        _text.Append(inv, $"  state {unit.State}, last order {unit.LastOrder}\n");
+        _text.Append(inv, $"  cell {Cell.FromPosition(unit.Position)}  pos ({unit.Position.X:0.00}, {unit.Position.Y:0.00})\n");
+        _text.Append(inv, $"  path: {waypoints} waypoints, {unit.RemainingPathLength:0.0} tiles left\n");
+    }
+
+    private void AppendGroupSummary()
+    {
+        var units = _match.Selection.Ids.Select(_match.Sim.GetUnit).OfType<Unit>().ToList();
+        _text.Append(CultureInfo.InvariantCulture, $"\nSelected {units.Count} units\n");
+        _text.Append("  state: ").Append(CountBy(units, u => u.State.ToString())).Append('\n');
+        _text.Append("  last order: ").Append(CountBy(units, u => u.LastOrder.ToString())).Append('\n');
+        _text.Append("  type: ").Append(CountBy(units, u => u.Type.Name)).Append('\n');
+    }
+
+    private static string CountBy(List<Unit> units, Func<Unit, string> key) =>
+        string.Join(", ", units.GroupBy(key).OrderBy(g => g.Key).Select(g => $"{g.Key} {g.Count()}"));
 }

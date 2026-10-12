@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using Godot;
 using Lordsio.Interaction;
 using Lordsio.Sim.Core;
@@ -29,6 +30,9 @@ public partial class MatchController : Node2D
     public Selection Selection { get; } = new();
     public CameraController Camera { get; private set; } = null!;
 
+    /// <summary>Smoothed wall-clock cost of one simulation tick, for the debug overlay.</summary>
+    public double StepMilliseconds { get; private set; }
+
     /// <summary>Fraction of the way from the previous tick to the next one, for smooth rendering.</summary>
     public float InterpolationAlpha => (float)(_accumulator / Simulation.TickDuration);
 
@@ -56,7 +60,10 @@ public partial class MatchController : Node2D
         int steps = 0;
         while (_accumulator >= Simulation.TickDuration && steps < MaxStepsPerFrame)
         {
+            long start = Stopwatch.GetTimestamp();
             Sim.Step();
+            double ms = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+            StepMilliseconds = StepMilliseconds * 0.9 + ms * 0.1;
             _accumulator -= Simulation.TickDuration;
             steps++;
         }

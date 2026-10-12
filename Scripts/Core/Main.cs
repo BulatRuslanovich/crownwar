@@ -10,7 +10,7 @@ namespace Lordsio.Core;
 /// <summary>
 /// Application root. Also handles developer command-line options (passed after "--"):
 ///   --screenshot=&lt;file.png&gt;   save a screenshot after --screenshot-delay seconds (default 2) and quit
-///   --demo-move=&lt;x&gt;,&lt;y&gt;      select the first player unit and order it to tile (x, y)
+///   --demo-move=&lt;x&gt;,&lt;y&gt;      select all player units and order them to tile (x, y)
 ///   --zoom-index=&lt;n&gt;         start at camera zoom step n (0 = farthest)
 /// </summary>
 public partial class Main : Node
@@ -46,9 +46,9 @@ public partial class Main : Node
         var target = new SimVector2(
             float.Parse(parts[0], CultureInfo.InvariantCulture) + 0.5f,
             float.Parse(parts[1], CultureInfo.InvariantCulture) + 0.5f);
-        var unit = match.Sim.Units.First(u => u.FactionId == MatchController.PlayerFactionId);
-        match.Selection.Select(unit.Id);
-        match.Sim.Issue(new MoveCommand(MatchController.PlayerFactionId, new[] { unit.Id }, target));
+        var ids = match.Sim.Units.Where(u => u.FactionId == MatchController.PlayerFactionId).Select(u => u.Id).ToArray();
+        match.Selection.Select(ids, additive: false);
+        match.Sim.Issue(new MoveCommand(MatchController.PlayerFactionId, ids, target));
     }
 
     private async System.Threading.Tasks.Task TakeScreenshotAndQuit(string path, double delay)

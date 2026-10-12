@@ -20,5 +20,19 @@ public sealed class Selection
         _ids.Add(unitId);
     }
 
+    /// <summary>Replaces the selection, or adds to it when <paramref name="additive"/> is set.</summary>
+    public void Select(IEnumerable<int> unitIds, bool additive)
+    {
+        if (!additive)
+            _ids.Clear();
+        _ids.UnionWith(unitIds);
+    }
+
+    public void Toggle(int unitId)
+    {
+        if (!_ids.Remove(unitId))
+            _ids.Add(unitId);
+    }
+
     public void Clear() => _ids.Clear();
 }

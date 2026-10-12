@@ -15,6 +15,14 @@ public sealed class Simulation
     /// <summary>How far from a blocked click we look for a reachable replacement point.</summary>
     private const int MaxGoalSearchRadius = 64;
 
+    // Stuck handling: every second a moving unit must cover a fraction of its speed.
+    private const int ProgressCheckTicks = TicksPerSecond;
+    private const float MinProgressFraction = 0.25f;
+    private const int RepathAfterChecks = 2;
+    private const int GiveUpAfterChecks = 5;
+    /// <summary>A unit stuck this close to its slot (crowded by neighbours) simply counts as arrived.</summary>
+    private const float ArrivalSlack = 1.5f;
+
     private readonly List<Unit> _units = new();
     private readonly Dictionary<int, Unit> _unitsById = new();
     private readonly Queue<Command> _pending = new();
@@ -27,7 +35,11 @@ public sealed class Simulation
         Catalog = catalog;
         _pathfinder = new Pathfinder(Map);
         foreach (var spawn in map.UnitSpawns)
-            SpawnUnit(spawn.TypeId, spawn.FactionId, spawn.Cell.Center);
+        {
+            var type = Catalog.Get(spawn.TypeId);
+            foreach (var slot in Formation.ComputeSlots(Map, spawn.Cell.Center, spawn.Count, type.Radius))
+                SpawnUnit(spawn.TypeId, spawn.FactionId, slot);
+        }
     }
 
     public TileGrid Map { get; }
@@ -50,6 +62,13 @@ public sealed class Simulation
 
         foreach (var unit in _units)
             unit.Move(TickDuration);
+
+        UnitCollisions.Resolve(_units);
+        foreach (var unit in _units)
+            KeepOnWalkableGround(unit);
+
+        foreach (var unit in _units)
+            CheckProgress(unit);
     }
 
     public Unit SpawnUnit(string typeId, int factionId, Vector2 position)
@@ -76,40 +95,113 @@ public sealed class Simulation
 
     private void ApplyMove(MoveCommand move)
     {
-        foreach (int id in move.UnitIds)
+        // Units that died or belong to someone else are silently skipped: the issuer's
+        // view of the world may be a tick out of date, and foreign units are not theirs to command.
+        // Units are grouped by walkable region, since each region resolves a blocked target differently.
+        var groups = new SortedDictionary<int, List<Unit>>();
+        foreach (int id in move.UnitIds.Distinct())
         {
-            // Units that died or belong to someone else are silently skipped: the issuer's
-            // view of the world may be a tick out of date, and foreign units are not theirs to command.
             if (GetUnit(id) is not { } unit || unit.FactionId != move.FactionId)
                 continue;
-            OrderMove(unit, move.Target);
+            int component = Map.ComponentOf(Cell.FromPosition(unit.Position));
+            if (!groups.TryGetValue(component, out var list))
+                groups[component] = list = new List<Unit>();
+            list.Add(unit);
         }
+
+        foreach (var (component, group) in groups)
+            OrderGroupMove(group, component, move.Target);
     }
 
-    private void OrderMove(Unit unit, Vector2 target)
+    private void OrderGroupMove(List<Unit> group, int component, Vector2 target)
     {
-        Cell from = Cell.FromPosition(unit.Position);
         Cell requested = Cell.FromPosition(target);
-        int component = Map.ComponentOf(from);
         Cell? goal = Map.FindNearestInComponent(requested, component, MaxGoalSearchRadius);
         if (goal == null)
         {
-            unit.ClearPath();
-            unit.LastOrder = MoveOrderResult.Unreachable;
+            foreach (var unit in group)
+            {
+                unit.Stop();
+                unit.LastOrder = MoveOrderResult.Unreachable;
+            }
             return;
         }
 
         bool adjusted = goal.Value != requested;
-        Vector2 destination = adjusted ? goal.Value.Center : target;
-        var path = _pathfinder.FindPath(unit.Position, destination, unit.Type.Radius);
-        if (path == null)
+        Vector2 center = adjusted ? goal.Value.Center : target;
+        float clearance = group.Max(u => u.Type.Radius);
+        var slots = Formation.ComputeSlots(Map, center, group.Count, clearance);
+
+        // Closest units take the central slots; the rest fill the outer rings.
+        group.Sort((a, b) =>
         {
-            unit.ClearPath();
-            unit.LastOrder = MoveOrderResult.Unreachable;
+            int byDistance = Vector2.DistanceSquared(a.Position, center).CompareTo(Vector2.DistanceSquared(b.Position, center));
+            return byDistance != 0 ? byDistance : a.Id.CompareTo(b.Id);
+        });
+
+        for (int i = 0; i < group.Count; i++)
+        {
+            var unit = group[i];
+            var path = _pathfinder.FindPath(unit.Position, slots[i], unit.Type.Radius);
+            if (path == null)
+            {
+                unit.Stop();
+                unit.LastOrder = MoveOrderResult.Unreachable;
+                continue;
+            }
+            unit.StartMove(slots[i], path);
+            unit.LastOrder = adjusted ? MoveOrderResult.Adjusted : MoveOrderResult.Accepted;
+        }
+    }
+
+    /// <summary>Undoes pushes into walls, the map edge or another walkable region.</summary>
+    private void KeepOnWalkableGround(Unit unit)
+    {
+        Vector2 pos = Map.PushOutOfWalls(unit.Position, unit.Type.Radius);
+        var cell = Cell.FromPosition(pos);
+        var previousCell = Cell.FromPosition(unit.PreviousPosition);
+        if (!Map.IsWalkable(cell) || Map.ComponentOf(cell) != Map.ComponentOf(previousCell))
+            pos = unit.PreviousPosition;
+        unit.Position = pos;
+    }
+
+    private void CheckProgress(Unit unit)
+    {
+        if (unit.State != UnitState.Moving || unit.Destination is not { } destination)
+            return;
+        if (++unit.TicksSinceProgressCheck < ProgressCheckTicks)
+            return;
+
+        float moved = Vector2.Distance(unit.Position, unit.ProgressAnchor);
+        float expected = unit.Type.Speed * ProgressCheckTicks * TickDuration;
+        unit.StuckChecks = moved < expected * MinProgressFraction ? unit.StuckChecks + 1 : 0;
+        unit.TicksSinceProgressCheck = 0;
+        unit.ProgressAnchor = unit.Position;
+        if (unit.StuckChecks == 0)
+            return;
+
+        bool nearSlot = Vector2.Distance(unit.Position, destination) <= ArrivalSlack;
+        if (unit.StuckChecks >= RepathAfterChecks && nearSlot)
+        {
+            unit.Stop(); // close enough: the slot is crowded, stand where we are
             return;
         }
-
-        unit.SetPath(path);
-        unit.LastOrder = adjusted ? MoveOrderResult.Adjusted : MoveOrderResult.Accepted;
+        if (unit.StuckChecks >= GiveUpAfterChecks)
+        {
+            unit.Stop();
+            unit.LastOrder = MoveOrderResult.Blocked;
+            return;
+        }
+        if (unit.StuckChecks == RepathAfterChecks)
+        {
+            var path = _pathfinder.FindPath(unit.Position, destination, unit.Type.Radius);
+            if (path == null)
+            {
+                unit.Stop();
+                unit.LastOrder = MoveOrderResult.Blocked;
+                return;
+            }
+            unit.ReplacePath(path);
+        }
     }
 }
