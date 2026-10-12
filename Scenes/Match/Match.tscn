@@ -6,10 +6,11 @@
 [ext_resource type="Script" path="res://Scripts/Interaction/SelectionController.cs" id="4_select"]
 [ext_resource type="Script" path="res://Scripts/World/CameraController.cs" id="5_camera"]
 [ext_resource type="Script" path="res://Scripts/UI/DebugHud.cs" id="6_hud"]
-[ext_resource type="Script" path="res://Scripts/Territory/SettlementsView.cs" id="7_settlements"]
+[ext_resource type="Script" path="res://Scripts/Buildings/BuildingsView.cs" id="7_buildings"]
 [ext_resource type="PackedScene" path="res://Scenes/UI/Hud.tscn" id="8_player_hud"]
-[ext_resource type="Script" path="res://Scripts/Territory/TerritoryOverlay.cs" id="9_territory"]
+[ext_resource type="Script" path="res://Scripts/World/DepositsView.cs" id="9_deposits"]
 [ext_resource type="Script" path="res://Scripts/Units/ProjectilesView.cs" id="10_projectiles"]
+[ext_resource type="Script" path="res://Scripts/Interaction/BuildPlacement.cs" id="11_placement"]
 
 [node name="Match" type="Node2D"]
 script = ExtResource("1_match")
@@ -17,15 +18,15 @@ script = ExtResource("1_match")
 [node name="MapView" type="TileMapLayer" parent="."]
 script = ExtResource("2_map")
 
-[node name="TerritoryOverlay" type="Sprite2D" parent="."]
-script = ExtResource("9_territory")
+[node name="DepositsView" type="Node2D" parent="."]
+script = ExtResource("9_deposits")
 
 [node name="Actors" type="Node2D" parent="."]
 y_sort_enabled = true
 
-[node name="SettlementsView" type="Node2D" parent="Actors"]
+[node name="BuildingsView" type="Node2D" parent="Actors"]
 y_sort_enabled = true
-script = ExtResource("7_settlements")
+script = ExtResource("7_buildings")
 
 [node name="UnitsView" type="Node2D" parent="Actors"]
 y_sort_enabled = true
@@ -36,6 +37,9 @@ script = ExtResource("10_projectiles")
 
 [node name="SelectionController" type="Node2D" parent="."]
 script = ExtResource("4_select")
+
+[node name="BuildPlacement" type="Node2D" parent="."]
+script = ExtResource("11_placement")
 
 [node name="Camera" type="Camera2D" parent="."]
 script = ExtResource("5_camera")

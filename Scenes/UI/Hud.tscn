@@ -32,36 +32,64 @@ text = "+0/s"
 layout_mode = 2
 text = "Army 0/0"
 
-[node name="SettlementPanel" type="PanelContainer" parent="."]
+[node name="BuildBar" type="PanelContainer" parent="."]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -260.0
+offset_top = -72.0
+offset_right = 260.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="Rows" type="VBoxContainer" parent="BuildBar"]
+layout_mode = 2
+
+[node name="Buttons" type="HBoxContainer" parent="BuildBar/Rows"]
+layout_mode = 2
+alignment = 1
+
+[node name="Hint" type="Label" parent="BuildBar/Rows"]
+custom_minimum_size = Vector2(500, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Build near your own troops."
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="BuildingPanel" type="PanelContainer" parent="."]
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 8.0
 offset_top = -150.0
-offset_right = 340.0
+offset_right = 370.0
 offset_bottom = -8.0
 grow_vertical = 0
 
-[node name="Rows" type="VBoxContainer" parent="SettlementPanel"]
+[node name="Rows" type="VBoxContainer" parent="BuildingPanel"]
 layout_mode = 2
 
-[node name="Title" type="Label" parent="SettlementPanel/Rows"]
+[node name="Title" type="Label" parent="BuildingPanel/Rows"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
 text = "Castle"
 
-[node name="Info" type="Label" parent="SettlementPanel/Rows"]
+[node name="Info" type="Label" parent="BuildingPanel/Rows"]
 layout_mode = 2
 text = "Income"
 
-[node name="RecruitButtons" type="HBoxContainer" parent="SettlementPanel/Rows"]
+[node name="RecruitButtons" type="HBoxContainer" parent="BuildingPanel/Rows"]
 layout_mode = 2
 
-[node name="Queue" type="Label" parent="SettlementPanel/Rows"]
+[node name="Queue" type="Label" parent="BuildingPanel/Rows"]
 layout_mode = 2
 text = "Training"
 
-[node name="Progress" type="ProgressBar" parent="SettlementPanel/Rows"]
+[node name="Progress" type="ProgressBar" parent="BuildingPanel/Rows"]
 custom_minimum_size = Vector2(0, 8)
 layout_mode = 2
 show_percentage = false

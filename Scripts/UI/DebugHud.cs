@@ -63,7 +63,10 @@ public partial class DebugHud : CanvasLayer
         _text.Append(inv, $"\nUnit #{unit.Id} {unit.Type.Name}  faction {unit.FactionId}\n");
         _text.Append(inv, $"  health {unit.Health}/{unit.Type.MaxHealth}, state {unit.State}, order {unit.Order} ({unit.LastOrder})\n");
         if (unit.Target is { } target)
-            _text.Append(inv, $"  target #{target.Id} {target.Type.Name} of faction {target.FactionId}\n");
+        {
+            string name = target switch { Unit u => u.Type.Name, Sim.Buildings.Building b => b.Type.Name, _ => "?" };
+            _text.Append(inv, $"  target #{target.Id} {name} of faction {target.FactionId}\n");
+        }
         _text.Append(inv, $"  cell {Cell.FromPosition(unit.Position)}  pos ({unit.Position.X:0.00}, {unit.Position.Y:0.00})\n");
         _text.Append(inv, $"  path: {waypoints} waypoints, {unit.RemainingPathLength:0.0} tiles left\n");
     }

@@ -18,7 +18,7 @@ public class SimulationTests
     };
 
     private static Simulation CreateSim(params string[] objects) =>
-        new(TestMaps.Parse(RiverMap, objects), TestMaps.Rules);
+        new(TestMaps.Parse(RiverMap, objects), TestMaps.Rules, MatchSetup.Sandbox);
 
     private static void RunSeconds(Simulation sim, float seconds)
     {

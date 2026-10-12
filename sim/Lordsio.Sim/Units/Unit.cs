@@ -1,4 +1,5 @@
 using System.Numerics;
+using Lordsio.Sim.Core;
 
 namespace Lordsio.Sim.Units;
 
@@ -34,7 +35,7 @@ public enum MoveOrderResult
     Blocked,
 }
 
-public sealed class Unit
+public sealed class Unit : Entity
 {
     /// <summary>Intermediate waypoints count as reached within this distance, so a unit jostled
     /// by its neighbours does not circle back to hit a corner point exactly.</summary>
@@ -43,36 +44,28 @@ public sealed class Unit
     private readonly List<Vector2> _path = new();
 
     internal Unit(int id, UnitType type, int factionId, Vector2 position)
+        : base(id, factionId, position, type.MaxHealth)
     {
-        Id = id;
         Type = type;
-        FactionId = factionId;
-        Position = position;
         PreviousPosition = position;
         GuardPoint = position;
-        Health = type.MaxHealth;
     }
 
-    public int Id { get; }
     public UnitType Type { get; }
+    public override int MaxHealth => Type.MaxHealth;
+    public override float RangedArmor => Type.RangedArmor;
 
-    /// <summary>Owner faction, or -1 for neutral garrison troops (hostile to everyone).</summary>
-    public int FactionId { get; }
-
-    /// <summary>Position in tile units at the end of the last tick.</summary>
-    public Vector2 Position { get; internal set; }
+    public override float SurfaceDistance(Vector2 point) =>
+        MathF.Max(0f, Vector2.Distance(Position, point) - Type.Radius);
 
     /// <summary>Position at the start of the last tick; views interpolate between the two.</summary>
     public Vector2 PreviousPosition { get; internal set; }
 
-    public int Health { get; internal set; }
-    public bool IsAlive => Health > 0;
-
     public UnitOrder Order { get; internal set; }
     public MoveOrderResult LastOrder { get; internal set; }
 
-    /// <summary>Enemy being fought or chased.</summary>
-    public Unit? Target { get; internal set; }
+    /// <summary>Enemy unit or building being fought or chased.</summary>
+    public Entity? Target { get; internal set; }
 
     /// <summary>Set by the simulation each tick while the unit stands and swings at its target.</summary>
     internal bool IsAttacking { get; set; }
@@ -93,8 +86,7 @@ public sealed class Unit
 
     internal int AttackCooldownTicks { get; set; }
     internal int ChaseRepathTicks { get; set; }
-    /// <summary>Faction that dealt the killing blow, for the death event.</summary>
-    internal int KilledByFactionId { get; set; } = -1;
+
 
     /// <summary>Consecutive progress checks in which the unit barely moved.</summary>
     internal int StuckChecks { get; set; }
@@ -127,7 +119,7 @@ public sealed class Unit
     }
 
     /// <summary>Starts hunting one enemy; the route is planned by the chase logic.</summary>
-    internal void StartAttack(Unit target)
+    internal void StartAttack(Entity target)
     {
         Order = UnitOrder.AttackUnit;
         Target = target;

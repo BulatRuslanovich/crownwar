@@ -1,4 +1,5 @@
 using System.Numerics;
+using Lordsio.Sim.World;
 
 namespace Lordsio.Sim.Core;
 
@@ -20,8 +21,11 @@ public enum MoveMode
 public sealed record MoveCommand(int FactionId, IReadOnlyList<int> UnitIds, Vector2 Target, MoveMode Mode = MoveMode.Move)
     : Command(FactionId);
 
-/// <summary>Order the given units to hunt down one enemy unit.</summary>
-public sealed record AttackUnitCommand(int FactionId, IReadOnlyList<int> UnitIds, int TargetUnitId) : Command(FactionId);
+/// <summary>Order the given units to attack one enemy unit or building until it is destroyed.</summary>
+public sealed record AttackCommand(int FactionId, IReadOnlyList<int> UnitIds, int TargetId) : Command(FactionId);
 
-/// <summary>Pay for a unit now and queue it for production at an owned settlement.</summary>
-public sealed record RecruitCommand(int FactionId, int SettlementId, string UnitTypeId) : Command(FactionId);
+/// <summary>Pay for a unit now and queue it for training at an owned castle or barracks.</summary>
+public sealed record RecruitCommand(int FactionId, int BuildingId, string UnitTypeId) : Command(FactionId);
+
+/// <summary>Pay for a building and start constructing it with its top-left corner at <paramref name="Anchor"/>.</summary>
+public sealed record BuildCommand(int FactionId, string BuildingTypeId, Cell Anchor) : Command(FactionId);

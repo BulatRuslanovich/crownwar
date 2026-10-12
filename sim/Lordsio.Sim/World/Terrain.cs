@@ -11,6 +11,10 @@ public enum Terrain : byte
 
 public static class TerrainInfo
 {
+    /// <summary>Buildings go on open ground only: roads and bridges must stay passable.</summary>
+    public static bool IsBuildable(Terrain terrain) =>
+        terrain is Terrain.Grass or Terrain.Forest;
+
     public static bool IsWalkable(Terrain terrain) =>
         terrain is Terrain.Grass or Terrain.Forest or Terrain.Road;
 

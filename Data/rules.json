@@ -1,6 +1,7 @@
 {
-  "startingGold": 150,
-  "captureRadius": 2.5,
+  "startingGold": 200,
+  "buildRadius": 5,
+  "startingUnits": [{ "unit": "infantry", "count": 4 }],
   "units": [
     {
       "id": "infantry", "name": "Infantry", "speed": 3.5, "radius": 0.3, "cost": 50, "buildTime": 4,
@@ -15,20 +16,22 @@
       "health": 240, "damage": 22, "attackRange": 0.3, "attackCooldown": 1.6, "sightRange": 6, "rangedArmor": 0.6
     }
   ],
-  "settlements": [
+  "buildings": [
     {
-      "id": "castle", "name": "Castle", "income": 5, "armyCap": 20, "captureTime": 20, "capital": true,
-      "recruits": ["infantry", "archer", "heavy"]
+      "id": "castle", "name": "Castle", "size": 3, "cost": 0, "buildTime": 0, "health": 2500, "rangedArmor": 0.8,
+      "income": 3, "armyCap": 10, "recruits": ["infantry", "archer", "heavy"], "capital": true
     },
     {
-      "id": "town", "name": "Town", "income": 3, "armyCap": 8, "captureTime": 12,
-      "recruits": ["infantry", "archer"],
-      "garrison": [{ "unit": "infantry", "count": 3 }, { "unit": "archer", "count": 2 }]
+      "id": "mine", "name": "Gold Mine", "size": 2, "cost": 100, "buildTime": 10, "health": 450, "rangedArmor": 0.7,
+      "mine": true
     },
     {
-      "id": "village", "name": "Village", "income": 2, "armyCap": 4, "captureTime": 8,
-      "recruits": [],
-      "garrison": [{ "unit": "infantry", "count": 2 }]
+      "id": "barracks", "name": "Barracks", "size": 2, "cost": 150, "buildTime": 20, "health": 700, "rangedArmor": 0.7,
+      "armyCap": 10, "recruits": ["infantry", "archer", "heavy"]
+    },
+    {
+      "id": "tower", "name": "Archer Tower", "size": 1, "cost": 125, "buildTime": 15, "health": 550, "rangedArmor": 0.8,
+      "attack": { "damage": 10, "range": 6, "cooldown": 1.25, "projectileSpeed": 14 }
     }
   ]
 }

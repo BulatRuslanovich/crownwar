@@ -2,10 +2,17 @@ using System.Numerics;
 
 namespace Lordsio.Sim.World;
 
-/// <summary>Static terrain grid plus derived connectivity data.</summary>
+/// <summary>
+/// Terrain grid plus cells occupied by buildings, and the connectivity derived from both.
+/// Buildings are solid: placing or removing one updates walkability and the regions.
+/// </summary>
 public sealed class TileGrid
 {
+    /// <summary>Pass as the component to <see cref="FindNearestInComponent"/> to accept any walkable cell.</summary>
+    public const int AnyComponent = int.MinValue;
+
     private readonly Terrain[] _tiles;
+    private readonly bool[] _occupied;
     private readonly int[] _component;
 
     public int Width { get; }
@@ -21,6 +28,7 @@ public sealed class TileGrid
         Width = width;
         Height = height;
         _tiles = tiles;
+        _occupied = new bool[tiles.Length];
         _component = new int[tiles.Length];
         LabelComponents();
     }
@@ -30,8 +38,30 @@ public sealed class TileGrid
 
     public Terrain GetTerrain(Cell cell) => _tiles[Index(cell.X, cell.Y)];
 
-    public bool IsWalkable(int x, int y) => InBounds(x, y) && TerrainInfo.IsWalkable(_tiles[Index(x, y)]);
+    public bool IsWalkable(int x, int y)
+    {
+        if (!InBounds(x, y))
+            return false;
+        int i = Index(x, y);
+        return !_occupied[i] && TerrainInfo.IsWalkable(_tiles[i]);
+    }
+
     public bool IsWalkable(Cell cell) => IsWalkable(cell.X, cell.Y);
+
+    /// <summary>A building stands on the cell.</summary>
+    public bool IsOccupied(Cell cell) => InBounds(cell) && _occupied[Index(cell.X, cell.Y)];
+
+    /// <summary>Marks a building footprint as solid (or frees it) and recomputes connectivity.</summary>
+    public void SetOccupied(IEnumerable<Cell> cells, bool occupied)
+    {
+        foreach (var cell in cells)
+        {
+            if (!InBounds(cell))
+                throw new ArgumentOutOfRangeException(nameof(cells), $"Cell {cell} is outside the map.");
+            _occupied[Index(cell.X, cell.Y)] = occupied;
+        }
+        LabelComponents();
+    }
 
     /// <summary>
     /// Id of the walkable region the cell belongs to, or -1 for blocked / out-of-bounds cells.
@@ -51,9 +81,9 @@ public sealed class TileGrid
     /// </summary>
     public Cell? FindNearestInComponent(Cell target, int component, int maxRadius)
     {
-        if (component < 0)
+        if (component < 0 && component != AnyComponent)
             return null;
-        if (ComponentOf(target) == component)
+        if (Matches(target))
             return target;
 
         Cell? best = null;
@@ -70,7 +100,7 @@ public sealed class TileGrid
                 for (int dx = -r; dx <= r; dx += edgeRow ? 1 : 2 * r)
                 {
                     var cell = new Cell(target.X + dx, target.Y + dy);
-                    if (ComponentOf(cell) != component)
+                    if (!Matches(cell))
                         continue;
                     float distSq = dx * dx + dy * dy;
                     if (distSq < bestDistSq)
@@ -82,6 +112,12 @@ public sealed class TileGrid
             }
         }
         return best;
+
+        bool Matches(Cell cell)
+        {
+            int c = ComponentOf(cell);
+            return component == AnyComponent ? c >= 0 : c == component;
+        }
     }
 
     /// <summary>
@@ -208,7 +244,7 @@ public sealed class TileGrid
         int next = 0;
         for (int start = 0; start < _tiles.Length; start++)
         {
-            if (_component[start] != -1 || !TerrainInfo.IsWalkable(_tiles[start]))
+            if (_component[start] != -1 || _occupied[start] || !TerrainInfo.IsWalkable(_tiles[start]))
                 continue;
 
             // 4-connectivity is sufficient: a diagonal step is only legal when both orthogonal

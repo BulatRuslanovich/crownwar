@@ -74,28 +74,35 @@ public class MapLoaderTests
         var map = MapLoader.Parse(File.ReadAllText(Path.Combine(root, "Maps", "default.txt")));
         var rules = Core.GameRules.Parse(File.ReadAllText(Path.Combine(root, "Data", "rules.json")));
 
-        // Creating the simulation checks every unit and settlement type id against the rules.
-        var sim = new Core.Simulation(map, rules);
-        Assert.That(sim.Units, Is.Not.Empty);
-        Assert.That(sim.Settlements.Any(s => s.OwnerId == 0 && s.Type.Recruits.Count > 0), Is.True,
-            "the player needs a settlement to recruit in");
+        Assert.That(map.StartPositions, Has.Count.GreaterThanOrEqualTo(4));
+        Assert.That(map.Deposits, Is.Not.Empty);
+
+        // Every start must fit a capital, whatever faction count and shuffle the match uses.
+        var sim = new Core.Simulation(map, rules, new Core.MatchSetup(map.StartPositions.Count, ShuffleStarts: false));
+        Assert.That(sim.Buildings.Count(b => b.Type.IsCapital), Is.EqualTo(map.StartPositions.Count));
+        Assert.That(sim.Units.Count(u => u.FactionId == 0), Is.EqualTo(rules.StartingUnits.Sum(s => s.Count)));
     }
 
     [Test]
-    public void ParsesSettlements()
+    public void ParsesStartsAndDeposits()
     {
-        var map = MapLoader.Parse("[tiles]\n....\n[objects]\nsettlement castle 0 1 0\nsettlement village -1 3 0");
+        var map = MapLoader.Parse("[tiles]\n.....\n.....\n[objects]\nstart 0 0\ngold 3 0 5\ngold 1 0");
 
-        Assert.That(map.SettlementSpawns, Is.EqualTo(new[]
+        Assert.That(map.StartPositions, Is.EqualTo(new[] { new Cell(0, 0) }));
+        Assert.That(map.Deposits, Is.EqualTo(new[]
         {
-            new SettlementSpawn("castle", 0, new Cell(1, 0)),
-            new SettlementSpawn("village", -1, new Cell(3, 0)),
+            new DepositSpawn(new Cell(3, 0), 5),
+            new DepositSpawn(new Cell(1, 0), MapLoader.DefaultDepositYield),
         }));
     }
 
-    [Test]
-    public void RejectsSettlementOnBlockedTile()
+    [TestCase("[tiles]\n.~\n..\n[objects]\ngold 0 0", Description = "deposit on water")]
+    [TestCase("[tiles]\n.=\n..\n[objects]\ngold 0 0", Description = "deposit on a road")]
+    [TestCase("[tiles]\n...\n...\n[objects]\ngold 1 1", Description = "deposit off the map edge")]
+    [TestCase("[tiles]\n...\n...\n[objects]\ngold 0 0\ngold 1 0", Description = "overlapping deposits")]
+    [TestCase("[tiles]\n..\n..\n[objects]\ngold 0 0 0", Description = "zero yield")]
+    public void RejectsBadDeposits(string text)
     {
-        Assert.Throws<FormatException>(() => MapLoader.Parse("[tiles]\n.~\n[objects]\nsettlement castle 0 1 0"));
+        Assert.Throws<FormatException>(() => MapLoader.Parse(text));
     }
 }

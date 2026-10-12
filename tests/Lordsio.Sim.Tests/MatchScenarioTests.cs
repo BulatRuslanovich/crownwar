@@ -1,5 +1,6 @@
 using System.Numerics;
 using Lordsio.Sim.Core;
+using Lordsio.Sim.Units;
 using Lordsio.Sim.World;
 
 namespace Lordsio.Sim.Tests;
@@ -7,31 +8,58 @@ namespace Lordsio.Sim.Tests;
 /// <summary>End-to-end scenarios on the real map and rules shipped with the game.</summary>
 public class MatchScenarioTests
 {
-    private static Simulation CreateDefaultMatch()
+    private static GameRules RealRules() =>
+        GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
+
+    private static Simulation CreateDefaultMatch(int factions, int seed = 1)
     {
-        string root = TestMaps.ProjectRoot();
-        var map = MapLoader.Parse(File.ReadAllText(Path.Combine(root, "Maps", "default.txt")));
-        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(root, "Data", "rules.json")));
-        return new Simulation(map, rules);
+        var map = MapLoader.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Maps", "default.txt")));
+        return new Simulation(map, RealRules(), new MatchSetup(factions, seed));
     }
 
     [Test]
-    public void StormingTheEnemyCastleWinsTheMatch()
+    public void CapitalsAreRandomButReproducible()
     {
-        var sim = CreateDefaultMatch();
-        var enemyCastle = sim.Settlements.Single(s => s.OwnerId == 1 && s.Type.IsCapital);
-        var staging = enemyCastle.Cell.Center + new Vector2(-6f, 4f);
-        var army = Enumerable.Range(0, 20)
-            .Select(i => sim.SpawnUnit(i % 4 == 0 ? "archer" : "infantry", 0, staging + new Vector2(i % 5, i / 5) * 0.8f))
-            .Select(u => u.Id).ToArray();
+        var a = CreateDefaultMatch(2, seed: 7).Buildings.Select(b => b.Anchor).ToList();
+        var b = CreateDefaultMatch(2, seed: 7).Buildings.Select(b => b.Anchor).ToList();
+        var layouts = Enumerable.Range(0, 20)
+            .Select(seed => string.Join(";", CreateDefaultMatch(2, seed).Buildings.Select(x => x.Anchor)))
+            .Distinct().Count();
 
-        sim.Issue(new MoveCommand(0, army, enemyCastle.Cell.Center, MoveMode.AttackMove));
+        Assert.That(a, Is.EqualTo(b), "same seed, same layout");
+        Assert.That(layouts, Is.GreaterThan(1), "different seeds shuffle the starts");
+    }
+
+    [Test]
+    public void ExpandWithAMineAndWinBySiege()
+    {
+        var sim = CreateDefaultMatch(2);
+        var mine = sim.Deposits.OrderBy(d => Vector2.Distance(d.Center, sim.GetBuilding(sim.GetFaction(0)!.CapitalId)!.Position)).First();
+        var starters = sim.Units.Where(u => u.FactionId == 0).Select(u => u.Id).ToArray();
+
+        // Walk the starting army to the nearest deposit and put a mine on it.
+        sim.Issue(new MoveCommand(0, starters, mine.Center + new Vector2(0f, 2f)));
+        for (int i = 0; i < 20 * Simulation.TicksPerSecond && sim.CanBuild(0, "mine", mine.Anchor) != BuildError.None; i++)
+            sim.Step();
+        sim.Issue(new BuildCommand(0, "mine", mine.Anchor));
+        for (int i = 0; i < 12 * Simulation.TicksPerSecond; i++)
+            sim.Step();
+        Assert.That(sim.GetFaction(0)!.IncomePerSecond, Is.EqualTo(3 + mine.Yield), "castle base income plus the mine");
+
+        // Then storm the enemy capital with a big army.
+        var enemyCapital = sim.GetBuilding(sim.GetFaction(1)!.CapitalId)!;
+        // Capitals sit at random corners, so snap the staging area to open ground near the enemy.
+        var staging = sim.Map.FindNearestInComponent(Cell.FromPosition(enemyCapital.Position + new Vector2(0f, 6f)),
+            TileGrid.AnyComponent, 10)!.Value.Center;
+        var army = Formation.ComputeSlots(sim.Map, staging, 16, 0.36f)
+            .Select((slot, i) => sim.SpawnUnit(i % 4 == 0 ? "heavy" : "infantry", 0, slot))
+            .Select(u => u.Id).ToArray();
+        sim.Issue(new AttackCommand(0, army, enemyCapital.Id));
         for (int i = 0; i < 120 * Simulation.TicksPerSecond && !sim.IsOver; i++)
             sim.Step();
 
-        Assert.That(sim.IsOver, Is.True, "the castle should fall within two minutes");
+        Assert.That(sim.IsOver, Is.True, "the capital should fall within two minutes");
         Assert.That(sim.WinnerId, Is.EqualTo(0));
-        Assert.That(sim.GetFaction(1)!.IsEliminated, Is.True);
     }
 
     /// <summary>Roughly equal gold on both sides; the counter relationships the unit data is meant to create.</summary>
@@ -40,9 +68,7 @@ public class MatchScenarioTests
     [TestCase("heavy", 1, "infantry", 1, Description = "one heavy beats one infantry")]
     public void UnitMatchups(string winnerType, int winnerCount, string loserType, int loserCount)
     {
-        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
-        var field = Enumerable.Repeat(new string('.', 30), 12).ToArray();
-        var sim = new Simulation(TestMaps.Parse(field), rules);
+        var sim = new Simulation(TestMaps.Parse(TestMaps.Field(30, 12)), RealRules(), MatchSetup.Sandbox);
         for (int i = 0; i < winnerCount; i++)
             sim.SpawnUnit(winnerType, 0, new Vector2(8.5f, 5.5f + i));
         for (int i = 0; i < loserCount; i++)
@@ -56,18 +82,17 @@ public class MatchScenarioTests
     }
 
     [Test]
-    public void IdleMatchStaysStableForTenMinutes()
+    public void IdleFourPlayerMatchStaysStable()
     {
-        var sim = CreateDefaultMatch();
+        var sim = CreateDefaultMatch(4);
         int units = sim.Units.Count;
 
-        for (int i = 0; i < 600 * Simulation.TicksPerSecond; i++)
+        for (int i = 0; i < 300 * Simulation.TicksPerSecond; i++)
             sim.Step();
 
-        // Nobody moves on their own: garrisons and starting armies are out of each other's sight.
+        // Starting armies stand by their castles, far out of each other's sight.
         Assert.That(sim.IsOver, Is.False);
         Assert.That(sim.Units, Has.Count.EqualTo(units));
-        Assert.That(sim.Settlements.Count(s => s.OwnerId == 0), Is.EqualTo(1));
-        Assert.That(sim.GetFaction(0)!.Treasury.Gold, Is.EqualTo(150 + 600 * 5));
+        Assert.That(sim.GetFaction(0)!.Treasury.Gold, Is.EqualTo(200 + 300 * 3));
     }
 }

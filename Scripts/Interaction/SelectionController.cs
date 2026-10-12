@@ -4,7 +4,7 @@ using System.Linq;
 using Godot;
 using Lordsio.Core;
 using Lordsio.Sim.Core;
-using Lordsio.Sim.Territory;
+using Lordsio.Sim.Buildings;
 using Lordsio.Sim.Units;
 
 namespace Lordsio.Interaction;
@@ -106,9 +106,9 @@ public partial class SelectionController : Node2D
         var unit = PickUnit(GetGlobalMousePosition());
         if (unit == null)
         {
-            var settlement = PickSettlement(GetGlobalMousePosition());
-            if (settlement != null)
-                _match.Selection.SelectSettlement(settlement.Id);
+            var building = PickBuilding(GetGlobalMousePosition());
+            if (building != null)
+                _match.Selection.SelectBuilding(building.Id);
             else if (!additive)
                 _match.Selection.Clear();
         }
@@ -134,17 +134,23 @@ public partial class SelectionController : Node2D
     }
 
     /// <summary>
-    /// Right click: on an enemy — hunt it; on the ground — advance, fighting whatever is met;
-    /// with Ctrl — retreat, ignoring enemies.
+    /// Right click: on an enemy unit or building — attack it; on the ground — advance, fighting
+    /// whatever is met; with Ctrl — retreat, ignoring enemies.
     /// </summary>
     private void IssueOrder(Vector2 world, bool retreat)
     {
         int player = MatchController.PlayerFactionId;
         int[] ids = _match.Selection.Ids.ToArray();
-        var enemy = retreat ? null : PickUnit(world, EnemyUnits());
+        Entity? enemy = null;
+        if (!retreat)
+        {
+            enemy = PickUnit(world, EnemyUnits());
+            if (enemy == null && PickBuilding(world) is { } building && building.FactionId != player)
+                enemy = building;
+        }
         if (enemy != null)
         {
-            _match.Sim.Issue(new AttackUnitCommand(player, ids, enemy.Id));
+            _match.Sim.Issue(new AttackCommand(player, ids, enemy.Id));
             _markerPosition = SimConvert.ToWorld(enemy.Position);
             _markerColor = AttackMarkerColor;
         }
@@ -200,15 +206,19 @@ public partial class SelectionController : Node2D
         return new Rect2(inverse * Vector2.Zero, Vector2.Zero).Expand(inverse * GetViewportRect().Size);
     }
 
-    /// <summary>Settlement whose drawing (roughly 2 tiles wide, rising above its cell) contains the point.</summary>
-    private Settlement? PickSettlement(Vector2 worldPoint)
+    /// <summary>
+    /// Building under the point: its footprint, plus the part of the drawing that rises above it
+    /// (about one footprint higher, since buildings are drawn tall).
+    /// </summary>
+    private Building? PickBuilding(Vector2 worldPoint)
     {
-        var point = SimConvert.ToSim(worldPoint);
-        foreach (var settlement in _match.Sim.Settlements)
+        var p = SimConvert.ToSim(worldPoint);
+        foreach (var building in _match.Sim.Buildings)
         {
-            var c = settlement.Cell.Center;
-            if (MathF.Abs(point.X - c.X) <= 1.1f && point.Y >= c.Y - 1.7f && point.Y <= c.Y + 0.5f)
-                return settlement;
+            float half = building.Type.Size / 2f;
+            var c = building.Position;
+            if (MathF.Abs(p.X - c.X) <= half && p.Y <= c.Y + half && p.Y >= c.Y - half - building.Type.Size * 0.8f)
+                return building;
         }
         return null;
     }

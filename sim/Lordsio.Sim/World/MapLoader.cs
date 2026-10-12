@@ -5,11 +5,15 @@ namespace Lordsio.Sim.World;
 /// <summary><paramref name="Count"/> units of one type, spread in formation around <paramref name="Cell"/>.</summary>
 public sealed record UnitSpawn(string TypeId, int FactionId, Cell Cell, int Count = 1);
 
-/// <summary>A settlement placed on the map; <paramref name="OwnerId"/> is -1 for neutral.</summary>
-public sealed record SettlementSpawn(string TypeId, int OwnerId, Cell Cell);
+/// <summary>A gold deposit's top-left cell and its yield in gold per second once mined.</summary>
+public sealed record DepositSpawn(Cell Anchor, int Yield);
 
+/// <param name="StartPositions">Top-left cells where capitals may be placed; factions are assigned to them at match start.</param>
 public sealed record MapDefinition(
-    TileGrid Grid, IReadOnlyList<UnitSpawn> UnitSpawns, IReadOnlyList<SettlementSpawn> SettlementSpawns);
+    TileGrid Grid,
+    IReadOnlyList<UnitSpawn> UnitSpawns,
+    IReadOnlyList<Cell> StartPositions,
+    IReadOnlyList<DepositSpawn> Deposits);
 
 /// <summary>
 /// Parses the text map format:
@@ -18,18 +22,22 @@ public sealed record MapDefinition(
 /// [tiles]
 /// ..ff~~^^==        one character per tile, all rows the same length
 /// [objects]
-/// unit &lt;typeId&gt; &lt;faction&gt; &lt;x&gt; &lt;y&gt; [count]
-/// settlement &lt;typeId&gt; &lt;owner, -1 = neutral&gt; &lt;x&gt; &lt;y&gt;
+/// start &lt;x&gt; &lt;y&gt;                         possible capital location (top-left cell)
+/// gold &lt;x&gt; &lt;y&gt; [yield]                  2×2 gold deposit (top-left cell), default yield 3
+/// unit &lt;typeId&gt; &lt;faction&gt; &lt;x&gt; &lt;y&gt; [count]  pre-placed units (tests, scenarios)
 /// </code>
-/// Type ids are checked against the rules when the simulation is created, not here.
+/// Unit type ids and whether a capital fits at a start are checked when the match is created.
 /// </summary>
 public static class MapLoader
 {
+    public const int DefaultDepositYield = 3;
+
     public static MapDefinition Parse(string text)
     {
         var rows = new List<string>();
         var units = new List<UnitSpawn>();
-        var settlements = new List<SettlementSpawn>();
+        var starts = new List<Cell>();
+        var deposits = new List<DepositSpawn>();
         string? section = null;
         int lineNo = 0;
 
@@ -54,7 +62,7 @@ public static class MapLoader
                     rows.Add(line);
                     break;
                 case "objects":
-                    ParseObject(line, lineNo, units, settlements);
+                    ParseObject(line, lineNo, units, starts, deposits);
                     break;
                 default:
                     throw Error(lineNo, "content before the first section header");
@@ -85,15 +93,25 @@ public static class MapLoader
             if (!grid.IsWalkable(spawn.Cell))
                 throw new FormatException($"Unit spawn at {spawn.Cell} is not on a walkable tile.");
         }
-        foreach (var settlement in settlements)
+        var depositCells = new HashSet<Cell>();
+        foreach (var deposit in deposits)
         {
-            if (!grid.IsWalkable(settlement.Cell))
-                throw new FormatException($"Settlement at {settlement.Cell} is not on a walkable tile.");
+            for (int y = 0; y < GoldDeposit.Size; y++)
+            {
+                for (int x = 0; x < GoldDeposit.Size; x++)
+                {
+                    var cell = new Cell(deposit.Anchor.X + x, deposit.Anchor.Y + y);
+                    if (!grid.InBounds(cell) || !TerrainInfo.IsBuildable(grid.GetTerrain(cell)))
+                        throw new FormatException($"Gold deposit at {deposit.Anchor} must lie on open ground (grass or forest).");
+                    if (!depositCells.Add(cell))
+                        throw new FormatException($"Gold deposit at {deposit.Anchor} overlaps another deposit.");
+                }
+            }
         }
-        return new MapDefinition(grid, units, settlements);
+        return new MapDefinition(grid, units, starts, deposits);
     }
 
-    private static void ParseObject(string line, int lineNo, List<UnitSpawn> units, List<SettlementSpawn> settlements)
+    private static void ParseObject(string line, int lineNo, List<UnitSpawn> units, List<Cell> starts, List<DepositSpawn> deposits)
     {
         string[] parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         switch (parts[0])
@@ -106,10 +124,18 @@ public static class MapLoader
                     throw Error(lineNo, "unit count must be at least 1");
                 units.Add(new UnitSpawn(parts[1], ParseInt(parts[2], lineNo), ParseCell(parts, 3, lineNo), count));
                 break;
-            case "settlement":
-                if (parts.Length != 5)
-                    throw Error(lineNo, "expected: settlement <typeId> <owner> <x> <y>");
-                settlements.Add(new SettlementSpawn(parts[1], ParseInt(parts[2], lineNo), ParseCell(parts, 3, lineNo)));
+            case "start":
+                if (parts.Length != 3)
+                    throw Error(lineNo, "expected: start <x> <y>");
+                starts.Add(ParseCell(parts, 1, lineNo));
+                break;
+            case "gold":
+                if (parts.Length is not (3 or 4))
+                    throw Error(lineNo, "expected: gold <x> <y> [yield]");
+                int yield = parts.Length == 4 ? ParseInt(parts[3], lineNo) : DefaultDepositYield;
+                if (yield <= 0)
+                    throw Error(lineNo, "deposit yield must be positive");
+                deposits.Add(new DepositSpawn(ParseCell(parts, 1, lineNo), yield));
                 break;
             default:
                 throw Error(lineNo, $"unknown object '{parts[0]}'");

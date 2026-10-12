@@ -1,4 +1,5 @@
 using System.Numerics;
+using Lordsio.Sim.Buildings;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.Units;
 using Lordsio.Sim.World;
@@ -6,12 +7,12 @@ using Lordsio.Sim.World;
 namespace Lordsio.Sim.Combat;
 
 /// <summary>
-/// Per-unit fighting behaviour (target choice, chasing, attacking) and projectile flight.
+/// Fighting behaviour of units (target choice, chasing, attacking) and towers, plus projectile flight.
 /// Damage is applied here by the rules, never by animations.
 /// </summary>
 internal sealed class CombatSystem
 {
-    /// <summary>Targets are (re)acquired every this many ticks, staggered by unit id.</summary>
+    /// <summary>Targets are (re)acquired every this many ticks, staggered by id.</summary>
     internal const int ScanIntervalTicks = 5;
     /// <summary>A chased target is dropped once it is this many sight ranges away.</summary>
     private const float LoseTargetFactor = 1.5f;
@@ -22,6 +23,8 @@ internal sealed class CombatSystem
     private const int ChaseRepathIntervalTicks = 10;
     /// <summary>An attack-moving unit within this distance of its slot counts as arrived.</summary>
     private const float ArrivalSlack = 1.5f;
+    /// <summary>How far around a building we look for a free spot to stand and hit it from.</summary>
+    private const int ApproachSearchRadius = 6;
 
     private readonly TileGrid _map;
     private readonly Pathfinder _pathfinder;
@@ -34,12 +37,11 @@ internal sealed class CombatSystem
         _projectiles = projectiles;
     }
 
-    public static bool InAttackRange(Unit attacker, Unit target) =>
-        Vector2.Distance(attacker.Position, target.Position) - attacker.Type.Radius - target.Type.Radius
-        <= attacker.Type.AttackRange;
+    public static bool InAttackRange(Unit attacker, Entity target) =>
+        target.SurfaceDistance(attacker.Position) - attacker.Type.Radius <= attacker.Type.AttackRange;
 
     /// <summary>Decides what the unit does this tick: fight, chase, resume its march or go back to its post.</summary>
-    public void UpdateBehaviour(Unit unit, IReadOnlyList<Unit> units, int tick)
+    public void UpdateBehaviour(Unit unit, IReadOnlyList<Unit> units, IReadOnlyList<Building> buildings, int tick)
     {
         if (unit.AttackCooldownTicks > 0)
             unit.AttackCooldownTicks--;
@@ -61,8 +63,10 @@ internal sealed class CombatSystem
             return;
         }
 
-        if (unit.Target == null && (tick + unit.Id) % ScanIntervalTicks == 0)
-            unit.Target = FindNearestEnemy(unit, units);
+        // Re-scan even while hitting a building: an enemy soldier showing up takes priority.
+        bool scan = (tick + unit.Id) % ScanIntervalTicks == 0;
+        if (scan && unit.Order != UnitOrder.AttackUnit && unit.Target is null or Building)
+            unit.Target = FindEnemyUnit(unit, units) ?? unit.Target ?? FindEnemyBuilding(unit, buildings);
 
         if (unit.Target is { } target)
         {
@@ -102,6 +106,25 @@ internal sealed class CombatSystem
         }
     }
 
+    /// <summary>A finished tower shoots the nearest enemy unit in range.</summary>
+    public void UpdateTower(Building tower, IReadOnlyList<Unit> units, int tick)
+    {
+        if (tower.Type.Attack is not { } attack || !tower.IsComplete)
+            return;
+        if (tower.AttackCooldownTicks > 0)
+            tower.AttackCooldownTicks--;
+
+        if (tower.Target is { } current && (!current.IsAlive || tower.SurfaceDistance(current.Position) > attack.Range))
+            tower.Target = null;
+        if (tower.Target == null && (tick + tower.Id) % ScanIntervalTicks == 0)
+            tower.Target = FindEnemyUnit(tower, units, attack.Range);
+        if (tower.Target is not { } target || tower.AttackCooldownTicks > 0)
+            return;
+
+        tower.AttackCooldownTicks = CooldownTicks(attack.Cooldown);
+        _projectiles.Add(new Projectile(tower.FactionId, attack.Damage, attack.ProjectileSpeed, tower.Position, target));
+    }
+
     public void AdvanceProjectiles(float dt)
     {
         for (int i = _projectiles.Count - 1; i >= 0; i--)
@@ -114,81 +137,114 @@ internal sealed class CombatSystem
                 continue;
             }
 
-            Vector2 toTarget = p.Target.Position - p.Position;
-            float dist = toTarget.Length();
             float step = p.Speed * dt;
-            if (dist <= step)
+            if (p.Target.SurfaceDistance(p.Position) <= step)
             {
-                p.Position = p.Target.Position;
                 ApplyDamage(p.Target, p.Damage, ranged: true, p.FactionId);
                 _projectiles.RemoveAt(i);
+                continue;
             }
-            else
-            {
-                p.Position += toTarget / dist * step;
-            }
+            Vector2 toTarget = p.Target.Position - p.Position;
+            p.Position += Vector2.Normalize(toTarget) * step;
         }
     }
 
-    public static void ApplyDamage(Unit target, int damage, bool ranged, int attackerFactionId)
+    public static void ApplyDamage(Entity target, int damage, bool ranged, int attackerFactionId)
     {
         if (!target.IsAlive)
             return;
-        int dealt = ranged ? Math.Max(1, (int)MathF.Round(damage * (1f - target.Type.RangedArmor))) : damage;
+        int dealt = ranged ? Math.Max(1, (int)MathF.Round(damage * (1f - target.RangedArmor))) : damage;
         target.Health -= dealt;
         if (!target.IsAlive)
             target.KilledByFactionId = attackerFactionId;
     }
 
-    private bool IsStillValidTarget(Unit unit, Unit target)
+    private bool IsStillValidTarget(Unit unit, Entity target)
     {
         if (!target.IsAlive)
             return false;
         if (unit.Order == UnitOrder.AttackUnit)
             return true; // explicit orders are followed anywhere
         float limit = unit.Type.SightRange * LoseTargetFactor;
-        return Vector2.DistanceSquared(unit.Position, target.Position) <= limit * limit;
+        return target.SurfaceDistance(unit.Position) <= limit;
     }
 
-    private static Unit? FindNearestEnemy(Unit unit, IReadOnlyList<Unit> units)
+    private static Unit? FindEnemyUnit(Unit unit, IReadOnlyList<Unit> units) =>
+        FindEnemyUnit(unit, units, unit.Type.SightRange);
+
+    /// <summary>Nearest living unit of another faction within <paramref name="range"/> of the seeker's body.</summary>
+    private static Unit? FindEnemyUnit(Entity seeker, IReadOnlyList<Unit> units, float range)
     {
         Unit? best = null;
-        float bestDistSq = unit.Type.SightRange * unit.Type.SightRange;
+        float bestDistance = float.MaxValue;
         foreach (var other in units)
         {
-            if (other.FactionId == unit.FactionId || !other.IsAlive)
+            if (other.FactionId == seeker.FactionId || !other.IsAlive)
                 continue;
-            float distSq = Vector2.DistanceSquared(unit.Position, other.Position);
-            if (distSq <= bestDistSq)
+            float distance = seeker.SurfaceDistance(other.Position);
+            if (distance <= range && distance < bestDistance)
             {
-                bestDistSq = distSq;
+                bestDistance = distance;
                 best = other;
             }
         }
         return best;
     }
 
-    private void Attack(Unit attacker, Unit target)
+    private static Building? FindEnemyBuilding(Unit unit, IReadOnlyList<Building> buildings)
     {
-        attacker.AttackCooldownTicks = Math.Max(1, (int)MathF.Round(attacker.Type.AttackCooldown * Simulation.TicksPerSecond));
+        Building? best = null;
+        float bestDistance = unit.Type.SightRange;
+        foreach (var building in buildings)
+        {
+            if (building.FactionId == unit.FactionId || !building.IsAlive)
+                continue;
+            float distance = building.SurfaceDistance(unit.Position);
+            if (distance <= bestDistance)
+            {
+                bestDistance = distance;
+                best = building;
+            }
+        }
+        return best;
+    }
+
+    private void Attack(Unit attacker, Entity target)
+    {
+        attacker.AttackCooldownTicks = CooldownTicks(attacker.Type.AttackCooldown);
         if (attacker.Type.IsRanged)
-            _projectiles.Add(new Projectile(attacker, target));
+            _projectiles.Add(new Projectile(attacker.FactionId, attacker.Type.Damage, attacker.Type.ProjectileSpeed, attacker.Position, target));
         else
             ApplyDamage(target, attacker.Type.Damage, ranged: false, attacker.FactionId);
     }
 
-    private void Chase(Unit unit, Unit target)
+    private static int CooldownTicks(float seconds) => Math.Max(1, (int)MathF.Round(seconds * Simulation.TicksPerSecond));
+
+    private void Chase(Unit unit, Entity target)
     {
-        if (_map.IsCorridorClear(unit.Position, target.Position, unit.Type.Radius))
+        // Buildings are solid: head for the nearest free spot next to them instead of their center.
+        Vector2 goal = target.Position;
+        if (target is Building)
         {
-            unit.SetSingleWaypoint(target.Position);
+            int component = _map.ComponentOf(Cell.FromPosition(unit.Position));
+            if (_map.FindNearestInComponent(Cell.FromPosition(target.Position), component, ApproachSearchRadius) is not { } spot)
+            {
+                unit.Target = null;
+                return;
+            }
+            goal = spot.Center;
+        }
+
+        if (_map.IsCorridorClear(unit.Position, goal, unit.Type.Radius))
+        {
+            unit.SetSingleWaypoint(goal);
             unit.ChaseRepathTicks = 0;
             return;
         }
         if (--unit.ChaseRepathTicks > 0 && unit.State == UnitState.Moving)
             return;
 
-        var path = _pathfinder.FindPath(unit.Position, target.Position, unit.Type.Radius);
+        var path = _pathfinder.FindPath(unit.Position, goal, unit.Type.Radius);
         if (path == null)
         {
             unit.Target = null;
@@ -201,6 +257,11 @@ internal sealed class CombatSystem
     private void ReturnToPost(Unit unit)
     {
         Vector2 post = unit.GuardPoint;
+        if (!_map.IsWalkable(Cell.FromPosition(post)))
+        {
+            unit.CompleteOrder(); // a building now stands on the old post: guard from here
+            return;
+        }
         var path = _pathfinder.FindPath(unit.Position, post, unit.Type.Radius);
         if (path == null || path.Count == 0)
         {

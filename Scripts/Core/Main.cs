@@ -13,6 +13,9 @@ namespace Lordsio.Core;
 ///   --demo-move=&lt;x&gt;,&lt;y&gt;      select all player units and order them to advance (attack-move) to tile (x, y)
 ///   --zoom-index=&lt;n&gt;         start at camera zoom step n (0 = farthest)
 ///   --demo-recruit=&lt;n&gt;       select the player's castle and order n recruits there
+///   --demo-gold=&lt;n&gt;          give the player n extra gold (for visual checks only)
+///   --demo-build             order a barracks and a tower next to the player's castle
+///   --seed=&lt;n&gt;               fixed seed for start positions (read by MatchController)
 /// </summary>
 public partial class Main : Node
 {
@@ -32,6 +35,14 @@ public partial class Main : Node
         if (demoMove != null)
             RunDemoMove(demoMove);
 
+        string? demoGold = Arg(args, "--demo-gold");
+        if (demoGold != null)
+            GetNode<MatchController>("Match").Sim.GetFaction(MatchController.PlayerFactionId)!
+                .Treasury.Add(int.Parse(demoGold, CultureInfo.InvariantCulture));
+
+        if (args.Contains("--demo-build"))
+            RunDemoBuild();
+
         string? demoRecruit = Arg(args, "--demo-recruit");
         if (demoRecruit != null)
             RunDemoRecruit(int.Parse(demoRecruit, CultureInfo.InvariantCulture));
@@ -47,10 +58,38 @@ public partial class Main : Node
     private void RunDemoRecruit(int count)
     {
         var match = GetNode<MatchController>("Match");
-        var castle = match.Sim.Settlements.First(s => s.OwnerId == MatchController.PlayerFactionId && s.Type.Recruits.Count > 0);
-        match.Selection.SelectSettlement(castle.Id);
+        var capital = match.Sim.GetBuilding(match.Sim.GetFaction(MatchController.PlayerFactionId)!.CapitalId)!;
+        match.Selection.SelectBuilding(capital.Id);
         for (int i = 0; i < count; i++)
-            match.Sim.Issue(new RecruitCommand(MatchController.PlayerFactionId, castle.Id, castle.Type.Recruits[0]));
+            match.Sim.Issue(new RecruitCommand(MatchController.PlayerFactionId, capital.Id, capital.Type.Recruits[0]));
+    }
+
+    /// <summary>Orders a barracks and a tower on the first free spots around the player's capital.</summary>
+    private void RunDemoBuild()
+    {
+        var match = GetNode<MatchController>("Match");
+        var sim = match.Sim;
+        var capital = sim.GetBuilding(sim.GetFaction(MatchController.PlayerFactionId)!.CapitalId)!;
+        var taken = new System.Collections.Generic.HashSet<Sim.World.Cell>();
+        foreach (string type in new[] { "barracks", "tower" })
+        {
+            int size = sim.Rules.GetBuildingType(type).Size;
+            for (int r = 3; r < 6; r++)
+            {
+                var anchor = Enumerable.Range(-r, 2 * r + 1)
+                    .SelectMany(dy => Enumerable.Range(-r, 2 * r + 1).Select(dx => new Sim.World.Cell(capital.Anchor.X + dx, capital.Anchor.Y + dy)))
+                    .FirstOrDefault(c => sim.CanBuild(MatchController.PlayerFactionId, type, c) == BuildError.None
+                                         && !Sim.Buildings.Building.FootprintOf(c, size).Any(taken.Contains));
+                if (anchor == default)
+                    continue;
+                sim.Issue(new BuildCommand(MatchController.PlayerFactionId, type, anchor));
+                // Keep a one-tile gap so the second building does not clip the first one's footprint.
+                for (int y = -1; y <= size; y++)
+                    for (int x = -1; x <= size; x++)
+                        taken.Add(new Sim.World.Cell(anchor.X + x, anchor.Y + y));
+                break;
+            }
+        }
     }
 
     private void RunDemoMove(string value)

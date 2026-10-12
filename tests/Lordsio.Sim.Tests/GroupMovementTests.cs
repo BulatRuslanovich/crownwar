@@ -35,7 +35,7 @@ public class GroupMovementTests
     [Test]
     public void MapSpawnPlacesGroupWithoutOverlap()
     {
-        var sim = new Simulation(TestMaps.Parse(BridgeMap, "unit infantry 0 3 4 20"), TestMaps.Rules);
+        var sim = new Simulation(TestMaps.Parse(BridgeMap, "unit infantry 0 3 4 20"), TestMaps.Rules, MatchSetup.Sandbox);
 
         Assert.That(sim.Units, Has.Count.EqualTo(20));
         AssertNoOverlap(sim, tolerance: 1e-3f);
@@ -44,7 +44,7 @@ public class GroupMovementTests
     [Test]
     public void GroupCrossesOneTileBridgeAndSpreadsAtTarget()
     {
-        var sim = new Simulation(TestMaps.Parse(BridgeMap, "unit infantry 0 3 4 20"), TestMaps.Rules);
+        var sim = new Simulation(TestMaps.Parse(BridgeMap, "unit infantry 0 3 4 20"), TestMaps.Rules, MatchSetup.Sandbox);
         var target = new Vector2(13.5f, 4.5f);
 
         sim.Issue(new MoveCommand(0, AllIds(sim), target));
@@ -68,7 +68,7 @@ public class GroupMovementTests
     [Test]
     public void OverlappingUnitsArePushedApart()
     {
-        var sim = new Simulation(TestMaps.Parse(BridgeMap), TestMaps.Rules);
+        var sim = new Simulation(TestMaps.Parse(BridgeMap), TestMaps.Rules, MatchSetup.Sandbox);
         var a = sim.SpawnUnit("infantry", 0, new Vector2(3.5f, 3.5f));
         var b = sim.SpawnUnit("infantry", 0, new Vector2(3.5f, 3.5f));
 
@@ -80,7 +80,7 @@ public class GroupMovementTests
     [Test]
     public void UnitsAreKeptOffWallsAndMapEdge()
     {
-        var sim = new Simulation(TestMaps.Parse(BridgeMap), TestMaps.Rules);
+        var sim = new Simulation(TestMaps.Parse(BridgeMap), TestMaps.Rules, MatchSetup.Sandbox);
         var edge = sim.SpawnUnit("infantry", 0, new Vector2(0.05f, 3.5f));
         var shore = sim.SpawnUnit("infantry", 0, new Vector2(7.9f, 1.5f));
 
@@ -93,7 +93,7 @@ public class GroupMovementTests
     [Test]
     public void DuplicateIdsInCommandAreHandledOnce()
     {
-        var sim = new Simulation(TestMaps.Parse(BridgeMap, "unit infantry 0 3 4"), TestMaps.Rules);
+        var sim = new Simulation(TestMaps.Parse(BridgeMap, "unit infantry 0 3 4"), TestMaps.Rules, MatchSetup.Sandbox);
         int id = sim.Units[0].Id;
         var target = new Vector2(5.5f, 4.5f);
 

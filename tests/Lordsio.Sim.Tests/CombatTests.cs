@@ -21,7 +21,7 @@ public class CombatTests
         "....................",
     };
 
-    private static Simulation EmptySim() => new(TestMaps.Parse(Field), TestMaps.Rules);
+    private static Simulation EmptySim() => new(TestMaps.Parse(Field), TestMaps.Rules, MatchSetup.Sandbox);
 
     private static void RunSeconds(Simulation sim, float seconds)
     {
@@ -162,7 +162,7 @@ public class CombatTests
         var unit = sim.SpawnUnit("infantry", 0, new Vector2(1.5f, 1.5f));
         var dummy = sim.SpawnUnit("dummy", 1, new Vector2(18.5f, 8.5f));
 
-        sim.Issue(new AttackUnitCommand(0, new[] { unit.Id }, dummy.Id));
+        sim.Issue(new AttackCommand(0, new[] { unit.Id }, dummy.Id));
         RunSeconds(sim, 20f);
 
         Assert.That(dummy.IsAlive, Is.False);
@@ -176,7 +176,7 @@ public class CombatTests
         var unit = sim.SpawnUnit("infantry", 0, new Vector2(1.5f, 1.5f));
         var friend = sim.SpawnUnit("infantry", 0, new Vector2(3.5f, 1.5f));
 
-        sim.Issue(new AttackUnitCommand(0, new[] { unit.Id }, friend.Id));
+        sim.Issue(new AttackCommand(0, new[] { unit.Id }, friend.Id));
         RunSeconds(sim, 3f);
 
         Assert.That(friend.Health, Is.EqualTo(100));

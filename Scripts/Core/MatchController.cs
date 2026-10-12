@@ -4,7 +4,7 @@ using Godot;
 using Lordsio.Interaction;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.World;
-using Lordsio.Territory;
+using Lordsio.Buildings;
 using Lordsio.UI;
 using Lordsio.Units;
 using Lordsio.World;
@@ -24,10 +24,17 @@ public partial class MatchController : Node2D
     [Export(PropertyHint.File, "*.txt")] public string MapPath { get; set; } = "res://Maps/default.txt";
     [Export(PropertyHint.File, "*.json")] public string RulesPath { get; set; } = "res://Data/rules.json";
 
+    /// <summary>Player plus opponents; each gets a capital on a random start position.</summary>
+    [Export(PropertyHint.Range, "1,8")] public int FactionCount { get; set; } = 2;
+
+    /// <summary>Seed for start positions; negative picks a new one every match (overridable with --seed=N).</summary>
+    [Export] public int Seed { get; set; } = -1;
+
     private double _accumulator;
     private Hud _hud = null!;
 
     public Simulation Sim { get; private set; } = null!;
+    public int ActualSeed { get; private set; }
     public Selection Selection { get; } = new();
     public CameraController Camera { get; private set; } = null!;
 
@@ -41,7 +48,8 @@ public partial class MatchController : Node2D
     {
         var map = MapLoader.Parse(ReadText(MapPath));
         var rules = GameRules.Parse(ReadText(RulesPath));
-        Sim = new Simulation(map, rules);
+        ActualSeed = SeedFromCommandLine() ?? (Seed >= 0 ? Seed : (int)(GD.Randi() & int.MaxValue));
+        Sim = new Simulation(map, rules, new MatchSetup(FactionCount, ActualSeed));
 
         Camera = GetNode<CameraController>("Camera");
         var worldSize = new Vector2(Sim.Map.Width, Sim.Map.Height) * SimConvert.TileSize;
@@ -49,25 +57,38 @@ public partial class MatchController : Node2D
         Camera.CenterOn(StartingFocus() ?? worldSize / 2);
 
         GetNode<MapView>("MapView").Build(Sim.Map);
-        GetNode<TerritoryOverlay>("TerritoryOverlay").Initialize(this);
-        GetNode<SettlementsView>("Actors/SettlementsView").Initialize(this);
+        GetNode<DepositsView>("DepositsView").Initialize(this);
+        GetNode<BuildingsView>("Actors/BuildingsView").Initialize(this);
         GetNode<UnitsView>("Actors/UnitsView").Initialize(this);
         GetNode<ProjectilesView>("ProjectilesView").Initialize(this);
         GetNode<SelectionController>("SelectionController").Initialize(this);
+        var placement = GetNode<BuildPlacement>("BuildPlacement");
+        placement.Initialize(this);
         GetNode<DebugHud>("DebugHud").Initialize(this);
         _hud = GetNode<Hud>("Hud");
-        _hud.Initialize(this);
+        _hud.Initialize(this, placement);
     }
 
-    /// <summary>The player's first settlement, else their first unit.</summary>
+    /// <summary>The player's capital, else their first unit.</summary>
     private Vector2? StartingFocus()
     {
-        foreach (var settlement in Sim.Settlements)
-            if (settlement.OwnerId == PlayerFactionId)
-                return SimConvert.ToWorld(settlement.Cell.Center);
+        if (Sim.GetFaction(PlayerFactionId) is { } player && Sim.GetBuilding(player.CapitalId) is { } capital)
+            return SimConvert.ToWorld(capital.Position);
         foreach (var unit in Sim.Units)
             if (unit.FactionId == PlayerFactionId)
                 return SimConvert.ToWorld(unit.Position);
+        return null;
+    }
+
+    private static int? SeedFromCommandLine()
+    {
+        foreach (string arg in OS.GetCmdlineUserArgs())
+        {
+            if (arg.StartsWith("--seed=", StringComparison.Ordinal)
+                && int.TryParse(arg["--seed=".Length..], System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out int seed))
+                return seed;
+        }
         return null;
     }
 

@@ -67,23 +67,26 @@
 ...............................................~~~..............................................
 
 [objects]
-# unit <typeId> <faction> <x> <y> [count]
-# settlement <typeId> <owner, -1 = neutral> <x> <y>
-settlement castle 0 10 16
-settlement castle 1 85 47
-settlement town -1 41 27
-settlement town -1 54 36
-settlement town -1 36 40
-settlement town -1 59 23
-settlement village -1 24 8
-settlement village -1 71 55
-settlement village -1 15 26
-settlement village -1 86 37
-settlement village -1 30 20
-settlement village -1 65 43
-settlement village -1 22 56
-settlement village -1 73 7
-settlement village -1 7 40
-settlement village -1 88 24
-unit infantry 0 10 18 5
-unit infantry 1 85 45 5
+# start <x> <y>             possible capital location (top-left of the 3x3 castle); castles are assigned at random
+# gold <x> <y> [yield]      2x2 gold deposit (top-left), yield in gold per second once mined
+start 9 15
+start 85 15
+start 9 46
+start 84 46
+# one safe and one exposed deposit per corner
+gold 15 18
+gold 24 8
+gold 79 18
+gold 70 7
+gold 15 53
+gold 24 56
+gold 78 53
+gold 70 56
+# contested deposits between neighbours
+gold 30 40
+gold 65 22
+gold 58 5
+gold 37 57
+# rich deposits at the central crossing
+gold 40 27 5
+gold 55 35 5
