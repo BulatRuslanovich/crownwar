@@ -70,4 +70,20 @@
 # unit <typeId> <faction> <x> <y> [count]
 # settlement <typeId> <owner, -1 = neutral> <x> <y>
 settlement castle 0 10 16
-unit infantry 0 13 20 5
+settlement castle 1 85 47
+settlement town -1 41 27
+settlement town -1 54 36
+settlement town -1 36 40
+settlement town -1 59 23
+settlement village -1 24 8
+settlement village -1 71 55
+settlement village -1 15 26
+settlement village -1 86 37
+settlement village -1 30 20
+settlement village -1 65 43
+settlement village -1 22 56
+settlement village -1 73 7
+settlement village -1 7 40
+settlement village -1 88 24
+unit infantry 0 10 18 5
+unit infantry 1 85 45 5

@@ -6,9 +6,23 @@ public enum UnitState
 {
     Idle,
     Moving,
+    Attacking,
 }
 
-/// <summary>Outcome of the most recent move order, kept for UI feedback.</summary>
+/// <summary>What the owner told the unit to do. Without an order a unit guards its post.</summary>
+public enum UnitOrder
+{
+    /// <summary>Guarding: fights enemies that come into sight, but does not chase far from its post.</summary>
+    None,
+    /// <summary>Walk to the destination ignoring enemies (e.g. a retreat).</summary>
+    Move,
+    /// <summary>Walk to the destination, fighting any enemies met on the way.</summary>
+    AttackMove,
+    /// <summary>Hunt one specific enemy unit until it dies.</summary>
+    AttackUnit,
+}
+
+/// <summary>Outcome of the most recent order, kept for UI feedback.</summary>
 public enum MoveOrderResult
 {
     None,
@@ -35,10 +49,14 @@ public sealed class Unit
         FactionId = factionId;
         Position = position;
         PreviousPosition = position;
+        GuardPoint = position;
+        Health = type.MaxHealth;
     }
 
     public int Id { get; }
     public UnitType Type { get; }
+
+    /// <summary>Owner faction, or -1 for neutral garrison troops (hostile to everyone).</summary>
     public int FactionId { get; }
 
     /// <summary>Position in tile units at the end of the last tick.</summary>
@@ -47,15 +65,36 @@ public sealed class Unit
     /// <summary>Position at the start of the last tick; views interpolate between the two.</summary>
     public Vector2 PreviousPosition { get; internal set; }
 
-    public UnitState State { get; private set; }
+    public int Health { get; internal set; }
+    public bool IsAlive => Health > 0;
+
+    public UnitOrder Order { get; internal set; }
     public MoveOrderResult LastOrder { get; internal set; }
+
+    /// <summary>Enemy being fought or chased.</summary>
+    public Unit? Target { get; internal set; }
+
+    /// <summary>Set by the simulation each tick while the unit stands and swings at its target.</summary>
+    internal bool IsAttacking { get; set; }
+
+    public UnitState State => IsAttacking ? UnitState.Attacking
+        : PathIndex < _path.Count ? UnitState.Moving
+        : UnitState.Idle;
 
     /// <summary>Final point of the current move order (the unit's formation slot).</summary>
     public Vector2? Destination { get; private set; }
 
+    /// <summary>Where a guarding unit stands; it returns here after chasing an intruder.</summary>
+    public Vector2 GuardPoint { get; private set; }
+
     /// <summary>Remaining waypoints, starting from <see cref="PathIndex"/>.</summary>
     public IReadOnlyList<Vector2> Path => _path;
     public int PathIndex { get; private set; }
+
+    internal int AttackCooldownTicks { get; set; }
+    internal int ChaseRepathTicks { get; set; }
+    /// <summary>Faction that dealt the killing blow, for the death event.</summary>
+    internal int KilledByFactionId { get; set; } = -1;
 
     /// <summary>Consecutive progress checks in which the unit barely moved.</summary>
     internal int StuckChecks { get; set; }
@@ -77,15 +116,27 @@ public sealed class Unit
         }
     }
 
-    /// <summary>Starts a new move order.</summary>
-    internal void StartMove(Vector2 destination, List<Vector2> waypoints)
+    /// <summary>Starts a new order towards <paramref name="destination"/>.</summary>
+    internal void StartMove(UnitOrder order, Vector2 destination, List<Vector2> waypoints)
     {
+        Order = order;
+        Target = null;
         Destination = destination;
         StuckChecks = 0;
         ReplacePath(waypoints);
     }
 
-    /// <summary>Swaps the route of the current order (re-pathing), keeping its stuck history.</summary>
+    /// <summary>Starts hunting one enemy; the route is planned by the chase logic.</summary>
+    internal void StartAttack(Unit target)
+    {
+        Order = UnitOrder.AttackUnit;
+        Target = target;
+        Destination = null;
+        ChaseRepathTicks = 0;
+        ClearPath();
+    }
+
+    /// <summary>Swaps the current route (re-pathing or chasing), keeping the order and its stuck history.</summary>
     internal void ReplacePath(List<Vector2> waypoints)
     {
         _path.Clear();
@@ -93,23 +144,36 @@ public sealed class Unit
         PathIndex = 0;
         TicksSinceProgressCheck = 0;
         ProgressAnchor = Position;
-        State = _path.Count > 0 ? UnitState.Moving : UnitState.Idle;
-        if (State == UnitState.Idle)
-            Destination = null;
     }
 
-    internal void Stop()
+    /// <summary>Heads straight for a point (open-ground chase) without allocating a new path.</summary>
+    internal void SetSingleWaypoint(Vector2 point)
+    {
+        _path.Clear();
+        _path.Add(point);
+        PathIndex = 0;
+    }
+
+    internal void ClearPath()
     {
         _path.Clear();
         PathIndex = 0;
+    }
+
+    /// <summary>Ends the current order: the unit stands still and guards where it is.</summary>
+    internal void CompleteOrder()
+    {
+        ClearPath();
+        Order = UnitOrder.None;
+        Target = null;
         Destination = null;
-        State = UnitState.Idle;
+        GuardPoint = Position;
     }
 
     /// <summary>Advances along the path by speed × dt.</summary>
     internal void Move(float dt)
     {
-        if (State != UnitState.Moving)
+        if (PathIndex >= _path.Count)
             return;
 
         float budget = Type.Speed * dt;
@@ -138,6 +202,6 @@ public sealed class Unit
         }
         Position = pos;
         if (PathIndex >= _path.Count)
-            Stop();
+            ClearPath();
     }
 }

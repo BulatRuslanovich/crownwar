@@ -49,8 +49,10 @@ public partial class MatchController : Node2D
         Camera.CenterOn(StartingFocus() ?? worldSize / 2);
 
         GetNode<MapView>("MapView").Build(Sim.Map);
+        GetNode<TerritoryOverlay>("TerritoryOverlay").Initialize(this);
         GetNode<SettlementsView>("Actors/SettlementsView").Initialize(this);
         GetNode<UnitsView>("Actors/UnitsView").Initialize(this);
+        GetNode<ProjectilesView>("ProjectilesView").Initialize(this);
         GetNode<SelectionController>("SelectionController").Initialize(this);
         GetNode<DebugHud>("DebugHud").Initialize(this);
         _hud = GetNode<Hud>("Hud");

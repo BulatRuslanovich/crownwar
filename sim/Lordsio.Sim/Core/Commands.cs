@@ -8,8 +8,20 @@ namespace Lordsio.Sim.Core;
 /// </summary>
 public abstract record Command(int FactionId);
 
-/// <summary>Move the given units to a point (tile units).</summary>
-public sealed record MoveCommand(int FactionId, IReadOnlyList<int> UnitIds, Vector2 Target) : Command(FactionId);
+public enum MoveMode
+{
+    /// <summary>Walk there ignoring enemies (retreat).</summary>
+    Move,
+    /// <summary>Walk there, fighting enemies met on the way.</summary>
+    AttackMove,
+}
+
+/// <summary>Send the given units to a point (tile units), spreading them around it.</summary>
+public sealed record MoveCommand(int FactionId, IReadOnlyList<int> UnitIds, Vector2 Target, MoveMode Mode = MoveMode.Move)
+    : Command(FactionId);
+
+/// <summary>Order the given units to hunt down one enemy unit.</summary>
+public sealed record AttackUnitCommand(int FactionId, IReadOnlyList<int> UnitIds, int TargetUnitId) : Command(FactionId);
 
 /// <summary>Pay for a unit now and queue it for production at an owned settlement.</summary>
 public sealed record RecruitCommand(int FactionId, int SettlementId, string UnitTypeId) : Command(FactionId);

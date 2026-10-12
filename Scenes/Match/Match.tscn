@@ -8,12 +8,17 @@
 [ext_resource type="Script" path="res://Scripts/UI/DebugHud.cs" id="6_hud"]
 [ext_resource type="Script" path="res://Scripts/Territory/SettlementsView.cs" id="7_settlements"]
 [ext_resource type="PackedScene" path="res://Scenes/UI/Hud.tscn" id="8_player_hud"]
+[ext_resource type="Script" path="res://Scripts/Territory/TerritoryOverlay.cs" id="9_territory"]
+[ext_resource type="Script" path="res://Scripts/Units/ProjectilesView.cs" id="10_projectiles"]
 
 [node name="Match" type="Node2D"]
 script = ExtResource("1_match")
 
 [node name="MapView" type="TileMapLayer" parent="."]
 script = ExtResource("2_map")
+
+[node name="TerritoryOverlay" type="Sprite2D" parent="."]
+script = ExtResource("9_territory")
 
 [node name="Actors" type="Node2D" parent="."]
 y_sort_enabled = true
@@ -25,6 +30,9 @@ script = ExtResource("7_settlements")
 [node name="UnitsView" type="Node2D" parent="Actors"]
 y_sort_enabled = true
 script = ExtResource("3_units")
+
+[node name="ProjectilesView" type="Node2D" parent="."]
+script = ExtResource("10_projectiles")
 
 [node name="SelectionController" type="Node2D" parent="."]
 script = ExtResource("4_select")

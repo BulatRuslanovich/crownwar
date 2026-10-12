@@ -38,6 +38,9 @@ public sealed class Selection
             _ids.Add(unitId);
     }
 
+    /// <summary>Drops a unit that no longer exists.</summary>
+    public void Remove(int unitId) => _ids.Remove(unitId);
+
     public void SelectSettlement(int settlementId)
     {
         _ids.Clear();

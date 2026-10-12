@@ -12,7 +12,8 @@ namespace Lordsio.Interaction;
 /// <summary>
 /// Turns mouse and keyboard input into selection changes and simulation commands.
 /// LMB click / drag: select a unit / box-select (Shift adds, Shift+click toggles);
-/// double click: all units of that type on screen; Ctrl+A: all own units; RMB: move order.
+/// double click: all units of that type on screen; Ctrl+A: all own units;
+/// RMB: advance / attack the clicked enemy; Ctrl+RMB: retreat ignoring enemies.
 /// </summary>
 public partial class SelectionController : Node2D
 {
@@ -23,11 +24,14 @@ public partial class SelectionController : Node2D
     private const float MarkerDuration = 0.45f;
 
     private static readonly Color MarkerColor = new("7cff6b");
+    private static readonly Color AttackMarkerColor = new("ff5a4a");
+    private static readonly Color RetreatMarkerColor = new("8ec5ff");
     private static readonly Color BoxFill = new(0.48f, 1f, 0.42f, 0.12f);
     private static readonly Color BoxOutline = new(0.48f, 1f, 0.42f, 0.9f);
 
     private MatchController _match = null!;
     private Vector2 _markerPosition;
+    private Color _markerColor = MarkerColor;
     private float _markerTimeLeft;
 
     private bool _leftDown;
@@ -56,8 +60,8 @@ public partial class SelectionController : Node2D
                     QueueRedraw();
                 break;
 
-            case InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } when _match.Selection.Count > 0:
-                IssueMove(GetGlobalMousePosition());
+            case InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } right when _match.Selection.Count > 0:
+                IssueOrder(GetGlobalMousePosition(), retreat: right.CtrlPressed);
                 GetViewport().SetInputAsHandled();
                 break;
 
@@ -129,11 +133,28 @@ public partial class SelectionController : Node2D
             .Select(u => u.Id), additive);
     }
 
-    private void IssueMove(Vector2 world)
+    /// <summary>
+    /// Right click: on an enemy — hunt it; on the ground — advance, fighting whatever is met;
+    /// with Ctrl — retreat, ignoring enemies.
+    /// </summary>
+    private void IssueOrder(Vector2 world, bool retreat)
     {
-        _match.Sim.Issue(new MoveCommand(
-            MatchController.PlayerFactionId, _match.Selection.Ids.ToArray(), SimConvert.ToSim(world)));
-        _markerPosition = world;
+        int player = MatchController.PlayerFactionId;
+        int[] ids = _match.Selection.Ids.ToArray();
+        var enemy = retreat ? null : PickUnit(world, EnemyUnits());
+        if (enemy != null)
+        {
+            _match.Sim.Issue(new AttackUnitCommand(player, ids, enemy.Id));
+            _markerPosition = SimConvert.ToWorld(enemy.Position);
+            _markerColor = AttackMarkerColor;
+        }
+        else
+        {
+            var mode = retreat ? MoveMode.Move : MoveMode.AttackMove;
+            _match.Sim.Issue(new MoveCommand(player, ids, SimConvert.ToSim(world), mode));
+            _markerPosition = world;
+            _markerColor = retreat ? RetreatMarkerColor : MarkerColor;
+        }
         _markerTimeLeft = MarkerDuration;
     }
 
@@ -162,13 +183,16 @@ public partial class SelectionController : Node2D
         {
             float t = _markerTimeLeft / MarkerDuration;
             DrawSetTransform(_markerPosition, 0f, new Vector2(1f, 0.6f));
-            DrawArc(Vector2.Zero, 3f + 6f * t, 0f, Mathf.Tau, 20, MarkerColor with { A = t }, 1f);
+            DrawArc(Vector2.Zero, 3f + 6f * t, 0f, Mathf.Tau, 20, _markerColor with { A = t }, 1f);
             DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
         }
     }
 
     private IEnumerable<Unit> OwnUnits() =>
         _match.Sim.Units.Where(u => u.FactionId == MatchController.PlayerFactionId);
+
+    private IEnumerable<Unit> EnemyUnits() =>
+        _match.Sim.Units.Where(u => u.FactionId != MatchController.PlayerFactionId);
 
     private Rect2 VisibleWorldRect()
     {
@@ -189,12 +213,14 @@ public partial class SelectionController : Node2D
         return null;
     }
 
-    private Unit? PickUnit(Vector2 worldPoint)
+    private Unit? PickUnit(Vector2 worldPoint) => PickUnit(worldPoint, OwnUnits());
+
+    private static Unit? PickUnit(Vector2 worldPoint, IEnumerable<Unit> candidates)
     {
         var point = SimConvert.ToSim(worldPoint);
         Unit? best = null;
         float bestDistSq = PickRadius * PickRadius;
-        foreach (var unit in OwnUnits())
+        foreach (var unit in candidates)
         {
             // Units are drawn upwards from their feet, so aim slightly above the position too.
             float distSq = MathF.Min(

@@ -10,4 +10,8 @@
     <Optimize Condition=" '$(Configuration)' == 'ExportRelease' ">true</Optimize>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Lordsio.Sim.Tests" />
+  </ItemGroup>
+
 </Project>

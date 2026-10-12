@@ -21,4 +21,9 @@ public sealed class Faction
 
     /// <summary>Living units plus units queued for production.</summary>
     public int Population { get; internal set; }
+
+    public bool IsEliminated { get; internal set; }
+
+    /// <summary>Started with a capital, so it competes for victory and is eliminated without one.</summary>
+    internal bool IsContender { get; set; }
 }

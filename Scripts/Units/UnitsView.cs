@@ -6,14 +6,15 @@ using Lordsio.Sim.Units;
 namespace Lordsio.Units;
 
 /// <summary>
-/// Keeps one <see cref="UnitView"/> per simulated unit, positioned with interpolation between ticks.
-/// Also draws the remaining path of selected units for debugging.
+/// Keeps one <see cref="UnitView"/> per simulated unit, positioned with interpolation between ticks,
+/// and drops views (and selection) of units that died. Also draws the planned route of selected units.
 /// </summary>
 public partial class UnitsView : Node2D
 {
-    private static readonly Color PathColor = new(1f, 1f, 1f, 0.55f);
+    private static readonly Color PathColor = new(1f, 1f, 1f, 0.45f);
 
     private readonly Dictionary<int, UnitView> _views = new();
+    private readonly List<int> _gone = new();
     private readonly List<Vector2> _pathPoints = new();
     private MatchController _match = null!;
 
@@ -29,7 +30,8 @@ public partial class UnitsView : Node2D
         {
             if (!_views.TryGetValue(unit.Id, out var view))
             {
-                view = new UnitView { Name = $"Unit{unit.Id}", FactionColor = FactionColors.Get(unit.FactionId) };
+                view = new UnitView { Name = $"Unit{unit.Id}" };
+                view.Initialize(unit);
                 _views.Add(unit.Id, view);
                 AddChild(view);
             }
@@ -37,7 +39,19 @@ public partial class UnitsView : Node2D
             view.Selected = _match.Selection.Contains(unit.Id);
         }
 
-        QueueRedraw(); // path overlay follows the units every frame
+        _gone.Clear();
+        foreach (var (id, view) in _views)
+        {
+            if (_match.Sim.GetUnit(id) != null)
+                continue;
+            view.QueueFree();
+            _match.Selection.Remove(id);
+            _gone.Add(id);
+        }
+        foreach (int id in _gone)
+            _views.Remove(id);
+
+        QueueRedraw(); // route overlay follows the units every frame
     }
 
     public override void _Draw()
@@ -45,7 +59,8 @@ public partial class UnitsView : Node2D
         float alpha = _match.InterpolationAlpha;
         foreach (int id in _match.Selection.Ids)
         {
-            if (_match.Sim.GetUnit(id) is not { State: UnitState.Moving } unit)
+            // Only marches: chase routes change every tick and would just flicker.
+            if (_match.Sim.GetUnit(id) is not { State: UnitState.Moving, Target: null } unit)
                 continue;
 
             _pathPoints.Clear();
@@ -56,8 +71,7 @@ public partial class UnitsView : Node2D
                 continue;
 
             DrawPolyline(_pathPoints.ToArray(), PathColor, 1f);
-            for (int i = 1; i < _pathPoints.Count; i++)
-                DrawRect(new Rect2(_pathPoints[i] - Vector2.One, Vector2.One * 2), PathColor);
+            DrawRect(new Rect2(_pathPoints[^1] - Vector2.One, Vector2.One * 2), PathColor);
         }
     }
 

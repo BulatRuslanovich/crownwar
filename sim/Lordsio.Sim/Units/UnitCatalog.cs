@@ -1,10 +1,30 @@
 namespace Lordsio.Sim.Units;
 
 /// <summary>
-/// Static stats of a unit kind. Speed is in tiles per second, radius in tiles,
-/// cost in gold and build time in seconds of production at a settlement.
+/// Static stats of a unit kind. Distances are in tiles, times in seconds, speeds in tiles per second.
+/// <list type="bullet">
+/// <item><see cref="AttackRange"/> is measured edge to edge between the two bodies.</item>
+/// <item><see cref="ProjectileSpeed"/> of 0 means a melee attack that lands instantly.</item>
+/// <item><see cref="RangedArmor"/> is the fraction of projectile damage ignored (0..1).</item>
+/// </list>
 /// </summary>
-public sealed record UnitType(string Id, string Name, float Speed, float Radius, int Cost, float BuildTime);
+public sealed record UnitType(
+    string Id,
+    string Name,
+    float Speed,
+    float Radius,
+    int Cost,
+    float BuildTime,
+    int MaxHealth,
+    int Damage,
+    float AttackRange,
+    float AttackCooldown,
+    float SightRange,
+    float ProjectileSpeed = 0f,
+    float RangedArmor = 0f)
+{
+    public bool IsRanged => ProjectileSpeed > 0f;
+}
 
 public sealed class UnitCatalog
 {
@@ -15,10 +35,7 @@ public sealed class UnitCatalog
         _types = new Dictionary<string, UnitType>();
         foreach (var type in types)
         {
-            if (type.Speed <= 0f || type.Radius <= 0f || type.Radius >= 0.5f)
-                throw new ArgumentException($"Unit type '{type.Id}': speed must be > 0 and radius in (0, 0.5).");
-            if (type.Cost < 0 || type.BuildTime < 0f)
-                throw new ArgumentException($"Unit type '{type.Id}': cost and build time cannot be negative.");
+            Validate(type);
             if (!_types.TryAdd(type.Id, type))
                 throw new ArgumentException($"Duplicate unit type id '{type.Id}'.");
         }
@@ -30,4 +47,21 @@ public sealed class UnitCatalog
 
     public UnitType Get(string id) =>
         _types.TryGetValue(id, out var type) ? type : throw new KeyNotFoundException($"Unknown unit type '{id}'.");
+
+    private static void Validate(UnitType t)
+    {
+        void Require(bool ok, string what)
+        {
+            if (!ok)
+                throw new ArgumentException($"Unit type '{t.Id}': {what}.");
+        }
+
+        Require(t.Speed > 0f, "speed must be > 0");
+        Require(t.Radius > 0f && t.Radius < 0.5f, "radius must be in (0, 0.5)");
+        Require(t.Cost >= 0 && t.BuildTime >= 0f, "cost and build time cannot be negative");
+        Require(t.MaxHealth > 0 && t.Damage >= 0, "health must be > 0 and damage >= 0");
+        Require(t.AttackRange >= 0f && t.AttackCooldown > 0f, "attack range >= 0 and cooldown > 0");
+        Require(t.SightRange >= t.AttackRange, "sight range must cover the attack range");
+        Require(t.ProjectileSpeed >= 0f && t.RangedArmor is >= 0f and <= 1f, "projectile speed >= 0 and ranged armor in [0, 1]");
+    }
 }

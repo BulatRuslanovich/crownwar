@@ -3,8 +3,22 @@ using Lordsio.Sim.World;
 
 namespace Lordsio.Sim.Territory;
 
-/// <summary>Static stats of a settlement kind. Income is gold per second.</summary>
-public sealed record SettlementType(string Id, string Name, int Income, int ArmyCap, IReadOnlyList<string> Recruits);
+public sealed record GarrisonEntry(string UnitTypeId, int Count);
+
+/// <summary>
+/// Static stats of a settlement kind. Income is gold per second, capture time is seconds of
+/// uncontested presence by a single unit. A faction that loses its last capital is eliminated.
+/// Neutral settlements start with their garrison standing around them.
+/// </summary>
+public sealed record SettlementType(
+    string Id,
+    string Name,
+    int Income,
+    int ArmyCap,
+    IReadOnlyList<string> Recruits,
+    float CaptureTime,
+    IReadOnlyList<GarrisonEntry> Garrison,
+    bool IsCapital = false);
 
 public sealed class ProductionItem
 {
@@ -41,10 +55,22 @@ public sealed class Settlement
     public Cell Cell { get; }
     public int OwnerId { get; internal set; }
 
+    /// <summary>Faction currently capturing the settlement, or <see cref="NeutralOwner"/> when nobody is.</summary>
+    public int CapturingFactionId { get; internal set; } = NeutralOwner;
+
+    /// <summary>Capture progress of <see cref="CapturingFactionId"/>, 0..1.</summary>
+    public float CaptureProgress { get; internal set; }
+
+    /// <summary>Several factions are in the capture zone, so progress is frozen.</summary>
+    public bool IsContested { get; internal set; }
+
     /// <summary>Units being trained; only the first one makes progress.</summary>
     public IReadOnlyList<ProductionItem> Queue => _queue;
 
     internal void Enqueue(ProductionItem item) => _queue.Add(item);
+
+    /// <summary>Training paid for by the previous owner is lost with the settlement.</summary>
+    internal void ClearQueue() => _queue.Clear();
 
     /// <summary>Advances production by one tick and returns the unit type that finished, if any.</summary>
     internal UnitType? AdvanceProduction()

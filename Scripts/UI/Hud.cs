@@ -29,6 +29,7 @@ public partial class Hud : CanvasLayer
     private Label _queue = null!;
     private ProgressBar _progress = null!;
     private Label _message = null!;
+    private Label _banner = null!;
     private int? _panelSettlementId;
     private float _messageTimeLeft;
 
@@ -45,8 +46,10 @@ public partial class Hud : CanvasLayer
         _queue = GetNode<Label>("SettlementPanel/Rows/Queue");
         _progress = GetNode<ProgressBar>("SettlementPanel/Rows/Progress");
         _message = GetNode<Label>("Message");
+        _banner = GetNode<Label>("Banner");
         _settlementPanel.Visible = false;
         _message.Visible = false;
+        _banner.Visible = false;
     }
 
     public override void _Process(double delta)
@@ -73,15 +76,28 @@ public partial class Hud : CanvasLayer
     /// <summary>Reacts to simulation events that concern the local player.</summary>
     public void OnSimEvent(SimEvent e)
     {
-        if (e.FactionId != MatchController.PlayerFactionId)
-            return;
+        int player = MatchController.PlayerFactionId;
         switch (e)
         {
-            case RecruitRejected rejected:
+            case RecruitRejected rejected when rejected.FactionId == player:
                 ShowMessage(Describe(rejected.Reason));
                 break;
-            case UnitRecruited recruited when _match.Sim.GetUnit(recruited.UnitId) is { } unit:
+            case UnitRecruited recruited when recruited.FactionId == player && _match.Sim.GetUnit(recruited.UnitId) is { } unit:
                 ShowMessage($"{unit.Type.Name} is ready");
+                break;
+            case SettlementCaptured captured when _match.Sim.GetSettlement(captured.SettlementId) is { } settlement:
+                if (captured.FactionId == player)
+                    ShowMessage($"{settlement.Type.Name} captured");
+                else if (captured.PreviousOwnerId == player)
+                    ShowMessage($"{settlement.Type.Name} lost!");
+                break;
+            case FactionEliminated eliminated when eliminated.FactionId != player:
+                ShowMessage($"Faction {eliminated.FactionId} has been eliminated");
+                break;
+            case MatchEnded ended:
+                _banner.Text = ended.FactionId == player ? "Victory!" : "Defeat";
+                _banner.Modulate = ended.FactionId == player ? new Color("ffe066") : ProblemColor;
+                _banner.Visible = true;
                 break;
         }
     }
@@ -105,7 +121,7 @@ public partial class Hud : CanvasLayer
         string owner = settlement.OwnerId == Settlement.NeutralOwner ? "neutral"
             : own ? "yours" : $"faction {settlement.OwnerId}";
         _title.Text = $"{settlement.Type.Name} ({owner})";
-        _info.Text = $"Income +{settlement.Type.Income}/s   Army cap +{settlement.Type.ArmyCap}";
+        _info.Text = $"Income +{settlement.Type.Income}/s   Army cap +{settlement.Type.ArmyCap}" + CaptureStatus(settlement);
 
         _buttons.Visible = own && _recruitButtons.Count > 0;
         foreach (var (button, typeId) in _recruitButtons)
@@ -126,6 +142,16 @@ public partial class Hud : CanvasLayer
                 (settlement.Queue.Count > 1 ? $"  (+{settlement.Queue.Count - 1} queued)" : "");
             _progress.Value = current.Progress * 100f;
         }
+    }
+
+    private static string CaptureStatus(Settlement s)
+    {
+        if (s.IsContested)
+            return "\nContested — capture halted";
+        if (s.CaptureProgress <= 0f)
+            return "";
+        string who = s.CapturingFactionId == MatchController.PlayerFactionId ? "You are" : $"Faction {s.CapturingFactionId} is";
+        return $"\n{who} capturing: {s.CaptureProgress * 100f:0}%";
     }
 
     private void RebuildRecruitButtons(Settlement settlement)

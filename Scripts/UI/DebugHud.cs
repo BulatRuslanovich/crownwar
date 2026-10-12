@@ -48,7 +48,8 @@ public partial class DebugHud : CanvasLayer
         else if (_match.Selection.Count > 1)
             AppendGroupSummary();
 
-        _text.Append("\nLMB select / drag box  ·  Shift add  ·  double click same type  ·  Ctrl+A all  ·  RMB move\n");
+        _text.Append("\nLMB select / drag box  ·  Shift add  ·  double click same type  ·  Ctrl+A all\n");
+        _text.Append("RMB advance (attacks on the way) / attack enemy  ·  Ctrl+RMB retreat\n");
         _text.Append("WASD / arrows / screen edge pan  ·  MMB drag  ·  wheel zoom");
         _label.Text = _text.ToString();
     }
@@ -60,7 +61,9 @@ public partial class DebugHud : CanvasLayer
         var inv = CultureInfo.InvariantCulture;
         int waypoints = unit.Path.Count - unit.PathIndex;
         _text.Append(inv, $"\nUnit #{unit.Id} {unit.Type.Name}  faction {unit.FactionId}\n");
-        _text.Append(inv, $"  state {unit.State}, last order {unit.LastOrder}\n");
+        _text.Append(inv, $"  health {unit.Health}/{unit.Type.MaxHealth}, state {unit.State}, order {unit.Order} ({unit.LastOrder})\n");
+        if (unit.Target is { } target)
+            _text.Append(inv, $"  target #{target.Id} {target.Type.Name} of faction {target.FactionId}\n");
         _text.Append(inv, $"  cell {Cell.FromPosition(unit.Position)}  pos ({unit.Position.X:0.00}, {unit.Position.Y:0.00})\n");
         _text.Append(inv, $"  path: {waypoints} waypoints, {unit.RemainingPathLength:0.0} tiles left\n");
     }
