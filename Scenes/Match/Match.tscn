@@ -11,6 +11,8 @@
 [ext_resource type="Script" path="res://Scripts/World/DepositsView.cs" id="9_deposits"]
 [ext_resource type="Script" path="res://Scripts/Units/ProjectilesView.cs" id="10_projectiles"]
 [ext_resource type="Script" path="res://Scripts/Interaction/BuildPlacement.cs" id="11_placement"]
+[ext_resource type="PackedScene" path="res://Scenes/UI/EndScreen.tscn" id="12_end"]
+[ext_resource type="PackedScene" path="res://Scenes/UI/PauseMenu.tscn" id="13_pause"]
 
 [node name="Match" type="Node2D"]
 script = ExtResource("1_match")
@@ -45,6 +47,7 @@ script = ExtResource("11_placement")
 script = ExtResource("5_camera")
 
 [node name="DebugHud" type="CanvasLayer" parent="."]
+visible = false
 script = ExtResource("6_hud")
 
 [node name="Panel" type="PanelContainer" parent="DebugHud"]
@@ -57,3 +60,7 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 13
 
 [node name="Hud" parent="." instance=ExtResource("8_player_hud")]
+
+[node name="EndScreen" parent="." instance=ExtResource("12_end")]
+
+[node name="PauseMenu" parent="." instance=ExtResource("13_pause")]

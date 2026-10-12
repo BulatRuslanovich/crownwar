@@ -1,0 +1,61 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Scripts/UI/EndScreen.cs" id="1_end"]
+
+[node name="EndScreen" type="CanvasLayer"]
+process_mode = 3
+layer = 9
+script = ExtResource("1_end")
+
+[node name="Dim" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.45)
+
+[node name="Center" type="CenterContainer" parent="Dim"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="Dim/Center"]
+layout_mode = 2
+
+[node name="Rows" type="VBoxContainer" parent="Dim/Center/Panel"]
+custom_minimum_size = Vector2(420, 0)
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="Dim/Center/Panel/Rows"]
+layout_mode = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 10
+theme_override_font_sizes/font_size = 56
+text = "END_VICTORY"
+horizontal_alignment = 1
+
+[node name="Stats" type="Label" parent="Dim/Center/Panel/Rows"]
+layout_mode = 2
+text = "END_STATS"
+
+[node name="Buttons" type="HBoxContainer" parent="Dim/Center/Panel/Rows"]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="Restart" type="Button" parent="Dim/Center/Panel/Rows/Buttons"]
+layout_mode = 2
+text = "UI_RESTART"
+
+[node name="Menu" type="Button" parent="Dim/Center/Panel/Rows/Buttons"]
+layout_mode = 2
+text = "UI_MAIN_MENU"
+
+[node name="Watch" type="Button" parent="Dim/Center/Panel/Rows/Buttons"]
+layout_mode = 2
+text = "END_KEEP_WATCHING"

@@ -1,0 +1,74 @@
+keys,en,ru
+MENU_SUBTITLE,"Build mines, raise an army, destroy the enemy castles.","Стройте шахты, собирайте армию, разрушьте вражеские замки."
+MENU_OPPONENTS,Opponents,Противники
+MENU_DIFFICULTY,Difficulty,Сложность
+MENU_SEED,Map seed,Номер карты
+MENU_SEED_RANDOM,random,случайно
+MENU_START,Start,Начать
+MENU_SETTINGS,Settings,Настройки
+MENU_QUIT,Quit,Выход
+DIFFICULTY_EASY,Easy,Лёгкая
+DIFFICULTY_NORMAL,Normal,Средняя
+DIFFICULTY_HARD,Hard,Сложная
+SETTINGS_TITLE,Settings,Настройки
+SETTINGS_VOLUME,Volume,Громкость
+SETTINGS_FULLSCREEN,Fullscreen,Полный экран
+SETTINGS_UI_SCALE,Interface scale,Масштаб интерфейса
+SETTINGS_EDGE_PAN,Scroll at screen edge,Прокрутка у края экрана
+SETTINGS_LANGUAGE,Language,Язык
+SETTINGS_LANGUAGE_SYSTEM,System,Системный
+UI_BACK,Back,Назад
+UI_RESTART,Restart,Заново
+UI_MAIN_MENU,Main menu,Главное меню
+PAUSE_TITLE,Paused,Пауза
+PAUSE_RESUME,Resume,Продолжить
+END_VICTORY,Victory!,Победа!
+END_DEFEAT,Defeat,Поражение
+END_STATS,"Match time: {0}:{1:00}\nTroops trained: {2}    lost: {3}    enemies killed: {4}\nBuildings built: {5}    lost: {6}    destroyed: {7}","Время матча: {0}:{1:00}\nНанято войск: {2}    потеряно: {3}    убито врагов: {4}\nПостроено зданий: {5}    потеряно: {6}    разрушено: {7}"
+END_KEEP_WATCHING,Keep watching,Смотреть дальше
+HUD_GOLD,Gold {0},Золото {0}
+HUD_INCOME,+{0}/s,+{0}/с
+HUD_ARMY,Army {0}/{1},Армия {0}/{1}
+HUD_GOLD_SHORT,g,з
+HUD_YOURS,yours,ваше
+HUD_UNDER_CONSTRUCTION,Under construction: {0:0}%,Строится: {0:0}%
+HUD_HEALTH,Health {0}/{1},Прочность {0}/{1}
+HUD_TRAINING,Training {0},Обучается: {0}
+HUD_QUEUED,(+{0} queued),(+{0} в очереди)
+BUILD_PLACING,"Placing {0}: {1}    (LMB place, Shift+LMB place more, RMB / Esc cancel)","Строим {0}: {1}    (ЛКМ поставить, Shift+ЛКМ ещё, ПКМ / Esc отмена)"
+BUILD_HINT,Build near your own troops. Mines go on gold deposits.,Стройте рядом со своими войсками. Шахты ставятся на месторождения золота.
+BUILD_OK,ok,можно строить
+BUILD_ERR_NO_UNITS,your troops must be nearby,рядом должны быть ваши войска
+BUILD_ERR_NEEDS_DEPOSIT,mines must stand on a gold deposit,шахта ставится только на месторождение
+BUILD_ERR_ON_DEPOSIT,keep gold deposits free for mines,месторождения оставьте для шахт
+BUILD_ERR_OCCUPIED,something is already built here,здесь уже что-то построено
+BUILD_ERR_TERRAIN,"needs open ground (no water, rocks or roads)","нужна свободная земля (не вода, не горы, не дорога)"
+BUILD_ERR_OUT_OF_BOUNDS,outside the map,за пределами карты
+BUILD_ERR_NOT_BUILDABLE,cannot be built,нельзя построить
+ERR_NOT_ENOUGH_GOLD,Not enough gold,Не хватает золота
+ERR_ARMY_CAP,Army limit reached — build barracks,Достигнут лимит армии — постройте казармы
+ERR_QUEUE_FULL,Training queue is full,Очередь обучения заполнена
+ERR_NOT_COMPLETE,Still under construction,Здание ещё строится
+ERR_NOT_OWNER,This building is not yours,Это не ваше здание
+ERR_CANNOT_TRAIN,Cannot train this unit here,Здесь нельзя обучить этот отряд
+ERR_UNKNOWN_BUILDING,Building no longer exists,Здание больше не существует
+MSG_UNIT_READY,{0} is ready,{0}: готов к бою
+MSG_BUILDING_COMPLETED,{0} completed,{0}: строительство завершено
+MSG_BUILDING_LOST,Your {0} was destroyed!,Ваше здание разрушено: {0}!
+MSG_ENEMY_BUILDING_DESTROYED,Enemy {0} destroyed,Вражеское здание разрушено: {0}
+MSG_FACTION_FELL,{0} has fallen,{0} повержена
+INFO_MINING,Mining +{0} gold/s,Добыча +{0} золота/с
+INFO_MINE,Earns gold on a deposit,Добывает золото на месторождении
+INFO_INCOME,Income +{0}/s,Доход +{0}/с
+INFO_ARMY_CAP,Army limit +{0},Лимит армии +{0}
+INFO_TRAINS,Trains troops,Обучает войска
+INFO_SHOOTS,Shoots enemies within {0:0} tiles,Стреляет по врагам в радиусе {0:0} клеток
+INFO_CAPITAL,Lose it and you lose the match,Потеряете его — проиграете матч
+FACTION_N,Faction {0},Фракция {0}
+UNIT_INFANTRY,Infantry,Пехота
+UNIT_ARCHER,Archers,Лучники
+UNIT_HEAVY,Heavy infantry,Тяжёлая пехота
+BUILDING_CASTLE,Castle,Замок
+BUILDING_MINE,Gold Mine,Шахта
+BUILDING_BARRACKS,Barracks,Казармы
+BUILDING_TOWER,Archer Tower,Башня лучников

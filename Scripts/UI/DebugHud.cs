@@ -23,8 +23,19 @@ public partial class DebugHud : CanvasLayer
         _label = GetNode<Label>("Panel/Label");
     }
 
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        if (@event is InputEventKey { PhysicalKeycode: Key.F3, Pressed: true, Echo: false })
+        {
+            Visible = !Visible;
+            GetViewport().SetInputAsHandled();
+        }
+    }
+
     public override void _Process(double delta)
     {
+        if (!Visible)
+            return;
         var sim = _match.Sim;
         var inv = CultureInfo.InvariantCulture;
         _text.Clear();

@@ -26,20 +26,24 @@ public partial class MatchController : Node2D
     [Export(PropertyHint.File, "*.txt")] public string MapPath { get; set; } = "res://Maps/default.txt";
     [Export(PropertyHint.File, "*.json")] public string RulesPath { get; set; } = "res://Data/rules.json";
 
-    /// <summary>Player plus computer opponents; each gets a capital on a random start position.</summary>
-    [Export(PropertyHint.Range, "1,8")] public int FactionCount { get; set; } = 4;
-
-    [Export] public BotDifficulty Difficulty { get; set; } = BotDifficulty.Normal;
-
-    /// <summary>Seed for start positions; negative picks a new one every match (overridable with --seed=N).</summary>
-    [Export] public int Seed { get; set; } = -1;
-
     private double _accumulator;
     private Hud _hud = null!;
+    private EndScreen _endScreen = null!;
+    private PauseMenu _pauseMenu = null!;
 
     private readonly List<BotBrain> _bots = new();
 
+    /// <summary>Set by <see cref="Main"/> before the match enters the tree; defaults when the scene runs alone.</summary>
+    public MatchConfig Config { get; set; } = MatchConfig.Default;
+
+    /// <summary>Raised when the player asks for a new match with the same settings.</summary>
+    public event Action? RestartRequested;
+
+    /// <summary>Raised when the player leaves to the main menu.</summary>
+    public event Action? MenuRequested;
+
     public Simulation Sim { get; private set; } = null!;
+    public MatchStats Stats { get; } = new(PlayerFactionId);
     public int ActualSeed { get; private set; }
     public IReadOnlyList<BotBrain> Bots => _bots;
     public Selection Selection { get; } = new();
@@ -55,12 +59,12 @@ public partial class MatchController : Node2D
     {
         var map = MapLoader.Parse(ReadText(MapPath));
         var rules = GameRules.Parse(ReadText(RulesPath));
-        ActualSeed = SeedFromCommandLine() ?? (Seed >= 0 ? Seed : (int)(GD.Randi() & int.MaxValue));
-        Sim = new Simulation(map, rules, new MatchSetup(FactionCount, ActualSeed));
+        ActualSeed = Config.Seed ?? (int)(GD.Randi() & int.MaxValue);
+        Sim = new Simulation(map, rules, new MatchSetup(1 + Config.BotCount, ActualSeed));
         foreach (var faction in Sim.Factions)
         {
             if (faction.Id != PlayerFactionId)
-                _bots.Add(new BotBrain(Sim, faction.Id, Difficulty, ActualSeed + faction.Id));
+                _bots.Add(new BotBrain(Sim, faction.Id, Config.Difficulty, ActualSeed + faction.Id));
         }
 
         Camera = GetNode<CameraController>("Camera");
@@ -79,7 +83,28 @@ public partial class MatchController : Node2D
         GetNode<DebugHud>("DebugHud").Initialize(this);
         _hud = GetNode<Hud>("Hud");
         _hud.Initialize(this, placement);
+        _endScreen = GetNode<EndScreen>("EndScreen");
+        _endScreen.Initialize(this);
+        _pauseMenu = GetNode<PauseMenu>("PauseMenu");
+        _pauseMenu.Initialize(this, placement);
     }
+
+    public bool IsPaused => GetTree().Paused;
+
+    /// <summary>Freezes the match (simulation, camera, input) while menus stay responsive.</summary>
+    public void SetPaused(bool paused)
+    {
+        GetTree().Paused = paused;
+        _pauseMenu.Visible = paused;
+    }
+
+    /// <summary>Dev-only: shows the end screen as if the match had ended, without touching the simulation.</summary>
+    public void PreviewEndScreen(bool victory) =>
+        _endScreen.OnSimEvent(new MatchEnded(victory ? PlayerFactionId : PlayerFactionId + 1));
+
+    public void RequestRestart() => RestartRequested?.Invoke();
+
+    public void RequestMenu() => MenuRequested?.Invoke();
 
     /// <summary>The player's capital, else their first unit.</summary>
     private Vector2? StartingFocus()
@@ -89,18 +114,6 @@ public partial class MatchController : Node2D
         foreach (var unit in Sim.Units)
             if (unit.FactionId == PlayerFactionId)
                 return SimConvert.ToWorld(unit.Position);
-        return null;
-    }
-
-    private static int? SeedFromCommandLine()
-    {
-        foreach (string arg in OS.GetCmdlineUserArgs())
-        {
-            if (arg.StartsWith("--seed=", StringComparison.Ordinal)
-                && int.TryParse(arg["--seed=".Length..], System.Globalization.NumberStyles.Integer,
-                    System.Globalization.CultureInfo.InvariantCulture, out int seed))
-                return seed;
-        }
         return null;
     }
 
@@ -124,7 +137,11 @@ public partial class MatchController : Node2D
             _accumulator = 0; // drop the backlog after a hitch instead of fast-forwarding
 
         foreach (var e in Sim.TakeEvents())
+        {
+            Stats.OnSimEvent(e);
             _hud.OnSimEvent(e);
+            _endScreen.OnSimEvent(e);
+        }
     }
 
     private static string ReadText(string path)

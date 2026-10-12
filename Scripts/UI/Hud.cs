@@ -10,7 +10,8 @@ namespace Lordsio.UI;
 
 /// <summary>
 /// Player HUD: resources, the build bar, the selected building's panel and short messages.
-/// Reads the simulation and only ever changes it by issuing commands.
+/// Reads the simulation and only ever changes it by issuing commands. All text goes through the
+/// translation tables (Translations/strings.csv).
 /// </summary>
 public partial class Hud : CanvasLayer
 {
@@ -41,7 +42,6 @@ public partial class Hud : CanvasLayer
     private Label _queue = null!;
     private ProgressBar _progress = null!;
     private Label _message = null!;
-    private Label _banner = null!;
     private int? _panelBuildingId;
     private float _messageTimeLeft;
 
@@ -60,10 +60,8 @@ public partial class Hud : CanvasLayer
         _queue = GetNode<Label>("BuildingPanel/Rows/Queue");
         _progress = GetNode<ProgressBar>("BuildingPanel/Rows/Progress");
         _message = GetNode<Label>("Message");
-        _banner = GetNode<Label>("Banner");
         _buildingPanel.Visible = false;
         _message.Visible = false;
-        _banner.Visible = false;
         CreateBuildButtons(GetNode<HBoxContainer>("BuildBar/Rows/Buttons"));
     }
 
@@ -71,20 +69,21 @@ public partial class Hud : CanvasLayer
     {
         if (_match.Sim.GetFaction(MatchController.PlayerFactionId) is { } faction)
         {
-            _gold.Text = $"Gold {faction.Treasury.Gold}";
-            _income.Text = $"+{faction.IncomePerSecond}/s";
-            _army.Text = $"Army {faction.Population}/{faction.ArmyCap}";
+            _gold.Text = string.Format(Tr("HUD_GOLD"), faction.Treasury.Gold);
+            _income.Text = string.Format(Tr("HUD_INCOME"), faction.IncomePerSecond);
+            _army.Text = string.Format(Tr("HUD_ARMY"), faction.Population, faction.ArmyCap);
             _army.Modulate = faction.Population >= faction.ArmyCap ? ProblemColor : Colors.White;
             foreach (var (button, type) in _buildButtons)
             {
+                button.Text = BuildButtonText(type); // follows a language change
                 button.Modulate = faction.Treasury.CanAfford(type.Cost) ? Colors.White : ProblemColor;
                 button.ButtonPressed = _placement.ActiveType == type;
             }
         }
 
         _buildHint.Text = _placement.ActiveType is { } placing
-            ? $"Placing {placing.Name}: {DescribePlacement(_placement.CurrentError)}   (LMB place, Shift+LMB place more, RMB / Esc cancel)"
-            : "Build near your own troops. Mines go on gold deposits.";
+            ? string.Format(Tr("BUILD_PLACING"), Names.Of(placing), DescribePlacement(_placement.CurrentError))
+            : Tr("BUILD_HINT");
 
         UpdateBuildingPanel();
 
@@ -124,42 +123,37 @@ public partial class Hud : CanvasLayer
                 ShowMessage(DescribePlacement(rejected.Reason));
                 break;
             case UnitRecruited recruited when recruited.FactionId == player && _match.Sim.GetUnit(recruited.UnitId) is { } unit:
-                ShowMessage($"{unit.Type.Name} is ready");
+                ShowMessage(string.Format(Tr("MSG_UNIT_READY"), Names.Of(unit.Type)));
                 break;
             case BuildingCompleted completed when completed.FactionId == player && _match.Sim.GetBuilding(completed.BuildingId) is { } building:
-                ShowMessage($"{building.Type.Name} completed");
+                ShowMessage(string.Format(Tr("MSG_BUILDING_COMPLETED"), Names.Of(building.Type)));
                 break;
             case BuildingDestroyed destroyed:
-                string name = _match.Sim.Rules.GetBuildingType(destroyed.BuildingTypeId).Name;
+                string name = Names.Of(_match.Sim.Rules.GetBuildingType(destroyed.BuildingTypeId));
                 if (destroyed.FactionId == player)
-                    ShowMessage($"Your {name} was destroyed!");
+                    ShowMessage(string.Format(Tr("MSG_BUILDING_LOST"), name));
                 else if (destroyed.KillerFactionId == player)
-                    ShowMessage($"Enemy {name} destroyed");
+                    ShowMessage(string.Format(Tr("MSG_ENEMY_BUILDING_DESTROYED"), name));
                 break;
-            case FactionEliminated eliminated when eliminated.FactionId == player:
-                // The bots may fight on; the player has lost either way.
-                ShowBanner("Defeat", ProblemColor);
-                break;
-            case FactionEliminated eliminated:
-                ShowMessage($"Faction {eliminated.FactionId} has fallen");
-                break;
-            case MatchEnded ended when ended.FactionId == player:
-                ShowBanner("Victory!", new Color("ffe066"));
-                break;
-            case MatchEnded:
-                ShowBanner("Defeat", ProblemColor);
+            case FactionEliminated eliminated when eliminated.FactionId != player:
+                ShowMessage(string.Format(Tr("MSG_FACTION_FELL"), Names.Faction(eliminated.FactionId)));
                 break;
         }
+    }
+
+    private string BuildButtonText(BuildingType type)
+    {
+        string hotkey = BuildHotkeys.TryGetValue(type.Id, out var key) ? $" [{key}]" : "";
+        return $"{Names.Of(type)} {type.Cost}{Tr("HUD_GOLD_SHORT")}{hotkey}";
     }
 
     private void CreateBuildButtons(HBoxContainer row)
     {
         foreach (var type in _match.Sim.Rules.BuildingTypes.Where(t => t.IsBuildable).OrderBy(t => t.Cost))
         {
-            string hotkey = BuildHotkeys.TryGetValue(type.Id, out var key) ? $" [{key}]" : "";
             var button = new Button
             {
-                Text = $"{type.Name} {type.Cost}g{hotkey}",
+                Text = BuildButtonText(type),
                 ToggleMode = true,
                 FocusMode = Control.FocusModeEnum.None,
                 TooltipText = DescribeBuildingType(type),
@@ -193,15 +187,17 @@ public partial class Hud : CanvasLayer
         }
 
         bool own = building.FactionId == MatchController.PlayerFactionId;
-        _title.Text = $"{building.Type.Name} ({(own ? "yours" : $"faction {building.FactionId}")})";
+        _title.Text = $"{Names.Of(building.Type)} ({(own ? Tr("HUD_YOURS") : Names.Faction(building.FactionId))})";
         string status = building.IsComplete
             ? DescribeBuildingType(building.Type, building)
-            : $"Under construction: {building.ConstructionProgress * 100f:0}%";
-        _info.Text = $"Health {building.Health}/{building.MaxHealth}\n{status}";
+            : string.Format(Tr("HUD_UNDER_CONSTRUCTION"), building.ConstructionProgress * 100f);
+        _info.Text = string.Format(Tr("HUD_HEALTH"), building.Health, building.MaxHealth) + "\n" + status;
 
         _recruitRow.Visible = own && building.IsComplete && _recruitButtons.Count > 0;
         foreach (var (button, typeId) in _recruitButtons)
         {
+            var type = _match.Sim.Rules.Units.Get(typeId);
+            button.Text = $"{Names.Of(type)}  {type.Cost}{Tr("HUD_GOLD_SHORT")}";
             // Buttons stay clickable: the simulation is the judge and explains a refusal with a message.
             var error = _match.Sim.CanRecruit(MatchController.PlayerFactionId, building.Id, typeId);
             button.Modulate = error == RecruitError.None ? Colors.White : ProblemColor;
@@ -214,8 +210,8 @@ public partial class Hud : CanvasLayer
         if (training)
         {
             var current = building.Queue[0];
-            _queue.Text = $"Training {current.Type.Name}" +
-                (building.Queue.Count > 1 ? $"  (+{building.Queue.Count - 1} queued)" : "");
+            _queue.Text = string.Format(Tr("HUD_TRAINING"), Names.Of(current.Type)) +
+                (building.Queue.Count > 1 ? "  " + string.Format(Tr("HUD_QUEUED"), building.Queue.Count - 1) : "");
             _progress.Value = current.Progress * 100f;
         }
     }
@@ -228,8 +224,7 @@ public partial class Hud : CanvasLayer
 
         foreach (string typeId in building.Type.Recruits)
         {
-            var type = _match.Sim.Rules.Units.Get(typeId);
-            var button = new Button { Text = $"{type.Name}  {type.Cost}g", FocusMode = Control.FocusModeEnum.None };
+            var button = new Button { FocusMode = Control.FocusModeEnum.None };
             int buildingId = building.Id;
             button.Pressed += () => _match.Sim.Issue(
                 new RecruitCommand(MatchController.PlayerFactionId, buildingId, typeId));
@@ -246,54 +241,45 @@ public partial class Hud : CanvasLayer
         _messageTimeLeft = MessageDuration;
     }
 
-    private void ShowBanner(string text, Color color)
-    {
-        _banner.Text = text;
-        _banner.Modulate = color;
-        _banner.Visible = true;
-    }
-
-    private static string DescribeBuildingType(BuildingType type, Building? instance = null)
+    private string DescribeBuildingType(BuildingType type, Building? instance = null)
     {
         var parts = new List<string>();
         if (type.IsMine)
-            parts.Add(instance?.Deposit is { } d ? $"Mining +{d.Yield} gold/s" : "Earns gold on a deposit");
+            parts.Add(instance?.Deposit is { } d ? string.Format(Tr("INFO_MINING"), d.Yield) : Tr("INFO_MINE"));
         if (type.Income > 0)
-            parts.Add($"Income +{type.Income}/s");
+            parts.Add(string.Format(Tr("INFO_INCOME"), type.Income));
         if (type.ArmyCap > 0)
-            parts.Add($"Army limit +{type.ArmyCap}");
+            parts.Add(string.Format(Tr("INFO_ARMY_CAP"), type.ArmyCap));
         if (type.Recruits.Count > 0)
-            parts.Add("Trains troops");
+            parts.Add(Tr("INFO_TRAINS"));
         if (type.Attack is { } attack)
-            parts.Add($"Shoots enemies within {attack.Range:0} tiles");
+            parts.Add(string.Format(Tr("INFO_SHOOTS"), attack.Range));
         if (type.IsCapital)
-            parts.Add("Lose it and you lose the match");
+            parts.Add(Tr("INFO_CAPITAL"));
         return string.Join("  ·  ", parts);
     }
 
-    private static string Describe(RecruitError error) => error switch
+    private string Describe(RecruitError error) => Tr(error switch
     {
-        RecruitError.NotEnoughGold => "Not enough gold",
-        RecruitError.ArmyCapReached => "Army limit reached — build barracks",
-        RecruitError.QueueFull => "Training queue is full",
-        RecruitError.NotComplete => "Still under construction",
-        RecruitError.NotOwner => "This building is not yours",
-        RecruitError.CannotRecruitType => "Cannot train this unit here",
-        RecruitError.UnknownBuilding => "Building no longer exists",
-        _ => error.ToString(),
-    };
+        RecruitError.NotEnoughGold => "ERR_NOT_ENOUGH_GOLD",
+        RecruitError.ArmyCapReached => "ERR_ARMY_CAP",
+        RecruitError.QueueFull => "ERR_QUEUE_FULL",
+        RecruitError.NotComplete => "ERR_NOT_COMPLETE",
+        RecruitError.NotOwner => "ERR_NOT_OWNER",
+        RecruitError.CannotRecruitType => "ERR_CANNOT_TRAIN",
+        _ => "ERR_UNKNOWN_BUILDING",
+    });
 
-    private static string DescribePlacement(BuildError error) => error switch
+    private string DescribePlacement(BuildError error) => Tr(error switch
     {
-        BuildError.None => "ok",
-        BuildError.NotEnoughGold => "not enough gold",
-        BuildError.NoUnitsNearby => "your troops must be nearby",
-        BuildError.NeedsDeposit => "mines must stand on a gold deposit",
-        BuildError.OnDeposit => "keep gold deposits free for mines",
-        BuildError.Occupied => "something is already built here",
-        BuildError.BlockedTerrain => "needs open ground (no water, rocks or roads)",
-        BuildError.OutOfBounds => "outside the map",
-        BuildError.NotBuildable => "cannot be built",
-        _ => error.ToString(),
-    };
+        BuildError.None => "BUILD_OK",
+        BuildError.NotEnoughGold => "ERR_NOT_ENOUGH_GOLD",
+        BuildError.NoUnitsNearby => "BUILD_ERR_NO_UNITS",
+        BuildError.NeedsDeposit => "BUILD_ERR_NEEDS_DEPOSIT",
+        BuildError.OnDeposit => "BUILD_ERR_ON_DEPOSIT",
+        BuildError.Occupied => "BUILD_ERR_OCCUPIED",
+        BuildError.BlockedTerrain => "BUILD_ERR_TERRAIN",
+        BuildError.OutOfBounds => "BUILD_ERR_OUT_OF_BOUNDS",
+        _ => "BUILD_ERR_NOT_BUILDABLE",
+    });
 }

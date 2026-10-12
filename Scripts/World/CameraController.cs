@@ -65,7 +65,7 @@ public partial class CameraController : Camera2D
             : Godot.Input.GetVector(
                 InputActions.CameraLeft, InputActions.CameraRight, InputActions.CameraUp, InputActions.CameraDown);
 
-        if (EdgePanEnabled && _mouseInWindow && !_dragging && GetWindow().HasFocus())
+        if (EdgePanEnabled && (GameSettings.Instance?.EdgePan ?? true) && _mouseInWindow && !_dragging && GetWindow().HasFocus())
         {
             Vector2 mouse = GetViewport().GetMousePosition();
             Vector2 size = GetViewportRect().Size;

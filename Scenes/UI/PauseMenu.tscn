@@ -1,0 +1,57 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Scripts/UI/PauseMenu.cs" id="1_pause"]
+[ext_resource type="PackedScene" path="res://Scenes/UI/SettingsPanel.tscn" id="2_settings"]
+
+[node name="PauseMenu" type="CanvasLayer"]
+process_mode = 3
+layer = 10
+script = ExtResource("1_pause")
+
+[node name="Dim" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.55)
+
+[node name="Center" type="CenterContainer" parent="Dim"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="Dim/Center"]
+layout_mode = 2
+
+[node name="Rows" type="VBoxContainer" parent="Dim/Center/Panel"]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Dim/Center/Panel/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "PAUSE_TITLE"
+horizontal_alignment = 1
+
+[node name="Resume" type="Button" parent="Dim/Center/Panel/Rows"]
+layout_mode = 2
+text = "PAUSE_RESUME"
+
+[node name="Restart" type="Button" parent="Dim/Center/Panel/Rows"]
+layout_mode = 2
+text = "UI_RESTART"
+
+[node name="Settings" type="Button" parent="Dim/Center/Panel/Rows"]
+layout_mode = 2
+text = "MENU_SETTINGS"
+
+[node name="Menu" type="Button" parent="Dim/Center/Panel/Rows"]
+layout_mode = 2
+text = "UI_MAIN_MENU"
+
+[node name="Settings" parent="." instance=ExtResource("2_settings")]
