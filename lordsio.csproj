@@ -1,0 +1,21 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Lordsio</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Godot compiles every *.cs under the project folder by default;
+       the simulation library and tests are separate projects. -->
+  <ItemGroup>
+    <Compile Remove="sim/**" />
+    <Compile Remove="tests/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="sim\Lordsio.Sim\Lordsio.Sim.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,33 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "lordsio", "lordsio.csproj", "{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D01}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lordsio.Sim", "sim\Lordsio.Sim\Lordsio.Sim.csproj", "{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D02}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lordsio.Sim.Tests", "tests\Lordsio.Sim.Tests\Lordsio.Sim.Tests.csproj", "{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D03}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		ExportDebug|Any CPU = ExportDebug|Any CPU
+		ExportRelease|Any CPU = ExportRelease|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D01}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D01}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D01}.ExportDebug|Any CPU.ActiveCfg = ExportDebug|Any CPU
+		{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D01}.ExportDebug|Any CPU.Build.0 = ExportDebug|Any CPU
+		{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D01}.ExportRelease|Any CPU.ActiveCfg = ExportRelease|Any CPU
+		{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D01}.ExportRelease|Any CPU.Build.0 = ExportRelease|Any CPU
+		{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D02}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D02}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D02}.ExportDebug|Any CPU.ActiveCfg = ExportDebug|Any CPU
+		{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D02}.ExportDebug|Any CPU.Build.0 = ExportDebug|Any CPU
+		{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D02}.ExportRelease|Any CPU.ActiveCfg = ExportRelease|Any CPU
+		{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D02}.ExportRelease|Any CPU.Build.0 = ExportRelease|Any CPU
+		{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D03}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D03}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D03}.ExportDebug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6F0B4C35-6C1E-4F7A-9B0B-2E7F4A7C1D03}.ExportRelease|Any CPU.ActiveCfg = Debug|Any CPU
+	EndGlobalSection
+EndGlobal

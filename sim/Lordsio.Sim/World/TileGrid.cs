@@ -1,0 +1,193 @@
+using System.Numerics;
+
+namespace Lordsio.Sim.World;
+
+/// <summary>Static terrain grid plus derived connectivity data.</summary>
+public sealed class TileGrid
+{
+    private readonly Terrain[] _tiles;
+    private readonly int[] _component;
+
+    public int Width { get; }
+    public int Height { get; }
+
+    public TileGrid(int width, int height, Terrain[] tiles)
+    {
+        if (width <= 0 || height <= 0)
+            throw new ArgumentOutOfRangeException(nameof(width), "Map size must be positive.");
+        if (tiles.Length != width * height)
+            throw new ArgumentException($"Expected {width * height} tiles, got {tiles.Length}.", nameof(tiles));
+
+        Width = width;
+        Height = height;
+        _tiles = tiles;
+        _component = new int[tiles.Length];
+        LabelComponents();
+    }
+
+    public bool InBounds(int x, int y) => x >= 0 && y >= 0 && x < Width && y < Height;
+    public bool InBounds(Cell cell) => InBounds(cell.X, cell.Y);
+
+    public Terrain GetTerrain(Cell cell) => _tiles[Index(cell.X, cell.Y)];
+
+    public bool IsWalkable(int x, int y) => InBounds(x, y) && TerrainInfo.IsWalkable(_tiles[Index(x, y)]);
+    public bool IsWalkable(Cell cell) => IsWalkable(cell.X, cell.Y);
+
+    /// <summary>
+    /// Id of the walkable region the cell belongs to, or -1 for blocked / out-of-bounds cells.
+    /// Two cells are mutually reachable exactly when their component ids are equal and not -1.
+    /// </summary>
+    public int ComponentOf(Cell cell) => InBounds(cell) ? _component[Index(cell.X, cell.Y)] : -1;
+
+    public bool AreConnected(Cell a, Cell b)
+    {
+        int ca = ComponentOf(a);
+        return ca >= 0 && ca == ComponentOf(b);
+    }
+
+    /// <summary>
+    /// Walkable cell of the given component closest (euclidean, between centers) to <paramref name="target"/>.
+    /// Returns null when the component has no cell within <paramref name="maxRadius"/>.
+    /// </summary>
+    public Cell? FindNearestInComponent(Cell target, int component, int maxRadius)
+    {
+        if (component < 0)
+            return null;
+        if (ComponentOf(target) == component)
+            return target;
+
+        Cell? best = null;
+        float bestDistSq = float.MaxValue;
+        for (int r = 1; r <= maxRadius; r++)
+        {
+            // Cells on ring r are at least r away, so once a candidate is closer than that we are done.
+            if (best != null && bestDistSq <= (float)r * r)
+                break;
+
+            for (int dy = -r; dy <= r; dy++)
+            {
+                bool edgeRow = dy == -r || dy == r;
+                for (int dx = -r; dx <= r; dx += edgeRow ? 1 : 2 * r)
+                {
+                    var cell = new Cell(target.X + dx, target.Y + dy);
+                    if (ComponentOf(cell) != component)
+                        continue;
+                    float distSq = dx * dx + dy * dy;
+                    if (distSq < bestDistSq)
+                    {
+                        bestDistSq = distSq;
+                        best = cell;
+                    }
+                }
+            }
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// True when every cell touched by the segment is walkable. Passing exactly through a cell corner
+    /// requires both side cells to be walkable, matching the pathfinder's no-corner-cutting rule.
+    /// </summary>
+    public bool IsSegmentClear(Vector2 from, Vector2 to)
+    {
+        var cell = Cell.FromPosition(from);
+        var end = Cell.FromPosition(to);
+        if (!IsWalkable(cell))
+            return false;
+
+        Vector2 d = to - from;
+        int stepX = Math.Sign(d.X);
+        int stepY = Math.Sign(d.Y);
+        float tDeltaX = stepX != 0 ? 1f / MathF.Abs(d.X) : float.PositiveInfinity;
+        float tDeltaY = stepY != 0 ? 1f / MathF.Abs(d.Y) : float.PositiveInfinity;
+        float tMaxX = stepX > 0 ? (cell.X + 1 - from.X) * tDeltaX
+            : stepX < 0 ? (from.X - cell.X) * tDeltaX
+            : float.PositiveInfinity;
+        float tMaxY = stepY > 0 ? (cell.Y + 1 - from.Y) * tDeltaY
+            : stepY < 0 ? (from.Y - cell.Y) * tDeltaY
+            : float.PositiveInfinity;
+
+        int x = cell.X, y = cell.Y;
+        int guard = Math.Abs(end.X - x) + Math.Abs(end.Y - y) + 2;
+        while (x != end.X || y != end.Y)
+        {
+            if (--guard < 0)
+                return false; // float drift; be conservative
+            if (MathF.Abs(tMaxX - tMaxY) < 1e-5f)
+            {
+                if (!IsWalkable(x + stepX, y) || !IsWalkable(x, y + stepY))
+                    return false;
+                x += stepX;
+                y += stepY;
+                tMaxX += tDeltaX;
+                tMaxY += tDeltaY;
+            }
+            else if (tMaxX < tMaxY)
+            {
+                x += stepX;
+                tMaxX += tDeltaX;
+            }
+            else
+            {
+                y += stepY;
+                tMaxY += tDeltaY;
+            }
+            if (!IsWalkable(x, y))
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>Segment check for a body of the given radius: the center line plus both side lines.</summary>
+    public bool IsCorridorClear(Vector2 from, Vector2 to, float radius)
+    {
+        if (!IsSegmentClear(from, to))
+            return false;
+        Vector2 d = to - from;
+        float len = d.Length();
+        if (radius <= 0f || len < 1e-5f)
+            return true;
+        Vector2 side = new Vector2(-d.Y, d.X) / len * radius;
+        return IsSegmentClear(from + side, to + side) && IsSegmentClear(from - side, to - side);
+    }
+
+    internal int Index(int x, int y) => y * Width + x;
+
+    private void LabelComponents()
+    {
+        Array.Fill(_component, -1);
+        var stack = new Stack<int>();
+        int next = 0;
+        for (int start = 0; start < _tiles.Length; start++)
+        {
+            if (_component[start] != -1 || !TerrainInfo.IsWalkable(_tiles[start]))
+                continue;
+
+            // 4-connectivity is sufficient: a diagonal step is only legal when both orthogonal
+            // neighbours are walkable, so it never connects regions that are otherwise separate.
+            _component[start] = next;
+            stack.Push(start);
+            while (stack.Count > 0)
+            {
+                int i = stack.Pop();
+                int x = i % Width, y = i / Width;
+                TryVisit(x + 1, y);
+                TryVisit(x - 1, y);
+                TryVisit(x, y + 1);
+                TryVisit(x, y - 1);
+            }
+            next++;
+        }
+
+        void TryVisit(int x, int y)
+        {
+            if (!IsWalkable(x, y))
+                return;
+            int i = Index(x, y);
+            if (_component[i] != -1)
+                return;
+            _component[i] = next;
+            stack.Push(i);
+        }
+    }
+}
