@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using Godot;
 using Lordsio.Interaction;
+using Lordsio.Sim.AI;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.World;
 using Lordsio.Buildings;
@@ -24,8 +26,10 @@ public partial class MatchController : Node2D
     [Export(PropertyHint.File, "*.txt")] public string MapPath { get; set; } = "res://Maps/default.txt";
     [Export(PropertyHint.File, "*.json")] public string RulesPath { get; set; } = "res://Data/rules.json";
 
-    /// <summary>Player plus opponents; each gets a capital on a random start position.</summary>
-    [Export(PropertyHint.Range, "1,8")] public int FactionCount { get; set; } = 2;
+    /// <summary>Player plus computer opponents; each gets a capital on a random start position.</summary>
+    [Export(PropertyHint.Range, "1,8")] public int FactionCount { get; set; } = 4;
+
+    [Export] public BotDifficulty Difficulty { get; set; } = BotDifficulty.Normal;
 
     /// <summary>Seed for start positions; negative picks a new one every match (overridable with --seed=N).</summary>
     [Export] public int Seed { get; set; } = -1;
@@ -33,12 +37,15 @@ public partial class MatchController : Node2D
     private double _accumulator;
     private Hud _hud = null!;
 
+    private readonly List<BotBrain> _bots = new();
+
     public Simulation Sim { get; private set; } = null!;
     public int ActualSeed { get; private set; }
+    public IReadOnlyList<BotBrain> Bots => _bots;
     public Selection Selection { get; } = new();
     public CameraController Camera { get; private set; } = null!;
 
-    /// <summary>Smoothed wall-clock cost of one simulation tick, for the debug overlay.</summary>
+    /// <summary>Smoothed wall-clock cost of one simulation tick plus bot decisions, for the debug overlay.</summary>
     public double StepMilliseconds { get; private set; }
 
     /// <summary>Fraction of the way from the previous tick to the next one, for smooth rendering.</summary>
@@ -50,6 +57,11 @@ public partial class MatchController : Node2D
         var rules = GameRules.Parse(ReadText(RulesPath));
         ActualSeed = SeedFromCommandLine() ?? (Seed >= 0 ? Seed : (int)(GD.Randi() & int.MaxValue));
         Sim = new Simulation(map, rules, new MatchSetup(FactionCount, ActualSeed));
+        foreach (var faction in Sim.Factions)
+        {
+            if (faction.Id != PlayerFactionId)
+                _bots.Add(new BotBrain(Sim, faction.Id, Difficulty, ActualSeed + faction.Id));
+        }
 
         Camera = GetNode<CameraController>("Camera");
         var worldSize = new Vector2(Sim.Map.Width, Sim.Map.Height) * SimConvert.TileSize;
@@ -100,6 +112,9 @@ public partial class MatchController : Node2D
         {
             long start = Stopwatch.GetTimestamp();
             Sim.Step();
+            // Bots decide right after a tick, like a player reacting to what they see.
+            foreach (var bot in _bots)
+                bot.Update();
             double ms = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
             StepMilliseconds = StepMilliseconds * 0.9 + ms * 0.1;
             _accumulator -= Simulation.TickDuration;

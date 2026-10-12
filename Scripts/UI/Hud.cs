@@ -136,13 +136,18 @@ public partial class Hud : CanvasLayer
                 else if (destroyed.KillerFactionId == player)
                     ShowMessage($"Enemy {name} destroyed");
                 break;
-            case FactionEliminated eliminated when eliminated.FactionId != player:
+            case FactionEliminated eliminated when eliminated.FactionId == player:
+                // The bots may fight on; the player has lost either way.
+                ShowBanner("Defeat", ProblemColor);
+                break;
+            case FactionEliminated eliminated:
                 ShowMessage($"Faction {eliminated.FactionId} has fallen");
                 break;
-            case MatchEnded ended:
-                _banner.Text = ended.FactionId == player ? "Victory!" : "Defeat";
-                _banner.Modulate = ended.FactionId == player ? new Color("ffe066") : ProblemColor;
-                _banner.Visible = true;
+            case MatchEnded ended when ended.FactionId == player:
+                ShowBanner("Victory!", new Color("ffe066"));
+                break;
+            case MatchEnded:
+                ShowBanner("Defeat", ProblemColor);
                 break;
         }
     }
@@ -239,6 +244,13 @@ public partial class Hud : CanvasLayer
         _message.Visible = true;
         _message.Modulate = Colors.White;
         _messageTimeLeft = MessageDuration;
+    }
+
+    private void ShowBanner(string text, Color color)
+    {
+        _banner.Text = text;
+        _banner.Modulate = color;
+        _banner.Visible = true;
     }
 
     private static string DescribeBuildingType(BuildingType type, Building? instance = null)

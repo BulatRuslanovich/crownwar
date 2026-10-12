@@ -29,7 +29,10 @@ public partial class DebugHud : CanvasLayer
         var inv = CultureInfo.InvariantCulture;
         _text.Clear();
         _text.Append(inv, $"FPS {Engine.GetFramesPerSecond():0}   tick {sim.Tick} ({_match.StepMilliseconds:0.00} ms)   ");
-        _text.Append(inv, $"units {sim.Units.Count}   zoom {_match.Camera.ZoomLevel:0.#}x\n");
+        _text.Append(inv, $"units {sim.Units.Count}   zoom {_match.Camera.ZoomLevel:0.#}x   seed {_match.ActualSeed}\n");
+        if (_match.Bots.Count > 0)
+            _text.Append("Bots: ").Append(string.Join(", ", _match.Bots.Select(b =>
+                sim.GetFaction(b.FactionId) is { IsEliminated: true } ? $"f{b.FactionId} out" : $"f{b.FactionId} {b.Mode}"))).Append('\n');
 
         var cell = Cell.FromPosition(SimConvert.ToSim(_match.GetGlobalMousePosition()));
         if (sim.Map.InBounds(cell))
