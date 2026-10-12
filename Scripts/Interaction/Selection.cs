@@ -3,7 +3,8 @@ using System.Collections.Generic;
 namespace Lordsio.Interaction;
 
 /// <summary>
-/// Ids of the units the local player has selected. Pure client-side state: the simulation never sees it.
+/// What the local player has selected: either a set of units or one settlement.
+/// Pure client-side state: the simulation never sees it.
 /// </summary>
 public sealed class Selection
 {
@@ -11,12 +12,13 @@ public sealed class Selection
 
     public IReadOnlyCollection<int> Ids => _ids;
     public int Count => _ids.Count;
+    public int? SettlementId { get; private set; }
 
     public bool Contains(int unitId) => _ids.Contains(unitId);
 
     public void Select(int unitId)
     {
-        _ids.Clear();
+        Clear();
         _ids.Add(unitId);
     }
 
@@ -25,14 +27,26 @@ public sealed class Selection
     {
         if (!additive)
             _ids.Clear();
+        SettlementId = null;
         _ids.UnionWith(unitIds);
     }
 
     public void Toggle(int unitId)
     {
+        SettlementId = null;
         if (!_ids.Remove(unitId))
             _ids.Add(unitId);
     }
 
-    public void Clear() => _ids.Clear();
+    public void SelectSettlement(int settlementId)
+    {
+        _ids.Clear();
+        SettlementId = settlementId;
+    }
+
+    public void Clear()
+    {
+        _ids.Clear();
+        SettlementId = null;
+    }
 }

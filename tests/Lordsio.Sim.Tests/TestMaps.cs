@@ -1,3 +1,5 @@
+using Lordsio.Sim.Core;
+using Lordsio.Sim.Territory;
 using Lordsio.Sim.Units;
 using Lordsio.Sim.World;
 
@@ -5,7 +7,15 @@ namespace Lordsio.Sim.Tests;
 
 internal static class TestMaps
 {
-    public static readonly UnitCatalog Catalog = new(new[] { new UnitType("infantry", "Infantry", 4f, 0.3f) });
+    /// <summary>Small round numbers so test expectations are easy to read.</summary>
+    public static readonly GameRules Rules = new(
+        startingGold: 100,
+        new UnitCatalog(new[] { new UnitType("infantry", "Infantry", Speed: 4f, Radius: 0.3f, Cost: 50, BuildTime: 2f) }),
+        new[]
+        {
+            new SettlementType("castle", "Castle", Income: 10, ArmyCap: 5, Recruits: new[] { "infantry" }),
+            new SettlementType("outpost", "Outpost", Income: 3, ArmyCap: 0, Recruits: Array.Empty<string>()),
+        });
 
     /// <summary>Builds a map from tile rows; appends an [objects] section if given.</summary>
     public static MapDefinition Parse(string[] rows, params string[] objects)

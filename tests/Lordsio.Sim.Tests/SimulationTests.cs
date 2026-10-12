@@ -18,7 +18,7 @@ public class SimulationTests
     };
 
     private static Simulation CreateSim(params string[] objects) =>
-        new(TestMaps.Parse(RiverMap, objects), TestMaps.Catalog);
+        new(TestMaps.Parse(RiverMap, objects), TestMaps.Rules);
 
     private static void RunSeconds(Simulation sim, float seconds)
     {
@@ -123,6 +123,6 @@ public class SimulationTests
         RunSeconds(sim, 1f);
 
         // Commands apply at the start of a tick, so one second moves exactly speed × 1 s.
-        Assert.That(unit.Position.X - 0.5f, Is.EqualTo(TestMaps.Catalog.Get("infantry").Speed).Within(1e-3f));
+        Assert.That(unit.Position.X - 0.5f, Is.EqualTo(TestMaps.Rules.Units.Get("infantry").Speed).Within(1e-3f));
     }
 }

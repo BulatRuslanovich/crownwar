@@ -6,6 +6,8 @@
 [ext_resource type="Script" path="res://Scripts/Interaction/SelectionController.cs" id="4_select"]
 [ext_resource type="Script" path="res://Scripts/World/CameraController.cs" id="5_camera"]
 [ext_resource type="Script" path="res://Scripts/UI/DebugHud.cs" id="6_hud"]
+[ext_resource type="Script" path="res://Scripts/Territory/SettlementsView.cs" id="7_settlements"]
+[ext_resource type="PackedScene" path="res://Scenes/UI/Hud.tscn" id="8_player_hud"]
 
 [node name="Match" type="Node2D"]
 script = ExtResource("1_match")
@@ -13,7 +15,14 @@ script = ExtResource("1_match")
 [node name="MapView" type="TileMapLayer" parent="."]
 script = ExtResource("2_map")
 
-[node name="UnitsView" type="Node2D" parent="."]
+[node name="Actors" type="Node2D" parent="."]
+y_sort_enabled = true
+
+[node name="SettlementsView" type="Node2D" parent="Actors"]
+y_sort_enabled = true
+script = ExtResource("7_settlements")
+
+[node name="UnitsView" type="Node2D" parent="Actors"]
 y_sort_enabled = true
 script = ExtResource("3_units")
 
@@ -34,3 +43,5 @@ mouse_filter = 2
 [node name="Label" type="Label" parent="DebugHud/Panel"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 13
+
+[node name="Hud" parent="." instance=ExtResource("8_player_hud")]

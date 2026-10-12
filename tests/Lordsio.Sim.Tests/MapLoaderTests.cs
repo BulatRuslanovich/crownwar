@@ -72,10 +72,30 @@ public class MapLoaderTests
     {
         string root = TestMaps.ProjectRoot();
         var map = MapLoader.Parse(File.ReadAllText(Path.Combine(root, "Maps", "default.txt")));
-        var catalog = Units.UnitCatalog.Parse(File.ReadAllText(Path.Combine(root, "Data", "units.json")));
+        var rules = Core.GameRules.Parse(File.ReadAllText(Path.Combine(root, "Data", "rules.json")));
 
-        Assert.That(map.UnitSpawns, Is.Not.Empty);
-        foreach (var spawn in map.UnitSpawns)
-            Assert.DoesNotThrow(() => catalog.Get(spawn.TypeId));
+        // Creating the simulation checks every unit and settlement type id against the rules.
+        var sim = new Core.Simulation(map, rules);
+        Assert.That(sim.Units, Is.Not.Empty);
+        Assert.That(sim.Settlements.Any(s => s.OwnerId == 0 && s.Type.Recruits.Count > 0), Is.True,
+            "the player needs a settlement to recruit in");
+    }
+
+    [Test]
+    public void ParsesSettlements()
+    {
+        var map = MapLoader.Parse("[tiles]\n....\n[objects]\nsettlement castle 0 1 0\nsettlement village -1 3 0");
+
+        Assert.That(map.SettlementSpawns, Is.EqualTo(new[]
+        {
+            new SettlementSpawn("castle", 0, new Cell(1, 0)),
+            new SettlementSpawn("village", -1, new Cell(3, 0)),
+        }));
+    }
+
+    [Test]
+    public void RejectsSettlementOnBlockedTile()
+    {
+        Assert.Throws<FormatException>(() => MapLoader.Parse("[tiles]\n.~\n[objects]\nsettlement castle 0 1 0"));
     }
 }

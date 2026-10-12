@@ -29,7 +29,7 @@ public partial class UnitsView : Node2D
         {
             if (!_views.TryGetValue(unit.Id, out var view))
             {
-                view = new UnitView { Name = $"Unit{unit.Id}" };
+                view = new UnitView { Name = $"Unit{unit.Id}", FactionColor = FactionColors.Get(unit.FactionId) };
                 _views.Add(unit.Id, view);
                 AddChild(view);
             }

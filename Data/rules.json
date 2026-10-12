@@ -1,0 +1,9 @@
+{
+  "startingGold": 150,
+  "units": [
+    { "id": "infantry", "name": "Infantry", "speed": 3.5, "radius": 0.3, "cost": 50, "buildTime": 4 }
+  ],
+  "settlements": [
+    { "id": "castle", "name": "Castle", "income": 5, "armyCap": 20, "recruits": ["infantry"] }
+  ]
+}

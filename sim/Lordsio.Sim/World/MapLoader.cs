@@ -5,7 +5,11 @@ namespace Lordsio.Sim.World;
 /// <summary><paramref name="Count"/> units of one type, spread in formation around <paramref name="Cell"/>.</summary>
 public sealed record UnitSpawn(string TypeId, int FactionId, Cell Cell, int Count = 1);
 
-public sealed record MapDefinition(TileGrid Grid, IReadOnlyList<UnitSpawn> UnitSpawns);
+/// <summary>A settlement placed on the map; <paramref name="OwnerId"/> is -1 for neutral.</summary>
+public sealed record SettlementSpawn(string TypeId, int OwnerId, Cell Cell);
+
+public sealed record MapDefinition(
+    TileGrid Grid, IReadOnlyList<UnitSpawn> UnitSpawns, IReadOnlyList<SettlementSpawn> SettlementSpawns);
 
 /// <summary>
 /// Parses the text map format:
@@ -15,14 +19,17 @@ public sealed record MapDefinition(TileGrid Grid, IReadOnlyList<UnitSpawn> UnitS
 /// ..ff~~^^==        one character per tile, all rows the same length
 /// [objects]
 /// unit &lt;typeId&gt; &lt;faction&gt; &lt;x&gt; &lt;y&gt; [count]
+/// settlement &lt;typeId&gt; &lt;owner, -1 = neutral&gt; &lt;x&gt; &lt;y&gt;
 /// </code>
+/// Type ids are checked against the rules when the simulation is created, not here.
 /// </summary>
 public static class MapLoader
 {
     public static MapDefinition Parse(string text)
     {
         var rows = new List<string>();
-        var spawns = new List<UnitSpawn>();
+        var units = new List<UnitSpawn>();
+        var settlements = new List<SettlementSpawn>();
         string? section = null;
         int lineNo = 0;
 
@@ -47,7 +54,7 @@ public static class MapLoader
                     rows.Add(line);
                     break;
                 case "objects":
-                    spawns.Add(ParseObject(line, lineNo));
+                    ParseObject(line, lineNo, units, settlements);
                     break;
                 default:
                     throw Error(lineNo, "content before the first section header");
@@ -73,15 +80,20 @@ public static class MapLoader
         }
 
         var grid = new TileGrid(width, height, tiles);
-        foreach (var spawn in spawns)
+        foreach (var spawn in units)
         {
             if (!grid.IsWalkable(spawn.Cell))
                 throw new FormatException($"Unit spawn at {spawn.Cell} is not on a walkable tile.");
         }
-        return new MapDefinition(grid, spawns);
+        foreach (var settlement in settlements)
+        {
+            if (!grid.IsWalkable(settlement.Cell))
+                throw new FormatException($"Settlement at {settlement.Cell} is not on a walkable tile.");
+        }
+        return new MapDefinition(grid, units, settlements);
     }
 
-    private static UnitSpawn ParseObject(string line, int lineNo)
+    private static void ParseObject(string line, int lineNo, List<UnitSpawn> units, List<SettlementSpawn> settlements)
     {
         string[] parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         switch (parts[0])
@@ -92,12 +104,20 @@ public static class MapLoader
                 int count = parts.Length == 6 ? ParseInt(parts[5], lineNo) : 1;
                 if (count < 1)
                     throw Error(lineNo, "unit count must be at least 1");
-                return new UnitSpawn(parts[1], ParseInt(parts[2], lineNo),
-                    new Cell(ParseInt(parts[3], lineNo), ParseInt(parts[4], lineNo)), count);
+                units.Add(new UnitSpawn(parts[1], ParseInt(parts[2], lineNo), ParseCell(parts, 3, lineNo), count));
+                break;
+            case "settlement":
+                if (parts.Length != 5)
+                    throw Error(lineNo, "expected: settlement <typeId> <owner> <x> <y>");
+                settlements.Add(new SettlementSpawn(parts[1], ParseInt(parts[2], lineNo), ParseCell(parts, 3, lineNo)));
+                break;
             default:
                 throw Error(lineNo, $"unknown object '{parts[0]}'");
         }
     }
+
+    private static Cell ParseCell(string[] parts, int index, int lineNo) =>
+        new(ParseInt(parts[index], lineNo), ParseInt(parts[index + 1], lineNo));
 
     private static int ParseInt(string s, int lineNo) =>
         int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out int v)

@@ -68,4 +68,6 @@
 
 [objects]
 # unit <typeId> <faction> <x> <y> [count]
-unit infantry 0 12 18 30
+# settlement <typeId> <owner, -1 = neutral> <x> <y>
+settlement castle 0 10 16
+unit infantry 0 13 20 5

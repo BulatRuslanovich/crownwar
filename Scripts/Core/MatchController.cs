@@ -3,8 +3,8 @@ using System.Diagnostics;
 using Godot;
 using Lordsio.Interaction;
 using Lordsio.Sim.Core;
-using Lordsio.Sim.Units;
 using Lordsio.Sim.World;
+using Lordsio.Territory;
 using Lordsio.UI;
 using Lordsio.Units;
 using Lordsio.World;
@@ -22,9 +22,10 @@ public partial class MatchController : Node2D
     private const int MaxStepsPerFrame = 5;
 
     [Export(PropertyHint.File, "*.txt")] public string MapPath { get; set; } = "res://Maps/default.txt";
-    [Export(PropertyHint.File, "*.json")] public string UnitsPath { get; set; } = "res://Data/units.json";
+    [Export(PropertyHint.File, "*.json")] public string RulesPath { get; set; } = "res://Data/rules.json";
 
     private double _accumulator;
+    private Hud _hud = null!;
 
     public Simulation Sim { get; private set; } = null!;
     public Selection Selection { get; } = new();
@@ -39,19 +40,33 @@ public partial class MatchController : Node2D
     public override void _Ready()
     {
         var map = MapLoader.Parse(ReadText(MapPath));
-        var catalog = UnitCatalog.Parse(ReadText(UnitsPath));
-        Sim = new Simulation(map, catalog);
+        var rules = GameRules.Parse(ReadText(RulesPath));
+        Sim = new Simulation(map, rules);
 
         Camera = GetNode<CameraController>("Camera");
         var worldSize = new Vector2(Sim.Map.Width, Sim.Map.Height) * SimConvert.TileSize;
         Camera.SetBounds(new Rect2(Vector2.Zero, worldSize).Grow(SimConvert.TileSize * 2));
-        var firstUnit = Sim.Units.Count > 0 ? Sim.Units[0] : null;
-        Camera.CenterOn(firstUnit != null ? SimConvert.ToWorld(firstUnit.Position) : worldSize / 2);
+        Camera.CenterOn(StartingFocus() ?? worldSize / 2);
 
         GetNode<MapView>("MapView").Build(Sim.Map);
-        GetNode<UnitsView>("UnitsView").Initialize(this);
+        GetNode<SettlementsView>("Actors/SettlementsView").Initialize(this);
+        GetNode<UnitsView>("Actors/UnitsView").Initialize(this);
         GetNode<SelectionController>("SelectionController").Initialize(this);
         GetNode<DebugHud>("DebugHud").Initialize(this);
+        _hud = GetNode<Hud>("Hud");
+        _hud.Initialize(this);
+    }
+
+    /// <summary>The player's first settlement, else their first unit.</summary>
+    private Vector2? StartingFocus()
+    {
+        foreach (var settlement in Sim.Settlements)
+            if (settlement.OwnerId == PlayerFactionId)
+                return SimConvert.ToWorld(settlement.Cell.Center);
+        foreach (var unit in Sim.Units)
+            if (unit.FactionId == PlayerFactionId)
+                return SimConvert.ToWorld(unit.Position);
+        return null;
     }
 
     public override void _Process(double delta)
@@ -69,6 +84,9 @@ public partial class MatchController : Node2D
         }
         if (_accumulator >= Simulation.TickDuration)
             _accumulator = 0; // drop the backlog after a hitch instead of fast-forwarding
+
+        foreach (var e in Sim.TakeEvents())
+            _hud.OnSimEvent(e);
     }
 
     private static string ReadText(string path)

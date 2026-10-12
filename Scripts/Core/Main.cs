@@ -12,6 +12,7 @@ namespace Lordsio.Core;
 ///   --screenshot=&lt;file.png&gt;   save a screenshot after --screenshot-delay seconds (default 2) and quit
 ///   --demo-move=&lt;x&gt;,&lt;y&gt;      select all player units and order them to tile (x, y)
 ///   --zoom-index=&lt;n&gt;         start at camera zoom step n (0 = farthest)
+///   --demo-recruit=&lt;n&gt;       select the player's castle and order n recruits there
 /// </summary>
 public partial class Main : Node
 {
@@ -31,12 +32,25 @@ public partial class Main : Node
         if (demoMove != null)
             RunDemoMove(demoMove);
 
+        string? demoRecruit = Arg(args, "--demo-recruit");
+        if (demoRecruit != null)
+            RunDemoRecruit(int.Parse(demoRecruit, CultureInfo.InvariantCulture));
+
         string? screenshot = Arg(args, "--screenshot");
         if (screenshot != null)
         {
             double delay = double.Parse(Arg(args, "--screenshot-delay") ?? "2", CultureInfo.InvariantCulture);
             _ = TakeScreenshotAndQuit(screenshot, delay);
         }
+    }
+
+    private void RunDemoRecruit(int count)
+    {
+        var match = GetNode<MatchController>("Match");
+        var castle = match.Sim.Settlements.First(s => s.OwnerId == MatchController.PlayerFactionId && s.Type.Recruits.Count > 0);
+        match.Selection.SelectSettlement(castle.Id);
+        for (int i = 0; i < count; i++)
+            match.Sim.Issue(new RecruitCommand(MatchController.PlayerFactionId, castle.Id, castle.Type.Recruits[0]));
     }
 
     private void RunDemoMove(string value)

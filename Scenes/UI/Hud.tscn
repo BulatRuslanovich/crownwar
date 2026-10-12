@@ -1,0 +1,83 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Scripts/UI/Hud.cs" id="1_hud"]
+
+[node name="Hud" type="CanvasLayer"]
+script = ExtResource("1_hud")
+
+[node name="ResourceBar" type="PanelContainer" parent="."]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -340.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = 40.0
+grow_horizontal = 0
+
+[node name="Row" type="HBoxContainer" parent="ResourceBar"]
+layout_mode = 2
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="Gold" type="Label" parent="ResourceBar/Row"]
+layout_mode = 2
+text = "Gold 0"
+
+[node name="Income" type="Label" parent="ResourceBar/Row"]
+layout_mode = 2
+text = "+0/s"
+
+[node name="Army" type="Label" parent="ResourceBar/Row"]
+layout_mode = 2
+text = "Army 0/0"
+
+[node name="SettlementPanel" type="PanelContainer" parent="."]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = -150.0
+offset_right = 340.0
+offset_bottom = -8.0
+grow_vertical = 0
+
+[node name="Rows" type="VBoxContainer" parent="SettlementPanel"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="SettlementPanel/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Castle"
+
+[node name="Info" type="Label" parent="SettlementPanel/Rows"]
+layout_mode = 2
+text = "Income"
+
+[node name="RecruitButtons" type="HBoxContainer" parent="SettlementPanel/Rows"]
+layout_mode = 2
+
+[node name="Queue" type="Label" parent="SettlementPanel/Rows"]
+layout_mode = 2
+text = "Training"
+
+[node name="Progress" type="ProgressBar" parent="SettlementPanel/Rows"]
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+show_percentage = false
+
+[node name="Message" type="Label" parent="."]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 56.0
+offset_right = 300.0
+offset_bottom = 82.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 0.92, 0.6, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 18
+horizontal_alignment = 1

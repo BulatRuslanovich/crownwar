@@ -1,4 +1,5 @@
 using System.Numerics;
+using Lordsio.Sim.Territory;
 using Lordsio.Sim.Units;
 using Lordsio.Sim.World;
 
@@ -23,33 +24,84 @@ public sealed class Simulation
     /// <summary>A unit stuck this close to its slot (crowded by neighbours) simply counts as arrived.</summary>
     private const float ArrivalSlack = 1.5f;
 
+    /// <summary>Recruits appear this far below (in front of) their settlement.</summary>
+    private static readonly Vector2 RecruitSpawnOffset = new(0f, 1.5f);
+
     private readonly List<Unit> _units = new();
     private readonly Dictionary<int, Unit> _unitsById = new();
+    private readonly List<Faction> _factions = new();
+    private readonly List<Settlement> _settlements = new();
     private readonly Queue<Command> _pending = new();
     private readonly Pathfinder _pathfinder;
+    private List<SimEvent> _events = new();
     private int _nextUnitId = 1;
 
-    public Simulation(MapDefinition map, UnitCatalog catalog)
+    public Simulation(MapDefinition map, GameRules rules)
     {
         Map = map.Grid;
-        Catalog = catalog;
+        Rules = rules;
         _pathfinder = new Pathfinder(Map);
+
+        var factionIds = map.SettlementSpawns.Select(s => s.OwnerId).Where(id => id >= 0)
+            .Concat(map.UnitSpawns.Select(u => u.FactionId)).Distinct().Order();
+        foreach (int id in factionIds)
+            _factions.Add(new Faction(id, rules.StartingGold));
+
+        foreach (var spawn in map.SettlementSpawns)
+            _settlements.Add(new Settlement(_settlements.Count + 1, rules.GetSettlementType(spawn.TypeId), spawn.Cell, spawn.OwnerId));
+
         foreach (var spawn in map.UnitSpawns)
         {
-            var type = Catalog.Get(spawn.TypeId);
+            var type = Rules.Units.Get(spawn.TypeId);
             foreach (var slot in Formation.ComputeSlots(Map, spawn.Cell.Center, spawn.Count, type.Radius))
                 SpawnUnit(spawn.TypeId, spawn.FactionId, slot);
         }
+        UpdateEconomy(payIncome: false);
     }
 
     public TileGrid Map { get; }
-    public UnitCatalog Catalog { get; }
+    public GameRules Rules { get; }
     public int Tick { get; private set; }
     public IReadOnlyList<Unit> Units => _units;
+    public IReadOnlyList<Faction> Factions => _factions;
+    public IReadOnlyList<Settlement> Settlements => _settlements;
 
     public Unit? GetUnit(int id) => _unitsById.GetValueOrDefault(id);
+    public Faction? GetFaction(int id) => _factions.Find(f => f.Id == id);
+    public Settlement? GetSettlement(int id) => _settlements.Find(s => s.Id == id);
 
     public void Issue(Command command) => _pending.Enqueue(command);
+
+    /// <summary>Events produced since the last call, oldest first.</summary>
+    public IReadOnlyList<SimEvent> TakeEvents()
+    {
+        if (_events.Count == 0)
+            return Array.Empty<SimEvent>();
+        var taken = _events;
+        _events = new List<SimEvent>();
+        return taken;
+    }
+
+    /// <summary>
+    /// Whether a <see cref="RecruitCommand"/> would currently succeed. The same check the command runs,
+    /// exposed so the UI can disable buttons and bots can plan without guessing the rules.
+    /// </summary>
+    public RecruitError CanRecruit(int factionId, int settlementId, string unitTypeId)
+    {
+        if (GetSettlement(settlementId) is not { } settlement)
+            return RecruitError.UnknownSettlement;
+        if (settlement.OwnerId != factionId || GetFaction(factionId) is not { } faction)
+            return RecruitError.NotOwner;
+        if (!settlement.Type.Recruits.Contains(unitTypeId))
+            return RecruitError.CannotRecruitType;
+        if (settlement.Queue.Count >= Settlement.MaxQueueLength)
+            return RecruitError.QueueFull;
+        if (PopulationOf(factionId) >= faction.ArmyCap)
+            return RecruitError.ArmyCapReached;
+        if (!faction.Treasury.CanAfford(Rules.Units.Get(unitTypeId).Cost))
+            return RecruitError.NotEnoughGold;
+        return RecruitError.None;
+    }
 
     public void Step()
     {
@@ -59,6 +111,9 @@ public sealed class Simulation
 
         while (_pending.TryDequeue(out var command))
             Apply(command);
+
+        UpdateEconomy(payIncome: true);
+        AdvanceProduction();
 
         foreach (var unit in _units)
             unit.Move(TickDuration);
@@ -75,7 +130,7 @@ public sealed class Simulation
     {
         if (!Map.IsWalkable(Cell.FromPosition(position)))
             throw new ArgumentException($"Cannot spawn a unit on a blocked tile at {position}.");
-        var unit = new Unit(_nextUnitId++, Catalog.Get(typeId), factionId, position);
+        var unit = new Unit(_nextUnitId++, Rules.Units.Get(typeId), factionId, position);
         _units.Add(unit);
         _unitsById.Add(unit.Id, unit);
         return unit;
@@ -88,9 +143,92 @@ public sealed class Simulation
             case MoveCommand move:
                 ApplyMove(move);
                 break;
+            case RecruitCommand recruit:
+                ApplyRecruit(recruit);
+                break;
             default:
                 throw new NotSupportedException($"Unhandled command type {command.GetType().Name}.");
         }
+    }
+
+    private void ApplyRecruit(RecruitCommand recruit)
+    {
+        var error = Rules.Units.Contains(recruit.UnitTypeId)
+            ? CanRecruit(recruit.FactionId, recruit.SettlementId, recruit.UnitTypeId)
+            : RecruitError.CannotRecruitType;
+        if (error != RecruitError.None)
+        {
+            _events.Add(new RecruitRejected(recruit.FactionId, recruit.SettlementId, recruit.UnitTypeId, error));
+            return;
+        }
+
+        var type = Rules.Units.Get(recruit.UnitTypeId);
+        var faction = GetFaction(recruit.FactionId)!;
+        faction.Treasury.TrySpend(type.Cost);
+        faction.Population++;
+        int ticks = Math.Max(1, (int)MathF.Round(type.BuildTime * TicksPerSecond));
+        GetSettlement(recruit.SettlementId)!.Enqueue(new ProductionItem(type, ticks));
+    }
+
+    /// <summary>Recomputes income, army cap and population of every faction, optionally paying one tick of income.</summary>
+    private void UpdateEconomy(bool payIncome)
+    {
+        foreach (var faction in _factions)
+        {
+            int income = 0, cap = 0;
+            foreach (var settlement in _settlements)
+            {
+                if (settlement.OwnerId != faction.Id)
+                    continue;
+                income += settlement.Type.Income;
+                cap += settlement.Type.ArmyCap;
+            }
+            faction.IncomePerSecond = income;
+            faction.ArmyCap = cap;
+            faction.Population = PopulationOf(faction.Id);
+            if (payIncome)
+                faction.Treasury.AccrueTick(income, TicksPerSecond);
+        }
+    }
+
+    private int PopulationOf(int factionId)
+    {
+        int count = 0;
+        foreach (var unit in _units)
+            if (unit.FactionId == factionId)
+                count++;
+        foreach (var settlement in _settlements)
+            if (settlement.OwnerId == factionId)
+                count += settlement.Queue.Count;
+        return count;
+    }
+
+    private void AdvanceProduction()
+    {
+        foreach (var settlement in _settlements)
+        {
+            if (settlement.AdvanceProduction() is not { } type)
+                continue;
+            var unit = SpawnUnit(type.Id, settlement.OwnerId, FreeSpotNear(settlement, type.Radius));
+            _events.Add(new UnitRecruited(settlement.OwnerId, settlement.Id, unit.Id));
+        }
+    }
+
+    /// <summary>First formation slot in front of the settlement that no unit is standing on.</summary>
+    private Vector2 FreeSpotNear(Settlement settlement, float radius)
+    {
+        Vector2 front = settlement.Cell.Center + RecruitSpawnOffset;
+        if (!Map.AreConnected(Cell.FromPosition(front), settlement.Cell))
+            front = settlement.Cell.Center;
+
+        var slots = Formation.ComputeSlots(Map, front, 32, radius);
+        foreach (var slot in slots)
+        {
+            bool occupied = _units.Any(u => Vector2.DistanceSquared(u.Position, slot) < MathF.Pow(u.Type.Radius + radius, 2));
+            if (!occupied)
+                return slot;
+        }
+        return slots[0]; // crowded: separation will make room
     }
 
     private void ApplyMove(MoveCommand move)

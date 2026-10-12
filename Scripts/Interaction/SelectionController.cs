@@ -4,6 +4,7 @@ using System.Linq;
 using Godot;
 using Lordsio.Core;
 using Lordsio.Sim.Core;
+using Lordsio.Sim.Territory;
 using Lordsio.Sim.Units;
 
 namespace Lordsio.Interaction;
@@ -101,7 +102,10 @@ public partial class SelectionController : Node2D
         var unit = PickUnit(GetGlobalMousePosition());
         if (unit == null)
         {
-            if (!additive)
+            var settlement = PickSettlement(GetGlobalMousePosition());
+            if (settlement != null)
+                _match.Selection.SelectSettlement(settlement.Id);
+            else if (!additive)
                 _match.Selection.Clear();
         }
         else if (additive)
@@ -170,6 +174,19 @@ public partial class SelectionController : Node2D
     {
         var inverse = GetCanvasTransform().AffineInverse();
         return new Rect2(inverse * Vector2.Zero, Vector2.Zero).Expand(inverse * GetViewportRect().Size);
+    }
+
+    /// <summary>Settlement whose drawing (roughly 2 tiles wide, rising above its cell) contains the point.</summary>
+    private Settlement? PickSettlement(Vector2 worldPoint)
+    {
+        var point = SimConvert.ToSim(worldPoint);
+        foreach (var settlement in _match.Sim.Settlements)
+        {
+            var c = settlement.Cell.Center;
+            if (MathF.Abs(point.X - c.X) <= 1.1f && point.Y >= c.Y - 1.7f && point.Y <= c.Y + 0.5f)
+                return settlement;
+        }
+        return null;
     }
 
     private Unit? PickUnit(Vector2 worldPoint)
