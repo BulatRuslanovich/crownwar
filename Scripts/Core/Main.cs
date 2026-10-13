@@ -24,6 +24,7 @@ public partial class Main : Node
     private Node? _screen;
     private MatchConfig _lastConfig = MatchConfig.Default;
     private NetSession? _session;
+    private Audio.MusicPlayer _music = null!;
 
     // Dev options for testing network games with two copies on one PC (see StartDevNetwork).
     private int _devAutoStartPlayers;
@@ -50,9 +51,13 @@ public partial class Main : Node
         if (DevTools.Arg(args, "--export-sounds") is { } soundDirectory)
         {
             Audio.SoundBank.ExportAll(soundDirectory);
+            Audio.MusicPlayer.ExportAll(soundDirectory);
             GetTree().Quit();
             return;
         }
+        _music = new Audio.MusicPlayer { Name = "Music" };
+        AddChild(_music);
+        GetTree().AutoAcceptQuit = false; // closing the window goes through QuitGame too
         if (DevTools.WantsDirectStart(args))
             DevTools.Apply(StartMatch(MatchConfig.Default with { Seed = DevTools.Seed(args) }), args);
         else if (DevTools.WantsNetwork(args))
@@ -70,6 +75,15 @@ public partial class Main : Node
         }
     }
 
+    public override void _Process(double delta)
+    {
+        // Menus get the menu theme; a match plays its calm or battle music.
+        if (_music != null)
+            _music.Track = _screen is MatchController match
+                ? match.InBattle ? Audio.MusicTrack.Battle : Audio.MusicTrack.Peace
+                : Audio.MusicTrack.Menu;
+    }
+
     public void ShowMenu()
     {
         EndSession();
@@ -78,6 +92,7 @@ public partial class Main : Node
         menu.Initialize(_lastConfig);
         menu.StartRequested += config => StartMatch(config);
         menu.NetworkRequested += () => ShowNetMenu(null);
+        menu.QuitRequested += QuitGame;
         Replace(menu);
     }
 
@@ -249,7 +264,7 @@ public partial class Main : Node
         StartMatch(MatchConfig.Default);
         await Wait(1.0);
         GD.Print("Smoke flow finished");
-        GetTree().Quit();
+        QuitGame();
     }
 
     private async System.Threading.Tasks.Task TakeScreenshotAndQuit(string path, double delay, bool selectMine)
@@ -264,6 +279,23 @@ public partial class Main : Node
         await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
         var error = GetViewport().GetTexture().GetImage().SavePng(path);
         GD.Print($"Screenshot saved to {path}: {error}");
+        QuitGame();
+    }
+
+    public override void _Notification(int what)
+    {
+        if (what == NotificationWMCloseRequest)
+            QuitGame();
+    }
+
+    /// <summary>
+    /// Quits once the music has stopped. The audio thread lets go of a stopped stream a moment later;
+    /// quitting in the same frame would leave it referenced at exit (reported as leaked instances).
+    /// </summary>
+    public async void QuitGame()
+    {
+        _music?.StopAll();
+        await ToSignal(GetTree().CreateTimer(0.15, processAlways: true), SceneTreeTimer.SignalName.Timeout);
         GetTree().Quit();
     }
 }

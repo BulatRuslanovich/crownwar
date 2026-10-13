@@ -8,6 +8,7 @@ namespace Lordsio.UI;
 public partial class SettingsPanel : Control
 {
     private HSlider _volume = null!;
+    private HSlider _music = null!;
     private CheckBox _fullscreen = null!;
     private OptionButton _uiScale = null!;
     private CheckBox _edgePan = null!;
@@ -20,6 +21,7 @@ public partial class SettingsPanel : Control
     public override void _Ready()
     {
         _volume = GetNode<HSlider>("Center/Panel/Rows/Grid/Volume");
+        _music = GetNode<HSlider>("Center/Panel/Rows/Grid/Music");
         _fullscreen = GetNode<CheckBox>("Center/Panel/Rows/Grid/Fullscreen");
         _uiScale = GetNode<OptionButton>("Center/Panel/Rows/Grid/UiScale");
         _edgePan = GetNode<CheckBox>("Center/Panel/Rows/Grid/EdgePan");
@@ -32,6 +34,7 @@ public partial class SettingsPanel : Control
         _language.AddItem("Русский");
 
         _volume.ValueChanged += _ => Changed();
+        _music.ValueChanged += _ => Changed();
         _fullscreen.Toggled += _ => Changed();
         _uiScale.ItemSelected += _ => Changed();
         _edgePan.Toggled += _ => Changed();
@@ -60,6 +63,7 @@ public partial class SettingsPanel : Control
             return;
         _loading = true;
         _volume.Value = s.MasterVolume;
+        _music.Value = s.MusicVolume;
         _fullscreen.ButtonPressed = s.Fullscreen;
         _uiScale.Selected = Math.Max(0, Array.IndexOf(GameSettings.UiScales, s.UiScale));
         _edgePan.ButtonPressed = s.EdgePan;
@@ -72,6 +76,7 @@ public partial class SettingsPanel : Control
         if (_loading || GameSettings.Instance is not { } s)
             return;
         s.MasterVolume = (float)_volume.Value;
+        s.MusicVolume = (float)_music.Value;
         s.Fullscreen = _fullscreen.ButtonPressed;
         s.UiScale = GameSettings.UiScales[Math.Max(0, _uiScale.Selected)];
         s.EdgePan = _edgePan.ButtonPressed;

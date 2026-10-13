@@ -97,6 +97,21 @@ public partial class MatchController : Node2D
     public Selection Selection { get; } = new();
     public CameraController Camera { get; private set; } = null!;
 
+    /// <summary>
+    /// The local team is in a real fight: enough blows landed on or by its units and buildings lately.
+    /// With hysteresis, so the battle music neither starts on a stray arrow nor flickers off mid-fight.
+    /// </summary>
+    public bool InBattle { get; private set; }
+
+    /// <summary>Blows involving the local team, decaying over a few seconds.</summary>
+    private float _battleHeat;
+    public float BattleHeat => _battleHeat;
+    private const float BattleHeatHalfLife = 4f;
+    private const float BattleStarts = 6f;
+    private const float BattleEnds = 1f;
+    /// <summary>Caps the heat, so peace returns within some 15 seconds even after a huge battle.</summary>
+    private const float BattleHeatMax = 15f;
+
     /// <summary>Smoothed wall-clock cost of one simulation tick plus bot decisions, for the debug overlay.</summary>
     public double StepMilliseconds { get; private set; }
 
@@ -213,9 +228,12 @@ public partial class MatchController : Node2D
             ProcessLocal(delta);
 
         UpdateFog();
+        _battleHeat *= MathF.Pow(0.5f, (float)delta / BattleHeatHalfLife);
 
         foreach (var e in Sim.TakeEvents())
         {
+            if (e is AttackLanded hit && (IsFriendly(hit.FactionId) || IsFriendly(hit.TargetFactionId)))
+                _battleHeat = MathF.Min(BattleHeatMax, _battleHeat + 1f);
             Stats.OnSimEvent(e);
             _hud.OnSimEvent(e);
             _alerts.OnSimEvent(e, Sim.Tick);
@@ -229,6 +247,17 @@ public partial class MatchController : Node2D
             _airEffects.OnSimEvent(e);
             _sounds.OnSimEvent(e);
         }
+        UpdateBattleMood();
+    }
+
+    private void UpdateBattleMood()
+    {
+        if (Sim.IsOver)
+            InBattle = false;
+        else if (_battleHeat >= BattleStarts)
+            InBattle = true;
+        else if (_battleHeat <= BattleEnds)
+            InBattle = false;
     }
 
     private void UpdateFog()

@@ -24,6 +24,9 @@ public partial class MainMenu : Control
     /// <summary>Raised when the player opens the network game screen.</summary>
     public event Action? NetworkRequested;
 
+    /// <summary>Raised when the player quits the game.</summary>
+    public event Action? QuitRequested;
+
     /// <summary>Pre-fills the form, e.g. with the setup of the match just left.</summary>
     public void Initialize(MatchConfig config) => _initial = config;
 
@@ -50,7 +53,7 @@ public partial class MainMenu : Control
             _menuPanel.Visible = false;
             _settings.Visible = true;
         };
-        GetNode<Button>("Center/Panel/Rows/Quit").Pressed += () => GetTree().Quit();
+        GetNode<Button>("Center/Panel/Rows/Quit").Pressed += () => QuitRequested?.Invoke();
         _settings.Closed += () => _menuPanel.Visible = true;
         _settings.Visible = false;
         GetNode<Button>("Center/Panel/Rows/Start").GrabFocus();

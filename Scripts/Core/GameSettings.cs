@@ -20,6 +20,9 @@ public partial class GameSettings : Node
     public static readonly string[] Languages = { "", "en", "ru" };
 
     public float MasterVolume { get; set; } = 0.8f;
+
+    /// <summary>Music volume relative to the master volume.</summary>
+    public float MusicVolume { get; set; } = 0.6f;
     public bool Fullscreen { get; set; }
     public float UiScale { get; set; } = 1f;
     public bool EdgePan { get; set; } = true;
@@ -46,6 +49,9 @@ public partial class GameSettings : Node
     {
         AudioServer.SetBusVolumeDb(0, Mathf.LinearToDb(Mathf.Max(MasterVolume, 0.0001f)));
         AudioServer.SetBusMute(0, MasterVolume <= 0.001f);
+        int music = MusicBus();
+        AudioServer.SetBusVolumeDb(music, Mathf.LinearToDb(Mathf.Max(MusicVolume, 0.0001f)));
+        AudioServer.SetBusMute(music, MusicVolume <= 0.001f);
         DisplayServer.WindowSetMode(Fullscreen ? DisplayServer.WindowMode.Fullscreen : DisplayServer.WindowMode.Windowed);
         GetTree().Root.ContentScaleFactor = UiScale;
         TranslationServer.SetLocale(Language == "" ? OS.GetLocaleLanguage() : Language);
@@ -55,6 +61,7 @@ public partial class GameSettings : Node
     {
         var config = new ConfigFile();
         config.SetValue(Section, "master_volume", MasterVolume);
+        config.SetValue(Section, "music_volume", MusicVolume);
         config.SetValue(Section, "fullscreen", Fullscreen);
         config.SetValue(Section, "ui_scale", UiScale);
         config.SetValue(Section, "edge_pan", EdgePan);
@@ -71,11 +78,25 @@ public partial class GameSettings : Node
         if (config.Load(FilePath) != Error.Ok)
             return; // first run: keep defaults
         MasterVolume = Mathf.Clamp((float)config.GetValue(Section, "master_volume", MasterVolume), 0f, 1f);
+        MusicVolume = Mathf.Clamp((float)config.GetValue(Section, "music_volume", MusicVolume), 0f, 1f);
         Fullscreen = (bool)config.GetValue(Section, "fullscreen", Fullscreen);
         UiScale = Mathf.Clamp((float)config.GetValue(Section, "ui_scale", UiScale), 0.5f, 3f);
         EdgePan = (bool)config.GetValue(Section, "edge_pan", EdgePan);
         Language = (string)config.GetValue(Section, "language", Language);
         PlayerName = (string)config.GetValue(Section, "player_name", PlayerName);
+    }
+
+    /// <summary>The music bus (created on first use, feeding the master bus), so music has its own volume.</summary>
+    private static int MusicBus()
+    {
+        int index = AudioServer.GetBusIndex(Audio.MusicPlayer.Bus);
+        if (index >= 0)
+            return index;
+        AudioServer.AddBus();
+        index = AudioServer.BusCount - 1;
+        AudioServer.SetBusName(index, Audio.MusicPlayer.Bus);
+        AudioServer.SetBusSend(index, "Master");
+        return index;
     }
 
     /// <summary>The OS user name, trimmed to fit the lobby; "Player" if unavailable.</summary>
