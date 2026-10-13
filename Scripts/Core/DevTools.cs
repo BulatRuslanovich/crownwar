@@ -17,7 +17,7 @@ namespace Lordsio.Core;
 ///   --zoom-index=&lt;n&gt;         start at camera zoom step n (0 = farthest)
 ///   --seed=&lt;n&gt;               fixed seed for start positions
 ///   --demo-gold=&lt;n&gt;          give the player n extra gold (for visual checks only)
-///   --demo-build             order a barracks and a tower next to the player's castle
+///   --demo-build             order a barracks, a tower and a watchtower next to the player's castle
 ///   --demo-recruit=&lt;n&gt;       select the player's castle and order n recruits there
 ///   --demo-move=&lt;x&gt;,&lt;y&gt;      select all player units and order them to advance to tile (x, y)
 ///   --demo-camera=&lt;x&gt;,&lt;y&gt;    center the camera on tile (x, y)
@@ -109,13 +109,13 @@ public static class DevTools
             match.Issue(new RecruitCommand(match.LocalFactionId, capital.Id, capital.Type.Recruits[0]));
     }
 
-    /// <summary>Orders a barracks and a tower on the first free spots around the player's capital.</summary>
+    /// <summary>Orders a barracks, a tower and a watchtower on the first free spots around the player's capital.</summary>
     private static void DemoBuild(MatchController match)
     {
         var sim = match.Sim;
         var capital = PlayerCapital(match);
         var taken = new HashSet<Cell>();
-        foreach (string type in new[] { "barracks", "tower" })
+        foreach (string type in new[] { "barracks", "tower", "watchtower" })
         {
             int size = sim.Rules.GetBuildingType(type).Size;
             for (int r = 3; r < 6; r++)

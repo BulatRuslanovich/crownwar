@@ -93,6 +93,9 @@ public sealed class Building : Entity
     public override int MaxHealth => Type.MaxHealth;
     public override float RangedArmor => Type.RangedArmor;
 
+    /// <summary>How far the building sees now: a construction site only looks around itself.</summary>
+    public float SightRange => IsComplete ? Type.EffectiveSight : Type.Size / 2f + 3f;
+
     /// <summary>Units being trained; only the first one makes progress. Any length: queued units count against the army cap.</summary>
     public IReadOnlyList<ProductionItem> Queue => _queue;
 

@@ -76,6 +76,38 @@ public class VisibilityTests
     }
 
     [Test]
+    public void WatchtowerSeesFarOnlyOnceBuilt()
+    {
+        var watchtower = TestMaps.Barracks with
+        {
+            Id = "watchtower", Name = "Watchtower", Size = 3, Cost = 50, ArmyCap = 0, Recruits = Array.Empty<string>(), SightRange = 12f,
+        };
+        var rules = new GameRules(100, 4f, Array.Empty<StartingUnits>(), TestMaps.Rules.Units,
+            new[] { TestMaps.Castle, TestMaps.Mine, TestMaps.Barracks, TestMaps.Tower, watchtower });
+        var sim = new Simulation(TestMaps.Parse(Field, "start 1 1", "unit infantry 0 6 6"), rules, new MatchSetup(1, ShuffleStarts: false));
+        var far = new Cell(17, 9); // 11 tiles east of the tower's center, out of the infantry's sight
+
+        sim.Issue(new BuildCommand(0, "watchtower", new Cell(5, 8)));
+        sim.Step();
+        Assert.That(Update(sim, 0).IsVisible(far), Is.False, "a construction site only looks around itself");
+
+        for (int i = 0; i < (watchtower.BuildTime + 0.2f) * Simulation.TicksPerSecond; i++)
+            sim.Step();
+        Assert.That(sim.Buildings.Single(b => b.Type.Id == "watchtower").IsComplete, Is.True);
+        Assert.That(Update(sim, 0).IsVisible(far), Is.True);
+    }
+
+    [Test]
+    public void WatchtowerRulesMatchTheDesign()
+    {
+        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
+        var watchtower = rules.GetBuildingType("watchtower");
+        Assert.That((watchtower.Size, watchtower.MaxHealth, watchtower.Cost), Is.EqualTo((3, 2000, 300)));
+        Assert.That(watchtower.Attack, Is.Null, "it does not shoot");
+        Assert.That(watchtower.EffectiveSight, Is.GreaterThan(rules.GetBuildingType("castle").EffectiveSight));
+    }
+
+    [Test]
     public void BuildingsSeeAtLeastAsFarAsTheyShoot()
     {
         Assert.That(TestMaps.Tower.EffectiveSight, Is.EqualTo(TestMaps.Tower.Attack!.Range + 1f));

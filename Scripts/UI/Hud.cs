@@ -27,6 +27,7 @@ public partial class Hud : CanvasLayer
         ["mine"] = Key.M,
         ["barracks"] = Key.B,
         ["tower"] = Key.T,
+        ["watchtower"] = Key.V,
     };
 
     private readonly List<(Button Button, string UnitTypeId)> _recruitButtons = new();
@@ -515,6 +516,8 @@ public partial class Hud : CanvasLayer
             parts.Add(Tr("INFO_TRAINS"));
         if (type.Attack is { } attack)
             parts.Add(string.Format(Tr("INFO_SHOOTS"), attack.Range));
+        else if (type.SightRange > 0f && !type.IsCapital)
+            parts.Add(string.Format(Tr("INFO_SIGHT"), type.SightRange));
         if (type.IsCapital)
             parts.Add(Tr("INFO_CAPITAL"));
         return string.Join("  ·  ", parts);

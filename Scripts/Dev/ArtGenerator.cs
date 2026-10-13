@@ -73,7 +73,7 @@ public static class ArtGenerator
 
         foreach (var (name, canvas) in new (string, PixelCanvas)[]
                  {
-                     ("castle", Castle()), ("barracks", Barracks()), ("tower", Tower()), ("mine", Mine()),
+                     ("castle", Castle()), ("barracks", Barracks()), ("tower", Tower()), ("watchtower", Watchtower()), ("mine", Mine()),
                  })
         {
             canvas.Save(System.IO.Path.Combine(assets, "Sprites", name + ".png"),
@@ -624,6 +624,52 @@ public static class ArtGenerator
         c.Rect(12, 45, 8, 1, StoneDark);
         Banner(c, 4, 44, 4, 6);
         Banner(c, 24, 44, 4, 6);
+        c.Outline(Outline);
+        return c;
+    }
+
+    /// <summary>
+    /// 48×76, bottom-centre origin; footprint 3×3 tiles. A walled base, a slim stone shaft and an open lookout
+    /// with a beacon fire under a pointed roof in faction colours. It does not shoot, so no arrow gallery.
+    /// </summary>
+    private static PixelCanvas Watchtower()
+    {
+        var fire = new Color("ff7a1a");
+        var fireLight = new Color("ffd25a");
+        var c = new PixelCanvas(48, 76);
+        Flag(c, 23, 0);
+        for (int row = 0; row < 12; row++)
+        {
+            int half = 2 + row;
+            for (int x = 24 - half; x < 24 + half; x++)
+                c.Team(x, 6 + row, row == 11 ? 0.55f : x < 24 ? 0.95f : 0.65f);
+        }
+        // Open lookout: corner posts, a beacon in a brazier, a railing and the floor.
+        c.Rect(11, 18, 26, 2, WoodDark);
+        c.Rect(12, 20, 2, 11, Wood);
+        c.Rect(34, 20, 2, 11, Wood);
+        c.Rect(20, 27, 8, 3, SteelDark);
+        c.Rect(21, 23, 6, 4, fire);
+        c.Rect(23, 21, 2, 4, fireLight);
+        c.Rect(9, 30, 30, 3, Wood);
+        for (int x = 10; x < 38; x += 3)
+            c.Rect(x, 31, 1, 2, WoodDark);
+        c.Rect(8, 33, 32, 2, WoodDark);
+        // Shaft with lookout windows.
+        Bricks(c, 15, 35, 18, 22, StoneLight);
+        c.Rect(23, 39, 2, 5, Window);
+        c.Rect(23, 48, 2, 4, Window);
+        // Walled base with a gate and banners.
+        Crenellations(c, 3, 53, 42, Stone);
+        Bricks(c, 3, 56, 42, 19, Stone);
+        c.Rect(3, 73, 42, 2, StoneDark);
+        c.Rect(20, 63, 8, 11, Door);
+        c.Rect(21, 61, 6, 2, Door);
+        for (int x = 22; x < 27; x += 2)
+            c.Rect(x, 64, 1, 10, WoodDark);
+        c.Rect(19, 60, 10, 1, StoneDark);
+        Banner(c, 7, 59, 5, 8);
+        Banner(c, 36, 59, 5, 8);
         c.Outline(Outline);
         return c;
     }
