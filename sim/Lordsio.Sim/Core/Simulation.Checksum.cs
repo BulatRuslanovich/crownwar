@@ -47,6 +47,8 @@ public sealed partial class Simulation
         {
             hash.Add(faction.Treasury.Gold);
             hash.Add(faction.Treasury.Remainder);
+            hash.Add(faction.Technology.Researched.Count);
+            hash.Add(faction.Technology.ResearchTicksLeft);
             hash.Add(faction.IsEliminated ? 1 : 0);
         }
         return hash.Value;

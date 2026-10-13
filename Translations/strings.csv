@@ -123,3 +123,27 @@ INFO_DEPOSIT_RESERVE,reserve {0}/{1},запас {0}/{1}
 INFO_DEPOSIT_EXHAUSTED,Deposit exhausted — refills in {0} s,Месторождение истощено — восстановится через {0} с
 MSG_DEPOSIT_EXHAUSTED,A mine has exhausted its deposit — it refills in {0:0} s,Шахта истощила месторождение — оно восстановится через {0:0} с
 MSG_DEPOSIT_RESTORED,A deposit has refilled — the mine is digging again,Месторождение восстановилось — шахта снова добывает золото
+HUD_RESEARCH,Upgrades (researched {0} of {1}),Улучшения (изучено {0} из {1})
+HUD_RESEARCHED,Researched:,Изучено:
+MSG_RESEARCH_STARTED,Research started: {0},Исследование начато: {0}
+MSG_RESEARCH_COMPLETED,Upgrade researched: {0},Улучшение изучено: {0}
+UPGRADE_COST_TIME,{0} gold · {1:0} s to research,{0} золота · исследование {1:0} с
+EFFECT_DAMAGE,{0}: damage +{1:0.#}%,{0}: урон +{1:0.#}%
+EFFECT_HEALTH,{0}: health +{1:0.#}%,{0}: прочность +{1:0.#}%
+EFFECT_RANGE,{0}: range +{1:0.#} tiles,{0}: дальность +{1:0.#} клетки
+EFFECT_ARMY_CAP,{0}: army limit +{1:0},{0}: лимит армии +{1:0}
+EFFECT_MINE_YIELD,Every working mine: +{0:0} gold/s,Каждая работающая шахта: +{0:0} золота/с
+EFFECT_UPKEEP,Army upkeep {0:+0;-0}%,Содержание армии {0:+0;-0}%
+ERR_RESEARCH_BUSY,Another upgrade is being researched,Уже идёт другое исследование
+ERR_RESEARCH_DONE,Already researched,Уже изучено
+ERR_RESEARCH_NO_CAPITAL,Upgrades are researched in your castle,Улучшения исследуются в замке
+ERR_RESEARCH_UNKNOWN,Unknown upgrade,Неизвестное улучшение
+ERR_RESEARCH_REQUIRES,Research {0} first,Сначала изучите «{0}»
+UPGRADE_DEEP_MINES,Deep Mines,Глубокие шахты
+UPGRADE_FORGED_BLADES,Forged Blades,Закалённые клинки
+UPGRADE_LONGBOWS,Longbows,Длинные луки
+UPGRADE_CHAINMAIL,Chainmail,Кольчуги
+UPGRADE_FORTIFIED_TOWERS,Fortified Towers,Укреплённые башни
+UPGRADE_GREAT_BARRACKS,Great Barracks,Большие казармы
+UPGRADE_SUPPLY_TRAIN,Supply Train,Обоз
+UPGRADE_STEEL_WEAPONS,Steel Weapons,Стальное оружие

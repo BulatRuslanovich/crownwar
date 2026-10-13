@@ -98,6 +98,18 @@ custom_minimum_size = Vector2(0, 8)
 layout_mode = 2
 show_percentage = false
 
+[node name="ResearchTitle" type="Label" parent="BuildingPanel/Rows"]
+layout_mode = 2
+text = "HUD_RESEARCH"
+
+[node name="ResearchButtons" type="HFlowContainer" parent="BuildingPanel/Rows"]
+layout_mode = 2
+
+[node name="ResearchProgress" type="ProgressBar" parent="BuildingPanel/Rows"]
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+show_percentage = false
+
 [node name="Message" type="Label" parent="."]
 anchors_preset = 5
 anchor_left = 0.5

@@ -18,6 +18,7 @@ public partial class Hud : CanvasLayer
     private const float MessageDuration = 2.5f;
 
     private static readonly Color ProblemColor = new("ff8a80");
+    private static readonly Color ResearchColor = new("9fd8ff");
 
     /// <summary>Physical hotkey per building type id; types without one are still on the bar.</summary>
     private static readonly Dictionary<string, Key> BuildHotkeys = new()
@@ -41,6 +42,10 @@ public partial class Hud : CanvasLayer
     private Container _recruitRow = null!;
     private Label _queue = null!;
     private ProgressBar _progress = null!;
+    private Label _researchTitle = null!;
+    private Container _researchRow = null!;
+    private ProgressBar _researchProgress = null!;
+    private readonly List<(Button Button, UpgradeType Upgrade)> _researchButtons = new();
     private Label _message = null!;
     private AlertIndicator _alert = null!;
     private int? _panelBuildingId;
@@ -61,6 +66,10 @@ public partial class Hud : CanvasLayer
         _recruitRow = GetNode<Container>("BuildingPanel/Rows/RecruitButtons");
         _queue = GetNode<Label>("BuildingPanel/Rows/Queue");
         _progress = GetNode<ProgressBar>("BuildingPanel/Rows/Progress");
+        _researchTitle = GetNode<Label>("BuildingPanel/Rows/ResearchTitle");
+        _researchRow = GetNode<Container>("BuildingPanel/Rows/ResearchButtons");
+        _researchProgress = GetNode<ProgressBar>("BuildingPanel/Rows/ResearchProgress");
+        CreateResearchButtons();
         _message = GetNode<Label>("Message");
         _alert = GetNode<AlertIndicator>("AlertIndicator");
         _alert.Initialize(match);
@@ -147,6 +156,15 @@ public partial class Hud : CanvasLayer
                 else if (destroyed.KillerFactionId == player)
                     ShowMessage(string.Format(Tr("MSG_ENEMY_BUILDING_DESTROYED"), name));
                 break;
+            case ResearchStarted started when started.FactionId == player && _match.Sim.Rules.FindUpgrade(started.UpgradeId) is { } upgrade:
+                ShowMessage(string.Format(Tr("MSG_RESEARCH_STARTED"), Names.Of(upgrade)));
+                break;
+            case ResearchCompleted completed when completed.FactionId == player && _match.Sim.Rules.FindUpgrade(completed.UpgradeId) is { } upgrade:
+                ShowMessage(string.Format(Tr("MSG_RESEARCH_COMPLETED"), Names.Of(upgrade)));
+                break;
+            case ResearchRejected rejected when rejected.FactionId == player:
+                ShowMessage(Describe(rejected.Reason));
+                break;
             case DepositExhausted exhausted when exhausted.FactionId == player:
                 ShowMessage(string.Format(Tr("MSG_DEPOSIT_EXHAUSTED"), _match.Sim.Rules.DepositRegenSeconds));
                 break;
@@ -230,6 +248,8 @@ public partial class Hud : CanvasLayer
             button.TooltipText = error == RecruitError.None ? upkeep : Describe(error) + "\n" + upkeep;
         }
 
+        UpdateResearch(own && building.IsComplete && building.Type.IsCapital);
+
         bool training = own && building.Queue.Count > 0;
         _queue.Visible = training;
         _progress.Visible = training;
@@ -241,6 +261,102 @@ public partial class Hud : CanvasLayer
             _progress.Value = current.Progress * 100f;
         }
     }
+
+    private void CreateResearchButtons()
+    {
+        foreach (var upgrade in _match.Sim.Rules.Upgrades)
+        {
+            var button = new Button { FocusMode = Control.FocusModeEnum.None };
+            button.AddThemeFontSizeOverride("font_size", 14);
+            string id = upgrade.Id;
+            button.Pressed += () => _match.Issue(new ResearchCommand(_match.LocalFactionId, id));
+            _researchRow.AddChild(button);
+            _researchButtons.Add((button, upgrade));
+        }
+    }
+
+    /// <summary>The research section of the castle panel: what can be researched, what is under way, what is done.</summary>
+    private void UpdateResearch(bool visible)
+    {
+        bool any = visible && _researchButtons.Count > 0;
+        _researchTitle.Visible = any;
+        _researchRow.Visible = any;
+        _researchProgress.Visible = false;
+        if (!any || _match.Sim.GetFaction(_match.LocalFactionId) is not { } faction)
+            return;
+
+        var tech = faction.Technology;
+        _researchTitle.Text = string.Format(Tr("HUD_RESEARCH"), tech.Researched.Count, _researchButtons.Count);
+        _researchTitle.TooltipText = tech.Researched.Count == 0
+            ? ""
+            : Tr("HUD_RESEARCHED") + "\n" + string.Join("\n", tech.Researched.Select(u => "• " + Names.Of(u)));
+        _researchTitle.MouseFilter = Control.MouseFilterEnum.Pass;
+        foreach (var (button, upgrade) in _researchButtons)
+        {
+            // Researched upgrades leave the list; the title counts them and lists them in its tooltip.
+            button.Visible = !tech.Has(upgrade.Id);
+            if (!button.Visible)
+                continue;
+            bool current = tech.Current == upgrade;
+            var error = _match.Sim.CanResearch(_match.LocalFactionId, upgrade.Id);
+            button.Text = current
+                ? $"{Names.Of(upgrade)} {tech.ResearchProgress * 100f:0}%"
+                : $"{Names.Of(upgrade)} {upgrade.Cost}{Tr("HUD_GOLD_SHORT")}";
+            // Red only for what gold would fix; waiting (another research, a prerequisite) is just dimmed.
+            button.Modulate = current ? ResearchColor : error switch
+            {
+                ResearchError.None => Colors.White,
+                ResearchError.NotEnoughGold => ProblemColor,
+                _ => Colors.White with { A = 0.5f },
+            };
+            string description = DescribeUpgrade(upgrade);
+            button.TooltipText = error is ResearchError.None or ResearchError.AlreadyResearched || current
+                ? description
+                : Describe(error, upgrade) + "\n" + description;
+        }
+        if (tech.Current != null)
+        {
+            _researchProgress.Visible = true;
+            _researchProgress.Value = tech.ResearchProgress * 100f;
+        }
+    }
+
+    /// <summary>The upgrade's effects, cost and time, built from the rules so new upgrades describe themselves.</summary>
+    private string DescribeUpgrade(UpgradeType upgrade)
+    {
+        var rules = _match.Sim.Rules;
+        string Targets(UpgradeEffect effect) => string.Join(", ", effect.Targets.Select(t =>
+            rules.Units.Contains(t) ? Names.Of(rules.Units.Get(t)) : Names.Of(rules.GetBuildingType(t))));
+
+        var lines = upgrade.Effects.Select(e => e.Stat switch
+        {
+            UpgradeStat.Damage => string.Format(Tr("EFFECT_DAMAGE"), Targets(e), e.Amount),
+            UpgradeStat.Health => string.Format(Tr("EFFECT_HEALTH"), Targets(e), e.Amount),
+            UpgradeStat.Range => string.Format(Tr("EFFECT_RANGE"), Targets(e), e.Amount),
+            UpgradeStat.ArmyCap => string.Format(Tr("EFFECT_ARMY_CAP"), Targets(e), e.Amount),
+            UpgradeStat.MineYield => string.Format(Tr("EFFECT_MINE_YIELD"), e.Amount),
+            UpgradeStat.Upkeep => string.Format(Tr("EFFECT_UPKEEP"), e.Amount),
+            _ => e.Stat.ToString(),
+        }).ToList();
+        lines.Add(string.Format(Tr("UPGRADE_COST_TIME"), upgrade.Cost, upgrade.ResearchTime));
+        return string.Join("\n", lines);
+    }
+
+    private string Describe(ResearchError error, UpgradeType upgrade) => error switch
+    {
+        ResearchError.MissingRequirement when _match.Sim.Rules.FindUpgrade(upgrade.Requires!) is { } required =>
+            string.Format(Tr("ERR_RESEARCH_REQUIRES"), Names.Of(required)),
+        _ => Describe(error),
+    };
+
+    private string Describe(ResearchError error) => Tr(error switch
+    {
+        ResearchError.NotEnoughGold => "ERR_NOT_ENOUGH_GOLD",
+        ResearchError.ResearchInProgress => "ERR_RESEARCH_BUSY",
+        ResearchError.AlreadyResearched => "ERR_RESEARCH_DONE",
+        ResearchError.NoCapital => "ERR_RESEARCH_NO_CAPITAL",
+        _ => "ERR_RESEARCH_UNKNOWN",
+    });
 
     private void RebuildRecruitButtons(Building building)
     {

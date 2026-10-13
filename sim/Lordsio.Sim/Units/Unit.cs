@@ -51,7 +51,8 @@ public sealed class Unit : Entity
         GuardPoint = position;
     }
 
-    public UnitType Type { get; }
+    /// <summary>The owner's version of the unit type: replaced when the owner researches an upgrade.</summary>
+    public UnitType Type { get; internal set; }
     public override int MaxHealth => Type.MaxHealth;
     public override float RangedArmor => Type.RangedArmor;
 

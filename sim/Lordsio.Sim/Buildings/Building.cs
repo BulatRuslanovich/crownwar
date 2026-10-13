@@ -67,7 +67,8 @@ public sealed class Building : Entity
         ConstructionTicksLeft = constructionTicks;
     }
 
-    public BuildingType Type { get; }
+    /// <summary>The owner's version of the building type: replaced when the owner researches an upgrade.</summary>
+    public BuildingType Type { get; internal set; }
 
     /// <summary>Top-left cell of the footprint.</summary>
     public Cell Anchor { get; }

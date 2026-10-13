@@ -63,7 +63,7 @@ public sealed partial class Simulation
         foreach (int id in factionIds)
         {
             int team = setup.TeamOf(id);
-            _factions.Add(new Faction(id, team, rules.StartingGold));
+            _factions.Add(new Faction(id, team, rules));
             _teamOf[id] = team;
         }
 
@@ -163,7 +163,8 @@ public sealed partial class Simulation
     {
         if (!Map.IsWalkable(Cell.FromPosition(position)))
             throw new ArgumentException($"Cannot spawn a unit on a blocked tile at {position}.");
-        var unit = new Unit(_nextEntityId++, Rules.Units.Get(typeId), factionId, position);
+        var type = GetFaction(factionId)?.Technology.Unit(typeId) ?? Rules.Units.Get(typeId);
+        var unit = new Unit(_nextEntityId++, type, factionId, position);
         _units.Add(unit);
         _entitiesById.Add(unit.Id, unit);
         return unit;
@@ -186,6 +187,9 @@ public sealed partial class Simulation
                 break;
             case BuildCommand build:
                 ApplyBuild(build);
+                break;
+            case ResearchCommand research:
+                ApplyResearch(research);
                 break;
             default:
                 throw new NotSupportedException($"Unhandled command type {command.GetType().Name}.");

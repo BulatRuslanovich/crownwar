@@ -117,6 +117,7 @@ public sealed partial class Simulation
 
     private Building AddBuilding(BuildingType type, int factionId, Cell anchor, int constructionTicks)
     {
+        type = GetFaction(factionId)?.Technology.Building(type.Id) ?? type;
         var deposit = type.IsMine ? DepositAt(anchor) : null;
         var building = new Building(_nextEntityId++, type, factionId, anchor, constructionTicks, deposit);
         _buildings.Add(building);
@@ -229,11 +230,14 @@ public sealed partial class Simulation
         foreach (var faction in _factions)
         {
             int income = 0, cap = 0, upkeep = 0;
+            var tech = faction.Technology;
             foreach (var building in _buildings)
             {
                 if (building.FactionId != faction.Id || !building.IsComplete || !building.IsAlive)
                     continue;
                 income += building.Income;
+                if (building.Type.IsMine && building.Income > 0)
+                    income += tech.MineYieldBonus;
                 cap += building.Type.ArmyCap;
             }
             foreach (var unit in _units)
@@ -242,6 +246,7 @@ public sealed partial class Simulation
                     upkeep += unit.Type.Upkeep;
             }
             faction.IncomePerSecond = income;
+            upkeep = upkeep * (100 + tech.UpkeepPercent) / 100;
             faction.ArmyUpkeepPerMinute = upkeep;
             faction.UpkeepPerMinute = Math.Max(0, upkeep - Rules.UpkeepAllowance);
             faction.ArmyCap = cap;
@@ -263,8 +268,74 @@ public sealed partial class Simulation
         return count;
     }
 
+    /// <summary>
+    /// Whether a <see cref="ResearchCommand"/> would currently succeed; the same check the command runs,
+    /// for the UI and bots.
+    /// </summary>
+    public ResearchError CanResearch(int factionId, string upgradeId)
+    {
+        if (Rules.FindUpgrade(upgradeId) is not { } upgrade)
+            return ResearchError.UnknownUpgrade;
+        if (GetFaction(factionId) is not { IsEliminated: false } faction || GetBuilding(faction.CapitalId) is not { IsAlive: true })
+            return ResearchError.NoCapital;
+        var tech = faction.Technology;
+        if (tech.Has(upgradeId))
+            return ResearchError.AlreadyResearched;
+        if (tech.Current != null)
+            return ResearchError.ResearchInProgress;
+        if (upgrade.Requires != null && !tech.Has(upgrade.Requires))
+            return ResearchError.MissingRequirement;
+        if (!faction.Treasury.CanAfford(upgrade.Cost))
+            return ResearchError.NotEnoughGold;
+        return ResearchError.None;
+    }
+
+    private void ApplyResearch(ResearchCommand research)
+    {
+        var error = CanResearch(research.FactionId, research.UpgradeId);
+        if (error != ResearchError.None)
+        {
+            _events.Add(new ResearchRejected(research.FactionId, research.UpgradeId, error));
+            return;
+        }
+        var upgrade = Rules.FindUpgrade(research.UpgradeId)!;
+        var faction = GetFaction(research.FactionId)!;
+        faction.Treasury.TrySpend(upgrade.Cost);
+        faction.Technology.Start(upgrade, (int)MathF.Round(upgrade.ResearchTime * TicksPerSecond));
+        _events.Add(new ResearchStarted(faction.Id, upgrade.Id));
+    }
+
+    /// <summary>Research under way progresses; a finished upgrade improves the faction's units and buildings at once.</summary>
+    private void AdvanceResearch()
+    {
+        foreach (var faction in _factions)
+        {
+            if (faction.IsEliminated || faction.Technology.Advance() is not { } done)
+                continue;
+            var tech = faction.Technology;
+            foreach (var unit in _units)
+            {
+                if (unit.FactionId != faction.Id)
+                    continue;
+                int before = unit.MaxHealth;
+                unit.Type = tech.Unit(unit.Type.Id);
+                unit.Health = Math.Clamp(unit.Health + unit.MaxHealth - before, 1, unit.MaxHealth); // tougher right away
+            }
+            foreach (var building in _buildings)
+            {
+                if (building.FactionId != faction.Id)
+                    continue;
+                int before = building.MaxHealth;
+                building.Type = tech.Building(building.Type.Id);
+                building.Health = Math.Clamp(building.Health + building.MaxHealth - before, 1, building.MaxHealth);
+            }
+            _events.Add(new ResearchCompleted(faction.Id, done.Id));
+        }
+    }
+
     private void AdvanceConstructionAndTraining()
     {
+        AdvanceResearch();
         foreach (var building in _buildings)
         {
             if (!building.IsComplete)

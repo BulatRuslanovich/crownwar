@@ -24,6 +24,8 @@ public enum BotDifficulty
 /// <param name="FirstMineDelay">Seconds into the match before it starts its first mine.</param>
 /// <param name="MineInterval">Seconds between starting one mine and the next: easier bots grow their economy
 /// at a pace a new player can match.</param>
+/// <param name="MaxResearch">Upgrades it researches at most, in the order of the rules file.</param>
+/// <param name="ResearchAfter">Seconds into the match before it researches anything.</param>
 public sealed record BotProfile(
     float ThinkInterval,
     int AttackArmyValue,
@@ -35,7 +37,9 @@ public sealed record BotProfile(
     float AttackAdvantage,
     int MaxMines,
     float FirstMineDelay = 0f,
-    float MineInterval = 0f)
+    float MineInterval = 0f,
+    int MaxResearch = 0,
+    float ResearchAfter = 0f)
 {
     public static BotProfile For(BotDifficulty difficulty) => difficulty switch
     {
@@ -44,9 +48,9 @@ public sealed record BotProfile(
             AttackAdvantage: 1f, MaxMines: 2, FirstMineDelay: 60f, MineInterval: 60f),
         BotDifficulty.Hard => new(ThinkInterval: 0.5f, AttackArmyValue: 700, CapitalAssaultValue: 1500,
             RetreatFraction: 0.45f, BuildsTowers: true, MaxBarracks: 3, CountersComposition: true,
-            AttackAdvantage: 1.6f, MaxMines: int.MaxValue),
+            AttackAdvantage: 1.6f, MaxMines: int.MaxValue, MaxResearch: int.MaxValue, ResearchAfter: 90f),
         _ => new(ThinkInterval: 1f, AttackArmyValue: 800, CapitalAssaultValue: 1700,
             RetreatFraction: 0.35f, BuildsTowers: true, MaxBarracks: 2, CountersComposition: false,
-            AttackAdvantage: 1.3f, MaxMines: 3, FirstMineDelay: 20f, MineInterval: 30f),
+            AttackAdvantage: 1.3f, MaxMines: 3, FirstMineDelay: 20f, MineInterval: 30f, MaxResearch: 3, ResearchAfter: 150f),
     };
 }

@@ -97,6 +97,8 @@ public sealed class BotBrain
         var threats = FindThreats();
 
         int reserve = PlanConstruction(me, capital, army, threatened: threats.Count > 0);
+        if (threats.Count == 0)
+            reserve += PlanResearch(me, reserve, armyValue);
         Recruit(me, capital, reserve, urgent: threats.Count > 0);
         CommandArmy(capital, army, armyValue, threats);
     }
@@ -146,7 +148,7 @@ public sealed class BotBrain
 
         // 2. Barracks when the army limit is the bottleneck.
         var barracksType = _sim.Rules.BuildingTypes.FirstOrDefault(t => t.ArmyCap > 0 && t.IsBuildable && !t.IsMine && t.Attack == null);
-        int barracks = OwnBuildings().Count(b => b.Type == barracksType);
+        int barracks = OwnBuildings().Count(b => b.Type.Id == barracksType?.Id);
         if (barracksType != null && barracks < _profile.MaxBarracks && me.Population >= me.ArmyCap - 1)
         {
             if (gold - reserve >= barracksType.Cost && TryPlaceNear(barracksType, capital.Position, 3, 7))
@@ -161,7 +163,7 @@ public sealed class BotBrain
         {
             foreach (var mine in OwnBuildings().Where(b => b.Type.IsMine && b.IsComplete))
             {
-                int guards = OwnBuildings().Count(b => b.Type == towerType && Vector2.Distance(b.Position, mine.Position) < 5f);
+                int guards = OwnBuildings().Count(b => b.Type.Id == towerType.Id && Vector2.Distance(b.Position, mine.Position) < 5f);
                 if (guards >= TowersPerMine || gold - reserve < towerType.Cost)
                     continue;
                 if (TryPlaceNear(towerType, mine.Position, 2, 4))
@@ -172,6 +174,26 @@ public sealed class BotBrain
     }
 
     /// <summary>Keeps the training queues busy with what gold allows beyond the reserve.</summary>
+    /// <summary>
+    /// Starts the next upgrade (in the rules' order) when there is gold to spare after construction, and
+    /// saves up for it once the army is half way to attack strength. Returns the gold committed or set aside,
+    /// so recruiting does not spend it.
+    /// </summary>
+    private int PlanResearch(Faction me, int reserve, int armyValue)
+    {
+        var tech = me.Technology;
+        if (tech.Current != null || tech.Researched.Count >= _profile.MaxResearch
+            || _sim.Tick < _profile.ResearchAfter * Simulation.TicksPerSecond)
+            return 0;
+        var next = _sim.Rules.Upgrades.FirstOrDefault(u => _sim.CanResearch(FactionId, u.Id) is ResearchError.None or ResearchError.NotEnoughGold);
+        if (next == null)
+            return 0;
+        if (me.Treasury.Gold - reserve < next.Cost)
+            return armyValue >= _profile.AttackArmyValue / 2 ? next.Cost : 0;
+        Issue(new ResearchCommand(FactionId, next.Id));
+        return next.Cost;
+    }
+
     private void Recruit(Faction me, Building capital, int reserve, bool urgent)
     {
         if (urgent)

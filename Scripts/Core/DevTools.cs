@@ -28,6 +28,7 @@ namespace Lordsio.Core;
 ///   --demo-autoplay          a Hard bot plays the player's faction (to watch a match unfold)
 ///   --demo-time-scale=&lt;x&gt;    run the game x times faster (timers, including --screenshot-delay, scale too)
 ///   --demo-select-mine       right before the screenshot, select the player's first mine
+///   --demo-research=&lt;id&gt;     start researching an upgrade
 /// </summary>
 public static class DevTools
 {
@@ -50,6 +51,8 @@ public static class DevTools
             match.AddBot(match.LocalFactionId, Sim.AI.BotDifficulty.Hard);
         if (Arg(args, "--demo-time-scale") is { } scale)
             Godot.Engine.TimeScale = double.Parse(scale, CultureInfo.InvariantCulture);
+        if (Arg(args, "--demo-research") is { } research)
+            match.Issue(new ResearchCommand(match.LocalFactionId, research));
         if (Arg(args, "--demo-gold") is { } gold)
             match.Sim.GetFaction(match.LocalFactionId)!.Treasury.Add(int.Parse(gold, CultureInfo.InvariantCulture));
         if (args.Contains("--demo-build"))

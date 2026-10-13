@@ -129,7 +129,7 @@ public partial class SelectionController : Node2D
             return;
         var visible = VisibleWorldRect();
         _match.Selection.Select(OwnUnits()
-            .Where(u => u.Type == clicked.Type && visible.HasPoint(SimConvert.ToWorld(u.Position)))
+            .Where(u => u.Type.Id == clicked.Type.Id && visible.HasPoint(SimConvert.ToWorld(u.Position)))
             .Select(u => u.Id), additive);
     }
 

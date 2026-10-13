@@ -23,6 +23,17 @@ public enum RecruitError
     QueueFull,
 }
 
+public enum ResearchError
+{
+    None,
+    UnknownUpgrade,
+    NoCapital,
+    AlreadyResearched,
+    ResearchInProgress,
+    MissingRequirement,
+    NotEnoughGold,
+}
+
 public enum BuildError
 {
     None,
@@ -46,6 +57,12 @@ public sealed record BuildRejected(int FactionId, string BuildingTypeId, BuildEr
 public sealed record BuildingPlaced(int FactionId, int BuildingId) : SimEvent(FactionId);
 
 public sealed record BuildingCompleted(int FactionId, int BuildingId) : SimEvent(FactionId);
+
+public sealed record ResearchStarted(int FactionId, string UpgradeId) : SimEvent(FactionId);
+
+public sealed record ResearchCompleted(int FactionId, string UpgradeId) : SimEvent(FactionId);
+
+public sealed record ResearchRejected(int FactionId, string UpgradeId, ResearchError Reason) : SimEvent(FactionId);
 
 /// <summary><see cref="SimEvent.FactionId"/> is the former owner.</summary>
 public sealed record BuildingDestroyed(int FactionId, int BuildingId, string BuildingTypeId, int KillerFactionId, Vector2 Position, int Size)

@@ -10,10 +10,12 @@ public sealed record StartingUnits(string UnitTypeId, int Count);
 public sealed class GameRules
 {
     private readonly Dictionary<string, BuildingType> _buildingTypes;
+    private readonly List<UpgradeType> _upgrades = new();
 
     public GameRules(int startingGold, float buildRadius, IReadOnlyList<StartingUnits> startingUnits,
         UnitCatalog units, IEnumerable<BuildingType> buildingTypes,
-        float depositReserveSeconds = 0f, float depositRegenSeconds = 0f, int upkeepAllowance = 0)
+        float depositReserveSeconds = 0f, float depositRegenSeconds = 0f, int upkeepAllowance = 0,
+        IEnumerable<UpgradeType>? upgrades = null)
     {
         if (startingGold < 0)
             throw new ArgumentOutOfRangeException(nameof(startingGold));
@@ -56,6 +58,25 @@ public sealed class GameRules
         }
         Capital = _buildingTypes.Values.SingleOrDefault(t => t.IsCapital)
                   ?? throw new ArgumentException("Exactly one building type must be the capital.");
+
+        foreach (var upgrade in upgrades ?? Array.Empty<UpgradeType>())
+        {
+            if (upgrade.Cost < 0 || upgrade.ResearchTime < 0f)
+                throw new ArgumentException($"Upgrade '{upgrade.Id}': cost and research time cannot be negative.");
+            if (_upgrades.Exists(u => u.Id == upgrade.Id))
+                throw new ArgumentException($"Duplicate upgrade id '{upgrade.Id}'.");
+            if (upgrade.Requires != null && !_upgrades.Exists(u => u.Id == upgrade.Requires))
+                throw new ArgumentException($"Upgrade '{upgrade.Id}' requires '{upgrade.Requires}', which must be listed before it.");
+            foreach (var effect in upgrade.Effects)
+            {
+                foreach (string target in effect.Targets)
+                {
+                    if (!units.Contains(target) && !_buildingTypes.ContainsKey(target))
+                        throw new ArgumentException($"Upgrade '{upgrade.Id}' targets unknown type '{target}'.");
+                }
+            }
+            _upgrades.Add(upgrade);
+        }
     }
 
     public int StartingGold { get; }
@@ -83,6 +104,11 @@ public sealed class GameRules
     public BuildingType Capital { get; }
 
     public IEnumerable<BuildingType> BuildingTypes => _buildingTypes.Values;
+
+    /// <summary>Upgrades in the order of the rules file (requirements come first).</summary>
+    public IReadOnlyList<UpgradeType> Upgrades => _upgrades;
+
+    public UpgradeType? FindUpgrade(string id) => _upgrades.Find(u => u.Id == id);
 
     public bool HasBuildingType(string id) => _buildingTypes.ContainsKey(id);
 
@@ -165,7 +191,33 @@ public sealed class GameRules
             buildings,
             OptionalSingle(root, "depositReserveSeconds"),
             OptionalSingle(root, "depositRegenSeconds"),
-            OptionalInt(root, "upkeepAllowance"));
+            OptionalInt(root, "upkeepAllowance"),
+            ParseUpgrades(root));
+    }
+
+    private static List<UpgradeType> ParseUpgrades(JsonElement root)
+    {
+        var upgrades = new List<UpgradeType>();
+        if (!root.TryGetProperty("upgrades", out var list))
+            return upgrades;
+        foreach (var u in list.EnumerateArray())
+        {
+            var effects = u.GetProperty("effects").EnumerateArray().Select(e => new UpgradeEffect(
+                Enum.TryParse<UpgradeStat>(RequiredString(e, "stat"), ignoreCase: true, out var stat)
+                    ? stat
+                    : throw new FormatException($"Unknown upgrade stat in {e}."),
+                e.GetProperty("amount").GetSingle(),
+                e.TryGetProperty("targets", out var t) ? t.EnumerateArray().Select(x => x.GetString() ?? "").ToArray() : Array.Empty<string>()))
+                .ToArray();
+            upgrades.Add(new UpgradeType(
+                RequiredString(u, "id"),
+                RequiredString(u, "name"),
+                u.GetProperty("cost").GetInt32(),
+                u.GetProperty("researchTime").GetSingle(),
+                effects,
+                u.TryGetProperty("requires", out var r) ? r.GetString() : null));
+        }
+        return upgrades;
     }
 
     private static float OptionalSingle(JsonElement element, string name) =>
