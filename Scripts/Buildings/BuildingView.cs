@@ -23,6 +23,8 @@ public partial class BuildingView : Node2D
     private static readonly Color IdleTint = new(0.42f, 0.42f, 0.5f);
     /// <summary>The reserve bar shows up by itself once a deposit is this close to running dry.</summary>
     private const float LowReserve = 0.25f;
+    /// <summary>Waiting recruits drawn as dots above the training bar; a longer queue shows the rest as "+N".</summary>
+    private const int MaxQueueDots = 5;
 
     private Building _building = null!;
     private Sprite2D _body = null!;
@@ -154,8 +156,13 @@ public partial class BuildingView : Node2D
         if (b.Queue.Count > 0)
         {
             Bar(y, b.Queue[0].Progress, TrainingFill);
-            for (int i = 1; i < b.Queue.Count; i++)
-                _overlay.DrawRect(new Rect2(-width / 2 + (i - 1) * 4, y - 4, 3, 3), TrainingFill);
+            int waiting = b.Queue.Count - 1;
+            int dots = Mathf.Min(waiting, MaxQueueDots);
+            for (int i = 0; i < dots; i++)
+                _overlay.DrawRect(new Rect2(-width / 2 + i * 4, y - 4, 3, 3), TrainingFill);
+            if (waiting > dots)
+                _overlay.DrawString(ThemeDB.FallbackFont, new Vector2(-width / 2 + dots * 4 + 1, y - 0.5f), $"+{waiting - dots}",
+                    fontSize: 8, modulate: TrainingFill);
         }
 
         void Bar(float barY, float fraction, Color fill)

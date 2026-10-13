@@ -48,7 +48,6 @@ BUILD_ERR_LIMIT,you already have as many of these as allowed,больше так
 BUILD_ERR_NOT_BUILDABLE,cannot be built,нельзя построить
 ERR_NOT_ENOUGH_GOLD,Not enough gold,Не хватает золота
 ERR_ARMY_CAP,Army limit reached — build barracks,Достигнут лимит армии — постройте казармы
-ERR_QUEUE_FULL,Training queue is full,Очередь обучения заполнена
 ERR_NOT_COMPLETE,Still under construction,Здание ещё строится
 ERR_NOT_OWNER,This building is not yours,Это не ваше здание
 ERR_CANNOT_TRAIN,Cannot train this unit here,Здесь нельзя обучить этот отряд

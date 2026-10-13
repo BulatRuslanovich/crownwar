@@ -320,23 +320,26 @@ public class RecruitmentTests
     }
 
     [Test]
-    public void QueueHasALimit()
+    public void QueueIsLimitedOnlyByTheArmyCap()
     {
         var sim = CreateSim();
         sim.GetFaction(0)!.Treasury.Add(1000);
-        // Raise the cap above the queue limit so only the queue can refuse.
+        // Raise the cap well above the old queue limit of five.
         sim.SpawnUnit("dummy", 0, new Vector2(8.5f, 4.5f));
         sim.Issue(new BuildCommand(0, "barracks", new Cell(8, 6)));
         for (int i = 0; i < 3 * Simulation.TicksPerSecond; i++)
             sim.Step();
         sim.TakeEvents();
 
-        for (int i = 0; i < Building.MaxQueueLength + 1; i++)
+        var faction = sim.GetFaction(0)!;
+        int room = faction.ArmyCap - faction.Population;
+        Assume.That(room, Is.GreaterThan(5));
+        for (int i = 0; i < room + 1; i++)
             sim.Issue(new RecruitCommand(0, Capital(sim, 0), "infantry"));
         sim.Step();
 
-        Assert.That(sim.GetBuilding(Capital(sim, 0))!.Queue, Has.Count.EqualTo(Building.MaxQueueLength));
-        Assert.That(sim.TakeEvents().OfType<RecruitRejected>().Single().Reason, Is.EqualTo(RecruitError.QueueFull));
+        Assert.That(sim.GetBuilding(Capital(sim, 0))!.Queue, Has.Count.EqualTo(room));
+        Assert.That(sim.TakeEvents().OfType<RecruitRejected>().Single().Reason, Is.EqualTo(RecruitError.ArmyCapReached));
     }
 }
 

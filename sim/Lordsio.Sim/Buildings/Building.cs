@@ -58,8 +58,6 @@ public sealed class ProductionItem
 
 public sealed class Building : Entity
 {
-    public const int MaxQueueLength = 5;
-
     /// <summary>A construction site starts with this share of its health and gains the rest while building.</summary>
     private const int StartingHealthPercent = 10;
 
@@ -95,7 +93,7 @@ public sealed class Building : Entity
     public override int MaxHealth => Type.MaxHealth;
     public override float RangedArmor => Type.RangedArmor;
 
-    /// <summary>Units being trained; only the first one makes progress.</summary>
+    /// <summary>Units being trained; only the first one makes progress. Any length: queued units count against the army cap.</summary>
     public IReadOnlyList<ProductionItem> Queue => _queue;
 
     /// <summary>Enemy unit a tower is shooting at.</summary>

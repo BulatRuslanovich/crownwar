@@ -20,7 +20,6 @@ public enum RecruitError
     CannotRecruitType,
     NotEnoughGold,
     ArmyCapReached,
-    QueueFull,
 }
 
 public enum ResearchError

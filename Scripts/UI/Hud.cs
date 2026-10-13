@@ -527,7 +527,6 @@ public partial class Hud : CanvasLayer
     {
         RecruitError.NotEnoughGold => "ERR_NOT_ENOUGH_GOLD",
         RecruitError.ArmyCapReached => "ERR_ARMY_CAP",
-        RecruitError.QueueFull => "ERR_QUEUE_FULL",
         RecruitError.NotComplete => "ERR_NOT_COMPLETE",
         RecruitError.NotOwner => "ERR_NOT_OWNER",
         RecruitError.CannotRecruitType => "ERR_CANNOT_TRAIN",

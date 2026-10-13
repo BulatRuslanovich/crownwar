@@ -73,8 +73,6 @@ public sealed partial class Simulation
             return RecruitError.NotComplete;
         if (!building.Type.Recruits.Contains(unitTypeId))
             return RecruitError.CannotRecruitType;
-        if (building.Queue.Count >= Building.MaxQueueLength)
-            return RecruitError.QueueFull;
         if (PopulationOf(factionId) >= faction.ArmyCap)
             return RecruitError.ArmyCapReached;
         if (!faction.Treasury.CanAfford(Rules.Units.Get(unitTypeId).Cost))
