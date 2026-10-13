@@ -126,7 +126,12 @@ public partial class Hud : CanvasLayer
     {
         if (_match.Sim.GetFaction(_match.LocalFactionId) is { } faction)
         {
-            _gold.Text = string.Format(Tr("HUD_GOLD"), faction.Treasury.Gold);
+            var treasury = faction.Treasury;
+            _gold.Text = treasury.Capacity > 0
+                ? string.Format(Tr("HUD_GOLD_CAPPED"), treasury.Gold, treasury.Capacity)
+                : string.Format(Tr("HUD_GOLD"), treasury.Gold);
+            _gold.Modulate = treasury.IsFull ? ProblemColor : Colors.White;
+            _gold.TooltipText = treasury.Capacity > 0 ? string.Format(Tr("HUD_GOLD_CAP_TOOLTIP"), treasury.Capacity) : "";
             float net = faction.NetPerMinute / 60f;
             _income.Text = string.Format(Tr("HUD_INCOME"), net);
             _income.Modulate = net < 0f ? ProblemColor : Colors.White;

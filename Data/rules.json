@@ -1,5 +1,6 @@
 {
   "startingGold": 200,
+  "goldCap": 5000,
   "buildRadius": 5,
   "depositReserveSeconds": 240,
   "depositRegenSeconds": 90,

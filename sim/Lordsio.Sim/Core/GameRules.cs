@@ -15,7 +15,7 @@ public sealed class GameRules
     public GameRules(int startingGold, float buildRadius, IReadOnlyList<StartingUnits> startingUnits,
         UnitCatalog units, IEnumerable<BuildingType> buildingTypes,
         float depositReserveSeconds = 0f, float depositRegenSeconds = 0f, int upkeepAllowance = 0,
-        IEnumerable<UpgradeType>? upgrades = null)
+        IEnumerable<UpgradeType>? upgrades = null, int goldCap = 0)
     {
         if (startingGold < 0)
             throw new ArgumentOutOfRangeException(nameof(startingGold));
@@ -25,7 +25,10 @@ public sealed class GameRules
             throw new ArgumentOutOfRangeException(nameof(depositReserveSeconds), "Deposit timings cannot be negative.");
         if (upkeepAllowance < 0)
             throw new ArgumentOutOfRangeException(nameof(upkeepAllowance));
+        if (goldCap < 0)
+            throw new ArgumentOutOfRangeException(nameof(goldCap));
         StartingGold = startingGold;
+        GoldCap = goldCap;
         DepositReserveSeconds = depositReserveSeconds;
         DepositRegenSeconds = depositRegenSeconds;
         UpkeepAllowance = upkeepAllowance;
@@ -88,6 +91,9 @@ public sealed class GameRules
 
     /// <summary>Seconds an exhausted deposit needs to refill completely; its mine earns nothing meanwhile.</summary>
     public float DepositRegenSeconds { get; }
+
+    /// <summary>Most gold a faction can hold; income beyond it is lost (0 = no limit).</summary>
+    public int GoldCap { get; }
 
     /// <summary>Army upkeep (gold per minute) each faction gets for free: a small garrison costs nothing.</summary>
     public int UpkeepAllowance { get; }
@@ -194,7 +200,8 @@ public sealed class GameRules
             OptionalSingle(root, "depositReserveSeconds"),
             OptionalSingle(root, "depositRegenSeconds"),
             OptionalInt(root, "upkeepAllowance"),
-            ParseUpgrades(root));
+            ParseUpgrades(root),
+            OptionalInt(root, "goldCap"));
     }
 
     private static List<UpgradeType> ParseUpgrades(JsonElement root)

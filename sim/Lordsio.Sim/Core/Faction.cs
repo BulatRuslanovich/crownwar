@@ -8,7 +8,7 @@ public sealed class Faction
     {
         Id = id;
         Team = team;
-        Treasury = new Treasury(rules.StartingGold);
+        Treasury = new Treasury(rules.StartingGold, rules.GoldCap);
         Technology = new Technology(rules);
     }
 

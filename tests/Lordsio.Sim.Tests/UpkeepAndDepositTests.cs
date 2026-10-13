@@ -201,6 +201,42 @@ public class TreasuryAccrualTests
     }
 
     [Test]
+    public void FullTreasuryLosesIncomeAndFillsAgainAfterSpending()
+    {
+        var treasury = new Economy.Treasury(4990, capacity: 5000);
+        for (int i = 0; i < 20 * 10; i++)
+            treasury.AccrueTick(3, 20); // 10 s at 3 gold/s: 30 offered, room for 10
+
+        Assert.That(treasury.Gold, Is.EqualTo(5000));
+        Assert.That(treasury.IsFull, Is.True);
+
+        Assert.That(treasury.TrySpend(100), Is.True);
+        for (int i = 0; i < 20 * 10; i++)
+            treasury.AccrueTick(3, 20);
+        Assert.That(treasury.Gold, Is.EqualTo(4930));
+    }
+
+    [Test]
+    public void AddAndStartingGoldRespectTheCap()
+    {
+        var treasury = new Economy.Treasury(9000, capacity: 5000);
+        Assert.That(treasury.Gold, Is.EqualTo(5000));
+        treasury.TrySpend(1000);
+        treasury.Add(int.MaxValue);
+        Assert.That(treasury.Gold, Is.EqualTo(5000));
+        Assert.That(new Economy.Treasury(9000).Gold, Is.EqualTo(9000), "no cap by default");
+    }
+
+    [Test]
+    public void FactionsGetTheGoldCapFromTheRules()
+    {
+        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
+        Assert.That(rules.GoldCap, Is.EqualTo(5000));
+        var sim = new Simulation(MapGenerator.Generate(1), rules, new MatchSetup(2, 1));
+        Assert.That(sim.GetFaction(0)!.Treasury.Capacity, Is.EqualTo(5000));
+    }
+
+    [Test]
     public void GoldNeverGoesNegative()
     {
         var treasury = new Economy.Treasury(5);
