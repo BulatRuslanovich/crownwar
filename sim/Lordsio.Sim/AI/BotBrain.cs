@@ -47,6 +47,7 @@ public sealed class BotBrain
     private int _attackTargetId;
     private int _launchValue;
     private GoldDeposit? _expansion;
+    private int _lastMineTick = int.MinValue / 2;
     private UnitType? _nextUnit;
 
     public BotBrain(Simulation sim, int factionId, BotDifficulty difficulty, int seed)
@@ -102,6 +103,11 @@ public sealed class BotBrain
 
     // ---------------------------------------------------------------- economy
 
+    /// <summary>The profile's pacing: no mine before <see cref="BotProfile.FirstMineDelay"/>, then one per <see cref="BotProfile.MineInterval"/>.</summary>
+    private bool MayStartMine() =>
+        _sim.Tick >= _profile.FirstMineDelay * Simulation.TicksPerSecond
+        && _sim.Tick - _lastMineTick >= _profile.MineInterval * Simulation.TicksPerSecond;
+
     /// <summary>Places buildings it can afford and returns gold to keep aside for a planned one.</summary>
     private int PlanConstruction(Faction me, Building capital, List<Unit> army, bool threatened)
     {
@@ -124,6 +130,7 @@ public sealed class BotBrain
                     Issue(new BuildCommand(FactionId, mineType.Id, deposit.Anchor));
                     gold -= mineType.Cost;
                     _expansion = null;
+                    _lastMineTick = _sim.Tick;
                 }
                 else
                 {
@@ -131,7 +138,7 @@ public sealed class BotBrain
                 }
             }
         }
-        if (OwnBuildings().Count(b => b.Type.IsMine) < _profile.MaxMines)
+        if (OwnBuildings().Count(b => b.Type.IsMine) < _profile.MaxMines && MayStartMine())
             _expansion ??= ChooseExpansion(capital);
         else
             _expansion = null;

@@ -58,7 +58,74 @@ public class BalanceReport
             .Select(g => $"{g.Key} {g.Count()}")));
 
         Assert.That(results.All(r => r.Winner >= 0), Is.True, "every match must end with a winner");
-        Assert.That(minutes[minutes.Count / 2], Is.InRange(8f, 18f), "median match length goal");
+        Assert.That(results.Count(r => r.Winner == 0), Is.GreaterThanOrEqualTo(results.Count / 2), "the Hard bot should win most four-way matches");
+    }
+
+    /// <summary>
+    /// Match length when all four sides are bots of one difficulty, as the main menu sets them up.
+    /// The length goal applies to Normal, the default.
+    /// </summary>
+    [TestCase(BotDifficulty.Easy)]
+    [TestCase(BotDifficulty.Normal)]
+    [TestCase(BotDifficulty.Hard)]
+    public void SameDifficultyFreeForAll(BotDifficulty difficulty)
+    {
+        var difficulties = Enumerable.Repeat(difficulty, 4).ToArray();
+        var minutes = Enumerable.Range(1, 12).Select(seed => Play(seed, difficulties).Minutes).OrderBy(m => m).ToList();
+        TestContext.Out.WriteLine($"{difficulty}: median {minutes[minutes.Count / 2]:0.0} min, range {minutes[0]:0.0}–{minutes[^1]:0.0}");
+        if (difficulty == BotDifficulty.Normal)
+            Assert.That(minutes[minutes.Count / 2], Is.InRange(8f, 18f), "median match length goal");
+    }
+
+    /// <summary>
+    /// How fast bots grow their economy: income, mines and gold earned at a few moments of the match, next to
+    /// a faction nobody plays (castle income only). Bots have no economic bonus; the gap comes from mines.
+    /// </summary>
+    [Test]
+    public void EconomyTimeline()
+    {
+        string root = TestMaps.ProjectRoot();
+        string mapText = File.ReadAllText(Path.Combine(root, "Maps", "default.txt"));
+        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(root, "Data", "rules.json")));
+        var difficulties = new[] { BotDifficulty.Easy, BotDifficulty.Normal, BotDifficulty.Hard };
+        int[] checkpoints = { 30, 60, 120, 180, 300 };
+        const int seeds = 8;
+        // [difficulty or idle][checkpoint] → (income, mines, earned) summed over seeds
+        var sums = new (int Income, int Mines, int Earned)[difficulties.Length + 1, checkpoints.Length];
+
+        for (int seed = 1; seed <= seeds; seed++)
+        {
+            var sim = new Simulation(MapLoader.Parse(mapText), rules, new MatchSetup(4, seed)); // a match marks cells occupied
+            var bots = difficulties.Select((d, i) => new BotBrain(sim, i, d, seed * 31 + i)).ToList();
+            var earned = new int[4];
+            int next = 0;
+            while (next < checkpoints.Length)
+            {
+                sim.Step();
+                foreach (var bot in bots)
+                    bot.Update();
+                foreach (var faction in sim.Factions)
+                    earned[faction.Id] += faction.IsEliminated ? 0 : faction.IncomePerSecond;
+                if (sim.Tick != checkpoints[next] * Simulation.TicksPerSecond)
+                    continue;
+                foreach (var faction in sim.Factions)
+                {
+                    int mines = sim.Buildings.Count(b => b.FactionId == faction.Id && b.IsAlive && b.IsComplete && b.Type.IsMine);
+                    var old = sums[faction.Id, next];
+                    sums[faction.Id, next] = (old.Income + faction.IncomePerSecond, old.Mines + mines,
+                        old.Earned + earned[faction.Id] / Simulation.TicksPerSecond);
+                }
+                next++;
+            }
+        }
+
+        string[] names = difficulties.Select(d => d.ToString()).Append("idle").ToArray();
+        TestContext.Out.WriteLine($"average of {seeds} matches: income/s, mines, gold earned so far");
+        for (int c = 0; c < checkpoints.Length; c++)
+        {
+            TestContext.Out.WriteLine($"{checkpoints[c] / 60}:{checkpoints[c] % 60:00}  " + string.Join("   ", names.Select((n, f) =>
+                $"{n,-6} {sums[f, c].Income / (float)seeds,4:0.0}/s {sums[f, c].Mines / (float)seeds,3:0.0} mines {sums[f, c].Earned / seeds,5}g")));
+        }
     }
 
     [TestCase(BotDifficulty.Hard, BotDifficulty.Easy, 7)]
