@@ -33,6 +33,8 @@ public partial class MatchSounds : Node
     private AudioStreamPlayer _ui = null!;
     private MatchController _match = null!;
     private int _nextVoice;
+    private bool _enabled;
+    private Dictionary<Sound, AudioStreamWav> _streams = new();
 
     public void Initialize(MatchController match)
     {
@@ -43,6 +45,9 @@ public partial class MatchSounds : Node
             AddChild(player);
             _world.Add(player);
         }
+        // Without a display (automated runs) nothing is heard: skip audio entirely.
+        _enabled = DisplayServer.GetName() != "headless";
+        _streams = SoundBank.CreateAll();
         _ui = new AudioStreamPlayer();
         AddChild(_ui);
     }
@@ -85,14 +90,32 @@ public partial class MatchSounds : Node
 
     public void PlayAlert() => PlayUi(Sound.Alert, -2f);
 
+    /// <summary>Stops playback and releases the generated streams when the match goes away.</summary>
+    public override void _ExitTree()
+    {
+        foreach (var voice in _world)
+        {
+            voice.Stop();
+            voice.Stream = null;
+        }
+        if (_ui != null)
+        {
+            _ui.Stop();
+            _ui.Stream = null;
+        }
+        foreach (var stream in _streams.Values)
+            stream.Dispose();
+        _streams.Clear();
+    }
+
     private void PlayAt(Sound sound, SimVector2 simPosition, float volumeDb, float margin = AudibleMargin)
     {
         var position = SimConvert.ToWorld(simPosition);
-        if (!IsNearScreen(position, margin) || !Throttle(sound))
+        if (!_enabled || !IsNearScreen(position, margin) || !Throttle(sound))
             return;
         var voice = _world[_nextVoice];
         _nextVoice = (_nextVoice + 1) % _world.Count;
-        voice.Stream = SoundBank.Get(sound);
+        voice.Stream = _streams[sound];
         voice.GlobalPosition = position;
         voice.VolumeDb = volumeDb;
         voice.PitchScale = _rng.RandfRange(0.92f, 1.08f); // keeps repeated hits from sounding mechanical
@@ -101,9 +124,9 @@ public partial class MatchSounds : Node
 
     private void PlayUi(Sound sound, float volumeDb)
     {
-        if (!Throttle(sound))
+        if (!_enabled || !Throttle(sound))
             return;
-        _ui.Stream = SoundBank.Get(sound);
+        _ui.Stream = _streams[sound];
         _ui.VolumeDb = volumeDb;
         _ui.Play();
     }

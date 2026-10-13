@@ -21,6 +21,7 @@ namespace Lordsio.Core;
 ///   --demo-recruit=&lt;n&gt;       select the player's castle and order n recruits there
 ///   --demo-move=&lt;x&gt;,&lt;y&gt;      select all player units and order them to advance to tile (x, y)
 ///   --demo-camera=&lt;x&gt;,&lt;y&gt;    center the camera on tile (x, y)
+///   --demo-army=&lt;n&gt;          stress test: n player units and n enemy units clash on screen
 ///   --pause                  open the pause menu right away
 ///   --debug-hud              show the developer overlay (F3 toggles it in game)
 ///   --demo-end=victory|defeat show the end screen (view only, the match goes on)
@@ -52,6 +53,8 @@ public static class DevTools
         }
         if (Arg(args, "--demo-move") is { } move)
             DemoMove(match, move);
+        if (Arg(args, "--demo-army") is { } army)
+            DemoArmy(match, int.Parse(army, CultureInfo.InvariantCulture));
         if (args.Contains("--pause"))
             match.SetPaused(true);
         if (Arg(args, "--demo-end") is { } end)
@@ -102,6 +105,23 @@ public static class DevTools
                 break;
             }
         }
+    }
+
+    /// <summary>Stress test: two armies of <paramref name="perSide"/> units clash in the middle of the camera view.</summary>
+    private static void DemoArmy(MatchController match, int perSide)
+    {
+        var sim = match.Sim;
+        var center = SimConvert.ToSim(match.Camera.GetScreenCenterPosition());
+        var types = new[] { "infantry", "infantry", "archer", "heavy" };
+        var west = sim.Map.FindNearestInComponent(Cell.FromPosition(center + new SimVector2(-8f, 0f)), TileGrid.AnyComponent, 12)!.Value.Center;
+        var east = sim.Map.FindNearestInComponent(Cell.FromPosition(center + new SimVector2(8f, 0f)), TileGrid.AnyComponent, 12)!.Value.Center;
+        var a = Sim.Units.Formation.ComputeSlots(sim.Map, west, perSide, 0.36f)
+            .Select((p, i) => sim.SpawnUnit(types[i % 4], MatchController.PlayerFactionId, p).Id).ToList();
+        int enemy = sim.Factions.First(f => f.Id != MatchController.PlayerFactionId).Id;
+        var b = Sim.Units.Formation.ComputeSlots(sim.Map, east, perSide, 0.36f)
+            .Select((p, i) => sim.SpawnUnit(types[i % 4], enemy, p).Id).ToList();
+        sim.Issue(new MoveCommand(MatchController.PlayerFactionId, a, east, MoveMode.AttackMove));
+        sim.Issue(new MoveCommand(enemy, b, west, MoveMode.AttackMove));
     }
 
     private static void DemoMove(MatchController match, string value)

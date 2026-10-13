@@ -28,21 +28,20 @@ public static class SoundBank
 {
     private const int Rate = 22050;
 
-    private static Dictionary<Sound, AudioStreamWav>? _cache;
-
-    public static AudioStreamWav Get(Sound sound)
-    {
-        _cache ??= Build();
-        return _cache[sound];
-    }
+    /// <summary>
+    /// Renders every sound. The caller owns the streams and must dispose them: they are engine objects,
+    /// and a static cache would outlive the engine at exit (reported as leaked instances).
+    /// </summary>
+    public static Dictionary<Sound, AudioStreamWav> CreateAll() => Build();
 
     /// <summary>Dev-only: writes every sound to <paramref name="directory"/> as a .wav file for listening.</summary>
     public static void ExportAll(string directory)
     {
-        foreach (Sound sound in Enum.GetValues<Sound>())
+        foreach (var (sound, stream) in CreateAll())
         {
-            var error = Get(sound).SaveToWav(System.IO.Path.Combine(directory, sound + ".wav"));
+            var error = stream.SaveToWav(System.IO.Path.Combine(directory, sound + ".wav"));
             GD.Print($"{sound}: {error}");
+            stream.Dispose();
         }
     }
 

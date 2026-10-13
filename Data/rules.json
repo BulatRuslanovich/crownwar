@@ -18,8 +18,9 @@
   ],
   "buildings": [
     {
-      "id": "castle", "name": "Castle", "size": 3, "cost": 0, "buildTime": 0, "health": 2500, "rangedArmor": 0.8,
-      "income": 3, "armyCap": 10, "recruits": ["infantry", "archer", "heavy"], "capital": true
+      "id": "castle", "name": "Castle", "size": 3, "cost": 0, "buildTime": 0, "health": 8000, "rangedArmor": 0.8,
+      "income": 3, "armyCap": 10, "recruits": ["infantry", "archer", "heavy"], "capital": true,
+      "attack": { "damage": 16, "range": 7, "cooldown": 1.0, "projectileSpeed": 14 }
     },
     {
       "id": "mine", "name": "Gold Mine", "size": 2, "cost": 100, "buildTime": 10, "health": 450, "rangedArmor": 0.7,

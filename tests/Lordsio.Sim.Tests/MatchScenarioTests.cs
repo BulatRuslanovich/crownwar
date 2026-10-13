@@ -46,13 +46,14 @@ public class MatchScenarioTests
             sim.Step();
         Assert.That(sim.GetFaction(0)!.IncomePerSecond, Is.EqualTo(3 + mine.Yield), "castle base income plus the mine");
 
-        // Then storm the enemy capital with a big army.
+        // Then storm the enemy capital. The castle is a fortress (8000 hp, shoots back), so it takes a real
+        // army: 24 units, a third of them heavies.
         var enemyCapital = sim.GetBuilding(sim.GetFaction(1)!.CapitalId)!;
         // Capitals sit at random corners, so snap the staging area to open ground near the enemy.
         var staging = sim.Map.FindNearestInComponent(Cell.FromPosition(enemyCapital.Position + new Vector2(0f, 6f)),
             TileGrid.AnyComponent, 10)!.Value.Center;
-        var army = Formation.ComputeSlots(sim.Map, staging, 16, 0.36f)
-            .Select((slot, i) => sim.SpawnUnit(i % 4 == 0 ? "heavy" : "infantry", 0, slot))
+        var army = Formation.ComputeSlots(sim.Map, staging, 24, 0.36f)
+            .Select((slot, i) => sim.SpawnUnit(i % 3 == 0 ? "heavy" : "infantry", 0, slot))
             .Select(u => u.Id).ToArray();
         sim.Issue(new AttackCommand(0, army, enemyCapital.Id));
         for (int i = 0; i < 120 * Simulation.TicksPerSecond && !sim.IsOver; i++)

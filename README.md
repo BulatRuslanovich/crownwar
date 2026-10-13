@@ -63,7 +63,13 @@
 ```sh
 dotnet build lordsio.sln                 # сборка игры, симуляции и тестов
 dotnet test tests/Lordsio.Sim.Tests      # тесты
+# по запросу, в Release:
+dotnet test tests/Lordsio.Sim.Tests -c Release --filter "TestCategory=Benchmark" --logger "console;verbosity=normal"
+dotnet test tests/Lordsio.Sim.Tests -c Release --filter "TestCategory=Balance"   --logger "console;verbosity=normal"
 ```
+`Benchmark` — время тика на 100–800 юнитах и в полном матче ботов. `Balance` — серии матчей ботов:
+длительность, размер армий, состав войск, победы по сложности; падает, если цели баланса нарушены
+(медиана матча 4 ботов 8–18 мин; старшая сложность выигрывает у младшей один на один не реже 6–7 из 10).
 Запуск: открыть папку в редакторе Godot и нажать F5, либо после `dotnet build`:
 ```sh
 Godot_v4.7.2-stable_mono_win64_console.exe --path .

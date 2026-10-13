@@ -47,6 +47,7 @@ public sealed class BotBrain
     private int _attackTargetId;
     private int _launchValue;
     private GoldDeposit? _expansion;
+    private UnitType? _nextUnit;
 
     public BotBrain(Simulation sim, int factionId, BotDifficulty difficulty, int seed)
         : this(sim, factionId, BotProfile.For(difficulty), seed)
@@ -119,7 +120,10 @@ public sealed class BotBrain
                 }
             }
         }
-        _expansion ??= ChooseExpansion(capital);
+        if (OwnBuildings().Count(b => b.Type.IsMine) < _profile.MaxMines)
+            _expansion ??= ChooseExpansion(capital);
+        else
+            _expansion = null;
 
         // 2. Barracks when the army limit is the bottleneck.
         var barracksType = _sim.Rules.BuildingTypes.FirstOrDefault(t => t.ArmyCap > 0 && t.IsBuildable && !t.IsMine && t.Attack == null);
@@ -161,12 +165,16 @@ public sealed class BotBrain
         {
             if (population >= me.ArmyCap || building.Queue.Count >= 2)
                 continue;
-            var type = ChooseUnitType(building);
-            if (gold - type.Cost < reserve)
+            // Keep the chosen type until it is bought, so expensive units are saved for, not skipped.
+            _nextUnit ??= ChooseUnitType(building);
+            if (!building.Type.Recruits.Contains(_nextUnit.Id))
+                continue;
+            if (gold - _nextUnit.Cost < reserve)
                 break;
-            _sim.Issue(new RecruitCommand(FactionId, building.Id, type.Id));
-            gold -= type.Cost;
+            _sim.Issue(new RecruitCommand(FactionId, building.Id, _nextUnit.Id));
+            gold -= _nextUnit.Cost;
             population++;
+            _nextUnit = null;
         }
     }
 
@@ -343,7 +351,7 @@ public sealed class BotBrain
             if (building.Type.IsCapital && armyValue < _profile.CapitalAssaultValue)
                 continue;
             int defence = DefenceValue(building.Position, building.FactionId);
-            if (defence > armyValue)
+            if (defence * _profile.AttackAdvantage > armyValue)
                 continue;
             float score = Vector2.Distance(building.Position, capital.Position) + defence / 25f;
             if (building.Type.IsCapital)
@@ -360,9 +368,11 @@ public sealed class BotBrain
     private int DefenceValue(Vector2 point, int owner)
     {
         int units = _sim.Units.Where(u => u.FactionId == owner && Vector2.Distance(u.Position, point) <= DefenceRadius).Sum(u => u.Type.Cost);
-        int towers = _sim.Buildings.Count(b => b.FactionId == owner && b.Type.Attack != null && b.IsComplete
-                                               && Vector2.Distance(b.Position, point) <= DefenceRadius);
-        return units + towers * TowerDefenceValue;
+        // Shooting buildings (towers, the castle) count in proportion to their damage.
+        int buildings = _sim.Buildings
+            .Where(b => b.FactionId == owner && b.Type.Attack != null && b.IsComplete && Vector2.Distance(b.Position, point) <= DefenceRadius)
+            .Sum(b => TowerDefenceValue * b.Type.Attack!.Damage / 10);
+        return units + buildings;
     }
 
     /// <summary>
