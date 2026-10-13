@@ -4,11 +4,12 @@ namespace Lordsio.Net;
 
 /// <summary>
 /// Identifies a build for network play: lockstep needs every machine to run the same code and the
-/// same rules and map, so the version string includes a hash of the data files.
+/// same rules, so the version string includes a hash of the rules file. Maps are generated from the
+/// match seed by code, so the code version (<see cref="Number"/>) covers them.
 /// </summary>
 public static class GameVersion
 {
-    public const string Number = "0.7.0";
+    public const string Number = "0.8.0";
 
     private static string? _current;
 
@@ -17,7 +18,7 @@ public static class GameVersion
     private static uint DataHash()
     {
         uint hash = 2166136261;
-        foreach (string path in new[] { "res://Data/rules.json", "res://Maps/default.txt" })
+        foreach (string path in new[] { "res://Data/rules.json" })
         {
             foreach (byte b in FileAccess.GetFileAsBytes(path))
             {

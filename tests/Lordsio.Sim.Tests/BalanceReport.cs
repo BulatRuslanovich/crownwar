@@ -5,8 +5,8 @@ using Lordsio.Sim.World;
 namespace Lordsio.Sim.Tests;
 
 /// <summary>
-/// Manual balance report (run with --filter "TestCategory=Balance"): plays series of bot matches on the
-/// real map and rules and prints match length, army sizes, unit mix and win rates per difficulty.
+/// Manual balance report (run with --filter "TestCategory=Balance"): plays series of bot matches on
+/// generated maps (the seed picks the map, as in the game) with the real rules and prints match length, army sizes, unit mix and win rates per difficulty.
 /// The thresholds asserted are the balance goals of the game, so a rules change that breaks them shows up.
 /// </summary>
 [Explicit("balance runs take a while")]
@@ -18,9 +18,8 @@ public class BalanceReport
     private static MatchResult Play(int seed, BotDifficulty[] difficulties)
     {
         string root = TestMaps.ProjectRoot();
-        var map = MapLoader.Parse(File.ReadAllText(Path.Combine(root, "Maps", "default.txt")));
         var rules = GameRules.Parse(File.ReadAllText(Path.Combine(root, "Data", "rules.json")));
-        var sim = new Simulation(map, rules, new MatchSetup(difficulties.Length, seed));
+        var sim = new Simulation(MapGenerator.Generate(seed), rules, new MatchSetup(difficulties.Length, seed));
         var bots = difficulties.Select((d, i) => new BotBrain(sim, i, d, seed * 31 + i)).ToList();
         var recruited = new Dictionary<string, int>();
         int peak = 0;
@@ -85,7 +84,6 @@ public class BalanceReport
     public void EconomyTimeline()
     {
         string root = TestMaps.ProjectRoot();
-        string mapText = File.ReadAllText(Path.Combine(root, "Maps", "default.txt"));
         var rules = GameRules.Parse(File.ReadAllText(Path.Combine(root, "Data", "rules.json")));
         var difficulties = new[] { BotDifficulty.Easy, BotDifficulty.Normal, BotDifficulty.Hard };
         int[] checkpoints = { 30, 60, 120, 180, 300 };
@@ -95,7 +93,7 @@ public class BalanceReport
 
         for (int seed = 1; seed <= seeds; seed++)
         {
-            var sim = new Simulation(MapLoader.Parse(mapText), rules, new MatchSetup(4, seed)); // a match marks cells occupied
+            var sim = new Simulation(MapGenerator.Generate(seed), rules, new MatchSetup(4, seed));
             var bots = difficulties.Select((d, i) => new BotBrain(sim, i, d, seed * 31 + i)).ToList();
             var earned = new int[4];
             int next = 0;

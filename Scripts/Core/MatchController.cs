@@ -63,7 +63,6 @@ public partial class MatchController : Node2D
     /// <summary>Upper bound on catch-up ticks per frame so a long hitch does not snowball.</summary>
     private const int MaxStepsPerFrame = 5;
 
-    [Export(PropertyHint.File, "*.txt")] public string MapPath { get; set; } = "res://Maps/default.txt";
     [Export(PropertyHint.File, "*.json")] public string RulesPath { get; set; } = "res://Data/rules.json";
 
     private double _accumulator;
@@ -106,9 +105,11 @@ public partial class MatchController : Node2D
 
     public override void _Ready()
     {
-        var map = MapLoader.Parse(ReadText(MapPath));
         var rules = GameRules.Parse(ReadText(RulesPath));
         ActualSeed = Config.Seed ?? (int)(GD.Randi() & int.MaxValue);
+        // Every match is on a new map; the seed (the "map number" in the menu) reproduces it exactly,
+        // which is also how network players all get the same map.
+        var map = MapGenerator.Generate(ActualSeed);
         LocalFactionId = Config.LocalFactionId;
         Sim = new Simulation(map, rules, new MatchSetup(Config.Slots.Count, ActualSeed, Teams: Config.Teams));
         Stats = new MatchStats(LocalFactionId);
