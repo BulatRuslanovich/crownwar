@@ -1,0 +1,600 @@
+using System;
+using Godot;
+
+namespace Lordsio.Dev;
+
+/// <summary>
+/// Generates the game's pixel art into Assets/ (run with --export-art). The PNGs are committed and
+/// loaded like any hand-drawn asset, so an artist can replace them file by file. Layout contracts
+/// (cell sizes, rows, frames) are documented on each method and mirrored in <see cref="ArtLayout"/>.
+/// </summary>
+public static class ArtGenerator
+{
+    // Palette.
+    private static readonly Color Outline = new("1c1a17");
+    private static readonly Color Grass = new("5a9a3c");
+    private static readonly Color GrassDark = new("4b8634");
+    private static readonly Color GrassLight = new("6db04a");
+    private static readonly Color Leaf = new("2e6a2c");
+    private static readonly Color LeafLight = new("3f8836");
+    private static readonly Color LeafHighlight = new("5aa04a");
+    private static readonly Color LeafDark = new("21501f");
+    private static readonly Color TreeOutline = new("163a15");
+    private static readonly Color Bark = new("5b3a1f");
+    private static readonly Color Dirt = new("a8864f");
+    private static readonly Color DirtDark = new("8d6d3c");
+    private static readonly Color DirtLight = new("bf9d64");
+    private static readonly Color Water = new("2f6db0");
+    private static readonly Color WaterLight = new("4f8fd2");
+    private static readonly Color WaterDark = new("285d98");
+    private static readonly Color Sand = new("d8c48a");
+    private static readonly Color SandDark = new("b9a46c");
+    private static readonly Color Foam = new("dceeff");
+    private static readonly Color Rock = new("6e6862");
+    private static readonly Color RockLight = new("9d968e");
+    private static readonly Color RockDark = new("4a4642");
+    private static readonly Color Snow = new("eef2f4");
+    private static readonly Color Stone = new("8c8781");
+    private static readonly Color StoneLight = new("aaa59e");
+    private static readonly Color StoneDark = new("6b6762");
+    private static readonly Color Mortar = new("75716b");
+    private static readonly Color Wood = new("8a6239");
+    private static readonly Color WoodDark = new("5e4026");
+    private static readonly Color WoodLight = new("a87a4a");
+    private static readonly Color Door = new("3e2716");
+    private static readonly Color Window = new("2a2420");
+    private static readonly Color Skin = new("e8b98a");
+    private static readonly Color SkinDark = new("c99467");
+    private static readonly Color Steel = new("b8bcc4");
+    private static readonly Color SteelLight = new("dfe2e7");
+    private static readonly Color SteelDark = new("7d828c");
+    private static readonly Color Boots = new("3b2f2a");
+    private static readonly Color Hood = new("4d6b34");
+    private static readonly Color HoodDark = new("3a5227");
+    private static readonly Color Leather = new("7a5530");
+    private static readonly Color Gold = new("ffd44a");
+    private static readonly Color GoldDark = new("c79a22");
+    private static readonly Color String = new("e8e2d0");
+
+    public static void ExportAll(string projectDir, string previewDir)
+    {
+        string assets = System.IO.Path.Combine(projectDir, "Assets");
+        System.IO.Directory.CreateDirectory(System.IO.Path.Combine(assets, "Tilesets"));
+        System.IO.Directory.CreateDirectory(System.IO.Path.Combine(assets, "Sprites"));
+
+        var terrain = Terrain();
+        terrain.Save(System.IO.Path.Combine(assets, "Tilesets", "terrain.png"));
+
+        var units = Units();
+        units.Save(System.IO.Path.Combine(assets, "Sprites", "units.png"), System.IO.Path.Combine(assets, "Sprites", "units_team.png"));
+
+        foreach (var (name, canvas) in new (string, PixelCanvas)[]
+                 {
+                     ("castle", Castle()), ("barracks", Barracks()), ("tower", Tower()), ("mine", Mine()),
+                 })
+        {
+            canvas.Save(System.IO.Path.Combine(assets, "Sprites", name + ".png"),
+                System.IO.Path.Combine(assets, "Sprites", name + "_team.png"));
+            SavePreview(canvas, System.IO.Path.Combine(previewDir, name + ".png"));
+        }
+        var gold = Deposit();
+        gold.Save(System.IO.Path.Combine(assets, "Sprites", "gold.png"));
+
+        SavePreview(terrain, System.IO.Path.Combine(previewDir, "terrain.png"));
+        SavePreview(units, System.IO.Path.Combine(previewDir, "units.png"));
+        SavePreview(gold, System.IO.Path.Combine(previewDir, "gold.png"));
+    }
+
+    /// <summary>4× enlarged image with the team mask tinted blue, for reviewing the art.</summary>
+    private static void SavePreview(PixelCanvas canvas, string path)
+    {
+        var image = Image.CreateEmpty(canvas.Width, canvas.Height, false, Image.Format.Rgba8);
+        var team = new Color("3c6fd8");
+        for (int y = 0; y < canvas.Height; y++)
+        {
+            for (int x = 0; x < canvas.Width; x++)
+            {
+                var m = canvas.Mask.GetPixel(x, y);
+                image.SetPixel(x, y, m.A > 0 ? new Color(team.R * m.R, team.G * m.G, team.B * m.B) : canvas.Base.GetPixel(x, y));
+            }
+        }
+        image.Resize(canvas.Width * 4, canvas.Height * 4, Image.Interpolation.Nearest);
+        image.SavePng(path);
+    }
+
+    private static int Hash(int x, int y, int salt) =>
+        (int)((uint)(x * 73856093 ^ y * 19349663 ^ salt * 83492791) % 1000);
+
+    // ------------------------------------------------------------------ terrain
+
+    /// <summary>
+    /// 16×16 tiles, 16 columns. Row 0 grass, 1 forest, 2 water, 3 mountain (4 variants each);
+    /// row 4 roads and row 5 shore overlays, both indexed by a 4-bit neighbour mask N=1, E=2, S=4, W=8;
+    /// row 6: bridge running east-west, bridge running north-south.
+    /// </summary>
+    private static PixelCanvas Terrain()
+    {
+        var c = new PixelCanvas(ArtLayout.Tile * 16, ArtLayout.Tile * 7);
+        for (int v = 0; v < ArtLayout.TerrainVariants; v++)
+        {
+            Cell(c, v, 0); GrassTile(c, v);
+            Cell(c, v, 1); GrassTile(c, v + 10); TreeTile(c, v);
+            Cell(c, v, 2); WaterTile(c, v);
+            Cell(c, v, 3); MountainTile(c, v);
+        }
+        for (int mask = 0; mask < 16; mask++)
+        {
+            Cell(c, mask, 4); GrassTile(c, mask + 20); RoadTile(c, mask);
+            Cell(c, mask, 5); ShoreTile(c, mask);
+        }
+        Cell(c, 0, 6); WaterTile(c, 1); BridgeTile(c, horizontal: true);
+        Cell(c, 1, 6); WaterTile(c, 2); BridgeTile(c, horizontal: false);
+        return c;
+
+        static void Cell(PixelCanvas canvas, int col, int row) =>
+            canvas.Origin = new Vector2I(col * ArtLayout.Tile, row * ArtLayout.Tile);
+    }
+
+    private static void GrassTile(PixelCanvas c, int v)
+    {
+        c.Ground(0, 0, 16, 16, Grass);
+        for (int y = 0; y < 16; y++)
+        {
+            for (int x = 0; x < 16; x++)
+            {
+                int h = Hash(x, y, v);
+                if (h < 70) c.Px(x, y, GrassDark, solid: false);
+                else if (h < 115) c.Px(x, y, GrassLight, solid: false);
+            }
+        }
+        // A couple of grass tufts: a light pixel over a dark one.
+        for (int t = 0; t < 3; t++)
+        {
+            int x = Hash(t, v, 7) % 14 + 1, y = Hash(v, t, 9) % 13 + 2;
+            c.Px(x, y, GrassLight, solid: false);
+            c.Px(x - 1, y + 1, GrassDark, solid: false);
+            c.Px(x + 1, y + 1, GrassDark, solid: false);
+        }
+        if (v == 3)
+        {
+            c.Px(4, 11, Snow, solid: false);
+            c.Px(11, 4, Gold, solid: false);
+        }
+    }
+
+    private static void TreeTile(PixelCanvas c, int v)
+    {
+        int cx = 8 + (v % 2 == 0 ? -1 : 1), cy = 6 + v % 2;
+        float r = v == 2 ? 4.5f : 5.5f;
+        c.Rect(cx - 1, cy + 4, 2, 4, Bark);
+        c.Disc(cx, cy, r, Leaf);
+        // Light from the top-left: lighter crescent there, shadow at the bottom-right.
+        for (int y = -6; y <= 6; y++)
+        {
+            for (int x = -6; x <= 6; x++)
+            {
+                if (x * x + y * y > r * r)
+                    continue;
+                if (x + y < -4) c.Px(cx + x, cy + y, LeafLight);
+                else if (x + y > 4) c.Px(cx + x, cy + y, LeafDark);
+            }
+        }
+        c.Px(cx - 2, cy - 3, LeafHighlight);
+        c.Px(cx - 3, cy - 1, LeafHighlight);
+        c.Outline(TreeOutline, new Rect2I(c.Origin, new Vector2I(16, 16)));
+    }
+
+    private static void WaterTile(PixelCanvas c, int v)
+    {
+        c.Ground(0, 0, 16, 16, Water);
+        for (int y = 0; y < 16; y++)
+            for (int x = 0; x < 16; x++)
+                if (Hash(x, y, v + 40) < 60)
+                    c.Px(x, y, WaterDark, solid: false);
+        for (int w = 0; w < 3; w++)
+        {
+            int x = (Hash(w, v, 3) % 11) + 1, y = (Hash(v, w, 5) % 13) + 1;
+            c.Ground(x, y, 4, 1, WaterLight);
+            c.Px(x + 1, y - 1, WaterLight, solid: false);
+        }
+    }
+
+    private static void MountainTile(PixelCanvas c, int v)
+    {
+        c.Ground(0, 0, 16, 16, RockDark);
+        int peak = 6 + v % 3, top = 1 + v % 2;
+        for (int y = top; y < 16; y++)
+        {
+            int half = (y - top) * 8 / (15 - top);
+            for (int x = peak - half; x <= peak + half; x++)
+            {
+                if (x < 0 || x > 15)
+                    continue;
+                var color = y < top + 3 ? Snow : x < peak ? RockLight : Rock;
+                c.Px(x, y, color);
+            }
+        }
+        c.Outline(Outline, new Rect2I(c.Origin, new Vector2I(16, 16)));
+    }
+
+    private static void RoadTile(PixelCanvas c, int mask)
+    {
+        // Dirt band 8 px wide through the centre, extended towards connected neighbours.
+        int from = 4, to = 12;
+        void Dirt(int x0, int y0, int x1, int y1)
+        {
+            for (int y = y0; y < y1; y++)
+                for (int x = x0; x < x1; x++)
+                    c.Px(x, y, ArtGenerator.Dirt, solid: false);
+        }
+        Dirt(from, from, to, to);
+        if ((mask & 1) != 0) Dirt(from, 0, to, from);
+        if ((mask & 2) != 0) Dirt(to, from, 16, to);
+        if ((mask & 4) != 0) Dirt(from, to, to, 16);
+        if ((mask & 8) != 0) Dirt(0, from, from, to);
+
+        // Darker rim where dirt meets grass, pebbles inside.
+        var dirt = new bool[16, 16];
+        for (int y = 0; y < 16; y++)
+            for (int x = 0; x < 16; x++)
+                dirt[x, y] = c.Base.GetPixel(c.Origin.X + x, c.Origin.Y + y) == ArtGenerator.Dirt;
+        for (int y = 0; y < 16; y++)
+        {
+            for (int x = 0; x < 16; x++)
+            {
+                if (!dirt[x, y])
+                    continue;
+                bool rim = (x > 0 && !dirt[x - 1, y]) || (x < 15 && !dirt[x + 1, y]) || (y > 0 && !dirt[x, y - 1]) || (y < 15 && !dirt[x, y + 1]);
+                if (rim) c.Px(x, y, DirtDark, solid: false);
+                else if (Hash(x, y, mask + 60) < 70) c.Px(x, y, DirtLight, solid: false);
+                else if (Hash(x, y, mask + 61) < 50) c.Px(x, y, DirtDark, solid: false);
+            }
+        }
+    }
+
+    /// <summary>Wooden deck over water: planks across the direction of travel, darker rails along it.</summary>
+    private static void BridgeTile(PixelCanvas c, bool horizontal)
+    {
+        for (int a = 0; a < 16; a++)
+        {
+            for (int b = 3; b < 13; b++)
+            {
+                int x = horizontal ? a : b, y = horizontal ? b : a;
+                var color = b is 3 or 12 ? WoodDark : a % 4 == 3 ? WoodDark : (a + b) % 7 == 0 ? WoodLight : Wood;
+                c.Px(x, y, color, solid: false);
+            }
+        }
+    }
+
+    /// <summary>Transparent tile with sand and foam along the sides where land is.</summary>
+    private static void ShoreTile(PixelCanvas c, int mask)
+    {
+        for (int i = 0; i < 16; i++)
+        {
+            if ((mask & 1) != 0) { c.Px(i, 0, Sand, false); c.Px(i, 1, SandDark, false); c.Px(i, 2, Foam, false); }
+            if ((mask & 4) != 0) { c.Px(i, 15, Sand, false); c.Px(i, 14, SandDark, false); c.Px(i, 13, Foam, false); }
+            if ((mask & 8) != 0) { c.Px(0, i, Sand, false); c.Px(1, i, SandDark, false); c.Px(2, i, Foam, false); }
+            if ((mask & 2) != 0) { c.Px(15, i, Sand, false); c.Px(14, i, SandDark, false); c.Px(13, i, Foam, false); }
+        }
+    }
+
+    // ------------------------------------------------------------------ units
+
+    /// <summary>
+    /// Cells of 16×20, feet at (8, 19), facing right. Rows: infantry, archer, heavy.
+    /// Columns: idle, walk 1, walk 2, attack. units_team.png holds the faction-colour mask.
+    /// </summary>
+    private static PixelCanvas Units()
+    {
+        var c = new PixelCanvas(ArtLayout.UnitCellWidth * ArtLayout.UnitFrames, ArtLayout.UnitCellHeight * 3);
+        for (int frame = 0; frame < ArtLayout.UnitFrames; frame++)
+        {
+            for (int row = 0; row < 3; row++)
+            {
+                c.Origin = new Vector2I(frame * ArtLayout.UnitCellWidth, row * ArtLayout.UnitCellHeight);
+                switch (row)
+                {
+                    case 0: Infantry(c, frame); break;
+                    case 1: Archer(c, frame); break;
+                    default: Heavy(c, frame); break;
+                }
+                c.Outline(Outline, new Rect2I(c.Origin, new Vector2I(ArtLayout.UnitCellWidth, ArtLayout.UnitCellHeight)));
+            }
+        }
+        return c;
+    }
+
+    /// <summary>Two legs whose stance depends on the frame: 0 idle, 1–2 walking, 3 lunging.</summary>
+    private static void Legs(PixelCanvas c, int frame, int width, Color color)
+    {
+        (int back, int front, int lift) = frame switch
+        {
+            1 => (4, 10, 0),
+            2 => (6, 8, 1),
+            3 => (4, 10, 0),
+            _ => (5, 9, 0),
+        };
+        c.Rect(back, 16, width, 3, color);
+        c.Rect(front, 16 - lift, width, 3, color);
+        c.Rect(back, 18, width, 1, Boots);
+        c.Rect(front, 18 - lift, width, 1, Boots);
+    }
+
+    private static void Infantry(PixelCanvas c, int frame)
+    {
+        int lean = frame == 3 ? 1 : 0;
+        Legs(c, frame, 2, new Color("4a3a30"));
+        c.TeamRect(5 + lean, 10, 6, 6);
+        c.Rect(5 + lean, 14, 6, 1, Bark);
+        c.Shaded(6 + lean, 6, 4, 4, Skin, Skin, SkinDark);
+        c.Rect(5 + lean, 5, 6, 2, Steel);
+        c.Rect(6 + lean, 4, 4, 1, SteelLight);
+        c.Px(9 + lean, 7, Outline); // eye
+        if (frame == 3)
+        {
+            // Spear thrust forward.
+            c.Line(6, 13, 14, 9, Leather);
+            c.Px(15, 8, SteelLight);
+            c.Px(14, 8, Steel);
+            c.Rect(11, 11, 1, 2, Skin);
+        }
+        else
+        {
+            c.Rect(12, 3, 1, 15, Leather);
+            c.Rect(12, 1, 1, 2, SteelLight);
+            c.Px(11, 0, Steel);
+            c.Rect(11, 11, 1, 2, Skin);
+        }
+    }
+
+    private static void Archer(PixelCanvas c, int frame)
+    {
+        Legs(c, frame, 2, new Color("4a3a30"));
+        c.Rect(3, 9, 2, 6, Leather); // quiver
+        c.Px(3, 8, String);
+        c.Px(4, 7, String);
+        c.TeamRect(5, 10, 6, 6);
+        c.Rect(5, 14, 6, 1, Bark);
+        c.Shaded(6, 6, 4, 4, Skin, Skin, SkinDark);
+        c.Rect(5, 5, 5, 2, Hood);
+        c.Rect(5, 7, 1, 3, HoodDark);
+        c.Px(9, 7, Outline); // eye
+        if (frame == 3)
+        {
+            // Bow drawn: string pulled back to the cheek, arrow on the string.
+            c.Line(12, 6, 13, 9, Wood);
+            c.Line(13, 10, 12, 14, Wood);
+            c.Line(12, 6, 9, 10, String);
+            c.Line(9, 10, 12, 14, String);
+            c.Rect(9, 10, 6, 1, WoodLight);
+            c.Px(15, 10, SteelLight);
+        }
+        else
+        {
+            c.Line(12, 6, 13, 8, Wood);
+            c.Rect(13, 9, 1, 3, Wood);
+            c.Line(13, 12, 12, 14, Wood);
+            c.Rect(11, 7, 1, 7, String);
+        }
+        c.Rect(11, 11, 1, 1, Skin);
+    }
+
+    private static void Heavy(PixelCanvas c, int frame)
+    {
+        int lean = frame == 3 ? 1 : 0;
+        Legs(c, frame, 3, SteelDark);
+        c.Shaded(4 + lean, 9, 8, 7, Steel, SteelLight, SteelDark);
+        c.Team(7 + lean, 9); c.Team(8 + lean, 9);
+        for (int y = 10; y < 16; y++) { c.Team(7 + lean, y, 0.85f); c.Team(8 + lean, y, 0.7f); }
+        c.Shaded(5 + lean, 3, 6, 6, Steel, SteelLight, SteelDark);
+        c.Rect(7 + lean, 5, 4, 1, Outline); // visor
+        if (frame == 3)
+        {
+            // Sword swung forward over the shield.
+            c.Line(10, 8, 15, 2, SteelLight);
+            c.Rect(9, 8, 2, 1, Leather);
+        }
+        else
+        {
+            c.Rect(3, 3, 1, 8, SteelLight);
+            c.Rect(2, 11, 3, 1, Leather);
+        }
+        // Shield in faction colours with a steel rim.
+        c.TeamRect(11, 9, 4, 7);
+        c.Rect(11, 9, 4, 1, SteelLight);
+        c.Rect(11, 15, 4, 1, SteelDark);
+    }
+
+    // ------------------------------------------------------------------ buildings
+
+    /// <summary>Stone wall texture: staggered bricks with mortar lines and a lit top edge.</summary>
+    private static void Bricks(PixelCanvas c, int x, int y, int w, int h, Color mid)
+    {
+        c.Rect(x, y, w, h, mid);
+        for (int j = 0; j < h; j++)
+        {
+            for (int i = 0; i < w; i++)
+            {
+                bool mortarRow = j % 4 == 3;
+                bool mortarCol = (i + (j / 4 % 2) * 3) % 6 == 5;
+                if (mortarRow || mortarCol)
+                    c.Px(x + i, y + j, Mortar);
+                else if (Hash(x + i, y + j, 11) < 60)
+                    c.Px(x + i, y + j, StoneLight);
+            }
+        }
+        c.Rect(x, y, w, 1, StoneLight);
+    }
+
+    private static void Crenellations(PixelCanvas c, int x, int y, int w, Color color)
+    {
+        for (int i = 0; i < w; i += 4)
+            c.Rect(x + i, y, Math.Min(2, w - i), 3, color);
+    }
+
+    private static void Banner(PixelCanvas c, int x, int y, int w, int h)
+    {
+        c.TeamRect(x, y, w, h);
+        // Swallowtail bottom.
+        for (int i = 0; i < w; i++)
+            if (i != w / 2 && i != w / 2 - 1)
+                c.Team(x + i, y + h, 0.62f);
+    }
+
+    private static void Flag(PixelCanvas c, int x, int y)
+    {
+        c.Rect(x, y, 1, 9, new Color("4a3a2a"));
+        c.TeamRect(x + 1, y, 6, 4);
+        c.Team(x + 7, y + 1, 0.82f);
+    }
+
+    /// <summary>48×60, bottom-centre origin; the footprint is 3×3 tiles.</summary>
+    private static PixelCanvas Castle()
+    {
+        var c = new PixelCanvas(48, 60);
+        Bricks(c, 4, 28, 40, 30, Stone);
+        Bricks(c, 14, 10, 20, 20, StoneLight);
+        Crenellations(c, 14, 7, 20, StoneLight);
+        Bricks(c, 0, 18, 12, 40, StoneLight);
+        Bricks(c, 36, 18, 12, 40, StoneLight);
+        Crenellations(c, 0, 15, 12, StoneLight);
+        Crenellations(c, 36, 15, 12, StoneLight);
+        Crenellations(c, 12, 25, 24, Stone);
+        // Gate with an arch and planks.
+        c.Rect(19, 44, 10, 14, Door);
+        c.Rect(20, 42, 8, 2, Door);
+        for (int x = 21; x < 28; x += 2)
+            c.Rect(x, 45, 1, 13, WoodDark);
+        c.Rect(18, 41, 12, 1, StoneDark);
+        // Windows.
+        foreach (int x in new[] { 18, 23, 28 })
+            c.Rect(x, 15, 2, 3, Window);
+        c.Rect(5, 30, 2, 3, Window);
+        c.Rect(41, 30, 2, 3, Window);
+        Banner(c, 3, 22, 6, 10);
+        Banner(c, 39, 22, 6, 10);
+        Flag(c, 23, 0);
+        c.Outline(Outline);
+        return c;
+    }
+
+    /// <summary>32×36, bottom-centre origin; footprint 2×2 tiles. The roof is in faction colours.</summary>
+    private static PixelCanvas Barracks()
+    {
+        var c = new PixelCanvas(32, 36);
+        c.Rect(2, 20, 28, 15, Wood);
+        for (int x = 2; x < 30; x += 4)
+            c.Rect(x, 20, 1, 15, WoodDark);
+        c.Rect(2, 33, 28, 2, StoneDark);
+        c.Rect(13, 26, 6, 8, Door);
+        c.Rect(15, 26, 1, 8, WoodDark);
+        c.Rect(5, 24, 3, 3, Window);
+        c.Rect(24, 24, 3, 3, Window);
+        c.Rect(24, 7, 3, 6, StoneDark); // chimney
+        for (int row = 0; row < 12; row++)
+        {
+            int inset = 11 - row;
+            for (int x = inset; x < 32 - inset; x++)
+                c.Team(x, 8 + row, row == 0 ? 1f : row == 11 ? 0.55f : (x - inset) % 4 == 0 ? 0.7f : 0.85f);
+        }
+        c.Outline(Outline);
+        return c;
+    }
+
+    /// <summary>16×44, bottom-centre origin; footprint 1 tile. Conical roof in faction colours.</summary>
+    private static PixelCanvas Tower()
+    {
+        var c = new PixelCanvas(16, 44);
+        Bricks(c, 3, 15, 10, 28, Stone);
+        c.Rect(6, 36, 4, 7, Door);
+        c.Rect(7, 21, 2, 5, Window);
+        c.Rect(1, 11, 14, 4, Wood);
+        c.Rect(1, 14, 14, 1, WoodDark);
+        for (int x = 2; x < 15; x += 3)
+            c.Rect(x, 11, 1, 3, WoodDark);
+        for (int row = 0; row < 10; row++)
+        {
+            int half = 1 + row * 7 / 9;
+            for (int x = 8 - half; x < 8 + half; x++)
+                c.Team(x, 1 + row, x < 8 ? 0.95f : 0.65f);
+        }
+        c.Rect(7, 0, 2, 1, new Color("4a3a2a"));
+        c.Outline(Outline);
+        return c;
+    }
+
+    /// <summary>32×36, bottom-centre origin; footprint 2×2 tiles on a gold deposit.</summary>
+    private static PixelCanvas Mine()
+    {
+        var c = new PixelCanvas(32, 36);
+        // Rock mound with a timbered tunnel mouth.
+        for (int y = 22; y < 35; y++)
+        {
+            int half = 6 + (y - 22) * 9 / 12;
+            for (int x = 16 - half; x < 16 + half; x++)
+                c.Px(x, y, Hash(x, y, 21) < 150 ? RockLight : Rock);
+        }
+        c.Rect(11, 26, 9, 9, Door);
+        c.Rect(10, 25, 1, 10, Wood);
+        c.Rect(20, 25, 1, 10, Wood);
+        c.Rect(10, 25, 11, 1, WoodLight);
+        // Headframe with a pulley wheel.
+        c.Rect(5, 7, 2, 18, Wood);
+        c.Rect(25, 7, 2, 18, Wood);
+        c.Rect(4, 6, 24, 2, WoodDark);
+        c.Line(6, 9, 15, 16, Wood);
+        c.Line(26, 9, 17, 16, Wood);
+        c.Disc(16, 10, 3f, StoneDark);
+        c.Px(16, 10, Steel);
+        // Cart full of gold.
+        c.Rect(22, 29, 8, 4, WoodDark);
+        c.Rect(23, 27, 6, 2, Gold);
+        c.Px(25, 26, GoldDark);
+        c.Rect(23, 33, 2, 2, Outline);
+        c.Rect(27, 33, 2, 2, Outline);
+        Flag(c, 3, 0);
+        c.Outline(Outline);
+        return c;
+    }
+
+    /// <summary>32×32 ore patch drawn on the 2×2 deposit footprint (top-left origin).</summary>
+    private static PixelCanvas Deposit()
+    {
+        var c = new PixelCanvas(32, 32);
+        var boulders = new (int X, int Y, int W, int H)[] { (3, 6, 9, 7), (15, 3, 10, 8), (6, 17, 11, 9), (20, 15, 8, 8), (13, 25, 6, 4) };
+        foreach (var (x, y, w, h) in boulders)
+        {
+            c.Shaded(x, y, w, h, Rock, RockLight, RockDark);
+            // Gold veins.
+            for (int i = 0; i < w * h / 6; i++)
+            {
+                int px = x + 1 + Hash(i, x, 31) % Math.Max(1, w - 2), py = y + 1 + Hash(i, y, 37) % Math.Max(1, h - 2);
+                c.Px(px, py, Hash(px, py, 41) < 300 ? GoldDark : Gold);
+            }
+        }
+        c.Outline(Outline);
+        return c;
+    }
+}
+
+/// <summary>Sheet layout shared by the art generator and the views that cut frames out of the sheets.</summary>
+public static class ArtLayout
+{
+    public const int Tile = 16;
+    public const int TerrainVariants = 4;
+    public const int GrassRow = 0, ForestRow = 1, WaterRow = 2, MountainRow = 3, RoadRow = 4, ShoreRow = 5, BridgeRow = 6;
+
+    public const int UnitCellWidth = 16;
+    public const int UnitCellHeight = 20;
+    public const int UnitFrames = 4;
+    public const int FrameIdle = 0, FrameWalk1 = 1, FrameWalk2 = 2, FrameAttack = 3;
+    /// <summary>Feet position inside a unit cell.</summary>
+    public static readonly Vector2I UnitFeet = new(8, 19);
+
+    public static int UnitRow(string unitTypeId) => unitTypeId switch
+    {
+        "archer" => 1,
+        "heavy" => 2,
+        _ => 0,
+    };
+}

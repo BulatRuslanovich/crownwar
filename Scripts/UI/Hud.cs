@@ -38,7 +38,7 @@ public partial class Hud : CanvasLayer
     private Control _buildingPanel = null!;
     private Label _title = null!;
     private Label _info = null!;
-    private HBoxContainer _recruitRow = null!;
+    private Container _recruitRow = null!;
     private Label _queue = null!;
     private ProgressBar _progress = null!;
     private Label _message = null!;
@@ -57,7 +57,7 @@ public partial class Hud : CanvasLayer
         _buildingPanel = GetNode<Control>("BuildingPanel");
         _title = GetNode<Label>("BuildingPanel/Rows/Title");
         _info = GetNode<Label>("BuildingPanel/Rows/Info");
-        _recruitRow = GetNode<HBoxContainer>("BuildingPanel/Rows/RecruitButtons");
+        _recruitRow = GetNode<Container>("BuildingPanel/Rows/RecruitButtons");
         _queue = GetNode<Label>("BuildingPanel/Rows/Queue");
         _progress = GetNode<ProgressBar>("BuildingPanel/Rows/Progress");
         _message = GetNode<Label>("Message");

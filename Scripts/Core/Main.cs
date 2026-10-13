@@ -24,6 +24,13 @@ public partial class Main : Node
     public override void _Ready()
     {
         var args = OS.GetCmdlineUserArgs();
+        if (DevTools.Arg(args, "--export-art") is { } previewDirectory)
+        {
+            Dev.ArtGenerator.ExportAll(ProjectSettings.GlobalizePath("res://"), previewDirectory);
+            GD.Print("Art exported");
+            GetTree().Quit();
+            return;
+        }
         if (DevTools.Arg(args, "--export-sounds") is { } soundDirectory)
         {
             Audio.SoundBank.ExportAll(soundDirectory);

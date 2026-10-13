@@ -15,6 +15,10 @@ run/main_scene="res://Scenes/Main/Main.tscn"
 config/features=PackedStringArray("4.7", "C#", "Mobile")
 config/icon="res://icon.svg"
 
+[autoload]
+
+GameSettings="*res://Scripts/Core/GameSettings.cs"
+
 [display]
 
 window/size/viewport_width=1280
@@ -26,6 +30,14 @@ window/stretch/aspect="expand"
 
 project/assembly_name="lordsio"
 
+[gui]
+
+theme/custom="res://Assets/UI/theme.tres"
+
+[internationalization]
+
+locale/translations=PackedStringArray("res://Translations/strings.en.translation", "res://Translations/strings.ru.translation")
+
 [physics]
 
 3d/physics_engine="Jolt Physics"
@@ -36,11 +48,3 @@ textures/canvas_textures/default_texture_filter=0
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="mobile"
 environment/defaults/default_clear_color=Color(0.07, 0.09, 0.08, 1)
-
-[autoload]
-
-GameSettings="*res://Scripts/Core/GameSettings.cs"
-
-[internationalization]
-
-locale/translations=PackedStringArray("res://Translations/strings.en.translation", "res://Translations/strings.ru.translation")

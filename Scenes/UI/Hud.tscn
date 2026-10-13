@@ -72,6 +72,7 @@ offset_bottom = -8.0
 grow_vertical = 0
 
 [node name="Rows" type="VBoxContainer" parent="BuildingPanel"]
+custom_minimum_size = Vector2(340, 0)
 layout_mode = 2
 
 [node name="Title" type="Label" parent="BuildingPanel/Rows"]
@@ -81,9 +82,11 @@ text = "Castle"
 
 [node name="Info" type="Label" parent="BuildingPanel/Rows"]
 layout_mode = 2
+custom_minimum_size = Vector2(340, 0)
+autowrap_mode = 3
 text = "Income"
 
-[node name="RecruitButtons" type="HBoxContainer" parent="BuildingPanel/Rows"]
+[node name="RecruitButtons" type="HFlowContainer" parent="BuildingPanel/Rows"]
 layout_mode = 2
 
 [node name="Queue" type="Label" parent="BuildingPanel/Rows"]
