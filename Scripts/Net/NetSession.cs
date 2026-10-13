@@ -200,13 +200,42 @@ public partial class NetSession : Node
 
     // ---------------------------------------------------------------- messaging
 
+    /// <summary>Dev (--net-lag): outgoing packets are held back this long, plus up to <see cref="DevJitterMs"/>, to test a poor link on one PC.</summary>
+    public int DevLagMs { get; set; }
+    public int DevJitterMs { get; set; }
+    private readonly Queue<(ulong DueMs, int PeerId, byte[] Data)> _delayed = new();
+    private ulong _lastDueMs;
+    private readonly Random _devRandom = new();
+
     public void Send(int peerId, NetMessage message)
     {
         if (_peer == null)
             return;
-        _peer.TransferMode = MultiplayerPeer.TransferModeEnum.Reliable;
+        byte[] data = NetCodec.Encode(message);
+        if (DevLagMs > 0 || DevJitterMs > 0)
+        {
+            // Never before an earlier packet: the channel is ordered anyway.
+            _lastDueMs = Math.Max(_lastDueMs, Time.GetTicksMsec() + (ulong)(DevLagMs + _devRandom.Next(DevJitterMs + 1)));
+            _delayed.Enqueue((_lastDueMs, peerId, data));
+            return;
+        }
+        Put(peerId, data);
+    }
+
+    private void Put(int peerId, byte[] data)
+    {
+        _peer!.TransferMode = MultiplayerPeer.TransferModeEnum.Reliable;
         _peer.SetTargetPeer(peerId);
-        _peer.PutPacket(NetCodec.Encode(message));
+        _peer.PutPacket(data);
+    }
+
+    private void SendDue()
+    {
+        while (_peer != null && _delayed.TryPeek(out var next) && next.DueMs <= Time.GetTicksMsec())
+        {
+            _delayed.Dequeue();
+            Put(next.PeerId, next.Data);
+        }
     }
 
     public void Broadcast(NetMessage message) => Send((int)MultiplayerPeer.TargetPeerBroadcast, message);
@@ -214,10 +243,46 @@ public partial class NetSession : Node
     /// <summary>Host: the faction a connected player controls in the match.</summary>
     public int? FactionOf(int peerId) => _factionOfPeer.TryGetValue(peerId, out int f) ? f : null;
 
+    /// <summary>
+    /// Sends what was queued right away instead of on the next frame's poll: in lockstep every hop of the
+    /// round trip counts against the input delay.
+    /// </summary>
+    public void Flush()
+    {
+        SendDue();
+        _peer?.Host?.Flush();
+    }
+
+    /// <summary>Round-trip time and its variance (ms) to a connected peer, as ENet measures them.</summary>
+    public (double RoundTrip, double Variance)? LinkTo(int peerId)
+    {
+        if (_peer?.GetPeer(peerId) is not { } link || !link.IsActive())
+            return null;
+        return (link.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime),
+            link.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTimeVariance));
+    }
+
+    /// <summary>Host: the other players' peers in the match (the host itself, peer 1, is not a link).</summary>
+    public IEnumerable<int> MatchPeers => _factionOfPeer.Keys.Where(id => id != 1);
+
+    /// <summary>
+    /// Receives and handles what has arrived. Runs every frame, and once more right before the match steps,
+    /// so a frame that came in this frame is used now and not a frame later.
+    /// </summary>
+    public void Receive()
+    {
+        if (_peer == null)
+            return;
+        SendDue();
+        _peer.Poll();
+        ReadPackets();
+    }
+
     public override void _Process(double delta)
     {
         if (_peer == null)
             return;
+        SendDue();
         _peer.Poll();
         if (_peer == null)
             return; // a handler closed the session
@@ -231,7 +296,11 @@ public partial class NetSession : Node
                 return;
             }
         }
+        ReadPackets();
+    }
 
+    private void ReadPackets()
+    {
         while (_peer != null && _peer.GetAvailablePacketCount() > 0)
         {
             int from = _peer.GetPacketPeer();

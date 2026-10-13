@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using Godot;
 using Lordsio.Core;
+using Lordsio.Sim.Core;
 using Lordsio.Sim.Units;
 using Lordsio.Sim.World;
 
@@ -56,6 +57,13 @@ public partial class DebugHud : CanvasLayer
         else
         {
             _text.Append("Cursor: outside the map\n");
+        }
+
+        if (_match.Net is { } net)
+        {
+            string ping = net.PingMilliseconds >= 0 ? $"{net.PingMilliseconds:0} ms ±{net.JitterMilliseconds:0}" : "?";
+            _text.Append(inv, $"Net: {(net.IsHost ? "host, slowest player" : "client")} ping {ping}  ·  input delay {net.InputDelay} ticks " +
+                              $"({net.InputDelay * Simulation.TickDuration * 1000:0} ms)  ·  frames ahead {net.BufferedFrames(sim.Tick)}  ·  stalls {_match.NetStalls}\n");
         }
 
         if (_match.Selection.Count == 1)

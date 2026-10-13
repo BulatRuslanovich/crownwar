@@ -413,10 +413,20 @@ public partial class MatchController : Node2D
     /// Lockstep: a tick runs only once its frame (everyone's commands) has arrived. When frames pile up
     /// (we fell behind) we catch up a few ticks per frame; when none is there we wait.
     /// </summary>
+    /// <summary>Times the match had to stop and wait for another player's commands (shown on the F3 overlay).</summary>
+    public int NetStalls { get; private set; }
+    private bool _starving;
+
     private void ProcessNetworked(double delta)
     {
         var net = Net!;
-        net.Pump();
+        net.Pump(delta);
+        StepNetworked(net, delta);
+        net.Flush();
+    }
+
+    private void StepNetworked(NetMatchDriver net, double delta)
+    {
         _replayedThisFrame = false;
         if (Sim.IsOver || net.IsDesynced)
             return;
@@ -446,6 +456,14 @@ public partial class MatchController : Node2D
             _accumulator = Math.Max(0, _accumulator - Simulation.TickDuration);
             steps++;
         }
+        // A stall: a whole tick overdue and still no frame (a few ms late is only clocks drifting apart).
+        bool starving = !net.HasFrame(Sim.Tick + 1) && _accumulator >= Simulation.TickDuration * 2;
+        if (starving && !_starving)
+        {
+            NetStalls++;
+            net.ReportStall();
+        }
+        _starving = starving;
         // While waiting for others, do not bank time to burst through later.
         _accumulator = Math.Min(_accumulator, Simulation.TickDuration * 4);
         WaitingForPlayers = !net.HasFrame(Sim.Tick + 1) && _accumulator >= Simulation.TickDuration * 4;

@@ -255,7 +255,8 @@ public class LockstepEndToEndTests
                 for (int step = 0; step < budget && p.Peer.HasFrame(p.Sim.Tick + 1); step++)
                 {
                     Apply(p, p.Peer.TakeFrame(p.Sim.Tick + 1), p == a ? returnsA : returnsB);
-                    host.SubmitInput(p.Faction, p.Peer.TakeInput(p.Sim.Tick));
+                    foreach (var input in p.Peer.TakeInputs(p.Sim.Tick))
+                        host.SubmitInput(p.Faction, input);
                 }
             }
 
@@ -276,6 +277,40 @@ public class LockstepEndToEndTests
         Assert.That(a.Bots.Any(bot => bot.FactionId == 1), Is.False, "after the return the faction is the player's again");
         Assert.That(b.Bots.Any(bot => bot.FactionId == 1), Is.False);
     }
+
+    [Test]
+    public void ChangingTheInputDelayKeepsExactlyOneInputPerTick()
+    {
+        var peer = new LockstepPeer();
+        var sent = new List<InputMessage>();
+        int tick = 0;
+        void Run(int ticks)
+        {
+            for (int i = 0; i < ticks; i++)
+                sent.AddRange(peer.TakeInputs(++tick));
+        }
+
+        Run(5);
+        peer.InputDelay = 7; // worse link: jump ahead, filling the gap with empty inputs
+        Run(5);
+        peer.QueueLocal(new StopProbe(0));
+        peer.InputDelay = 3; // better link: hold back until the ticks catch up
+        Run(1);
+        Assert.That(sent.Last().Commands, Is.Empty, "the command waits for the next input it can go into");
+        Run(10);
+
+        var ticks = sent.Select(i => i.Tick).ToList();
+        Assert.That(ticks, Is.EqualTo(Enumerable.Range(LockstepHost.InputDelay + 1, ticks.Count)), "every tick once, in order");
+        Assert.That(sent.Count(i => i.Commands.Count > 0), Is.EqualTo(1), "the command is sent exactly once");
+        Assert.That(ticks[^1], Is.EqualTo(tick + 3), "back to the short delay");
+
+        peer.InputDelay = 99;
+        Assert.That(peer.InputDelay, Is.EqualTo(LockstepPeer.MaxInputDelay));
+        peer.InputDelay = 0;
+        Assert.That(peer.InputDelay, Is.EqualTo(LockstepHost.InputDelay));
+    }
+
+    private sealed record StopProbe(int FactionId) : Command(FactionId);
 
     [Test]
     public void PeersStayInSyncThroughLagCommandsAndADisconnect()
@@ -309,6 +344,10 @@ public class LockstepEndToEndTests
                 host.DropFaction(1);
             }
 
+            // Player 1's link gets better and worse: its input delay changes every few seconds.
+            if (now % 100 == 50)
+                players[1].Peer.InputDelay = LockstepHost.InputDelay + rng.Next(0, 6);
+
             foreach (var p in players.Where(p => p.Connected))
             {
                 // Each player orders its army around every few seconds.
@@ -329,7 +368,8 @@ public class LockstepEndToEndTests
                     foreach (var bot in p.Bots)
                         bot.Update();
                     p.Checksums[p.Sim.Tick] = p.Sim.ComputeChecksum();
-                    toHost.Add((now + rng.Next(0, 2), p.Faction, p.Peer.TakeInput(p.Sim.Tick)));
+                    foreach (var input in p.Peer.TakeInputs(p.Sim.Tick))
+                        toHost.Add((now + rng.Next(0, 2), p.Faction, input));
                 }
             }
         }

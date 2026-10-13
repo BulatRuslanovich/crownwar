@@ -211,7 +211,8 @@ public partial class Main : Node
     /// skip the menus; --net-players=N
     /// makes the host start once N players are in (open slots become Hard bots), --net-teams=0,0,1,1 sets the
     /// slots' teams; --net-autoplay lets a bot
-    /// play the local faction through the network; --net-log prints checksums to compare the copies' logs.
+    /// play the local faction through the network; --net-log prints checksums to compare the copies' logs;
+    /// --net-lag=MS[,JITTER] holds this copy's outgoing packets back (a poor link on one PC; ENet's ping does not see it).
     /// </summary>
     private void StartDevNetwork(string[] args)
     {
@@ -219,6 +220,12 @@ public partial class Main : Node
         _devNetLog = System.Array.IndexOf(args, "--net-log") >= 0;
         string name = DevTools.Arg(args, "--net-name") ?? GameSettings.Instance?.PlayerName ?? "Player";
         ShowNetMenu(null);
+        if (DevTools.Arg(args, "--net-lag") is { } lag)
+        {
+            var parts = lag.Split(',').Select(p => int.Parse(p, CultureInfo.InvariantCulture)).ToArray();
+            Session().DevLagMs = parts[0];
+            Session().DevJitterMs = parts.Length > 1 ? parts[1] : 0;
+        }
         if (System.Array.IndexOf(args, "--net-browse") >= 0)
             return;
         if (DevTools.Arg(args, "--net-join") is { } address)

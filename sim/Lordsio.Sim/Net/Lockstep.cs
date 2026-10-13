@@ -110,8 +110,25 @@ public sealed class LockstepHost
 /// </summary>
 public sealed class LockstepPeer
 {
+    /// <summary>Upper bound for <see cref="InputDelay"/> (half a second): beyond that the game feels broken anyway.</summary>
+    public const int MaxInputDelay = 10;
+
     private readonly Dictionary<int, FrameMessage> _frames = new();
     private readonly List<Command> _local = new();
+    /// <summary>The last tick an input was sent for; ticks up to the host's delay need none.</summary>
+    private int _lastInputTick = LockstepHost.InputDelay;
+    private int _inputDelay = LockstepHost.InputDelay;
+
+    /// <summary>
+    /// How many ticks ahead this player's commands are sent. A player far from the host (slow or jittery link)
+    /// sends further ahead, so the host has the input before it needs it instead of everyone stalling.
+    /// It can change at any time: <see cref="TakeInputs"/> keeps exactly one input per tick.
+    /// </summary>
+    public int InputDelay
+    {
+        get => _inputDelay;
+        set => _inputDelay = Math.Clamp(value, LockstepHost.InputDelay, MaxInputDelay);
+    }
 
     public void QueueLocal(Command command) => _local.Add(command);
 
@@ -134,14 +151,22 @@ public sealed class LockstepPeer
     }
 
     /// <summary>
-    /// Called once per simulated tick: all commands queued since the last call, addressed to the tick
-    /// <see cref="LockstepHost.InputDelay"/> ahead.
+    /// Called once per simulated tick: the inputs to send, normally one, carrying all commands queued since the
+    /// last call for the tick <see cref="InputDelay"/> ahead. After the delay grew, the skipped ticks get empty
+    /// inputs (the host waits for every tick); after it shrank, nothing is sent until the ticks catch up with
+    /// the last input (the commands wait for the next one), so no tick ever gets two.
     /// </summary>
-    public InputMessage TakeInput(int currentTick)
+    public List<InputMessage> TakeInputs(int currentTick)
     {
-        var input = new InputMessage(currentTick + LockstepHost.InputDelay, _local.ToList());
+        var inputs = new List<InputMessage>();
+        int target = currentTick + _inputDelay;
+        if (target <= _lastInputTick)
+            return inputs;
+        while (_lastInputTick < target - 1)
+            inputs.Add(new InputMessage(++_lastInputTick, Array.Empty<Command>()));
+        inputs.Add(new InputMessage(++_lastInputTick, _local.ToList()));
         _local.Clear();
-        return input;
+        return inputs;
     }
 }
 
