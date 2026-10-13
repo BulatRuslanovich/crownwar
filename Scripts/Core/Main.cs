@@ -29,6 +29,7 @@ public partial class Main : Node
     private MatchConfig _lastConfig = MatchConfig.Default;
     private NetSession? _session;
     private Audio.MusicPlayer _music = null!;
+    private Audio.UiSounds? _uiSounds;
 
     // Dev options for testing network games with two copies on one PC (see StartDevNetwork).
     private int _devAutoStartPlayers;
@@ -39,6 +40,10 @@ public partial class Main : Node
     public override void _EnterTree()
     {
         InputActions.Register();
+        // Hooked before any screen exists, so every button gets its click.
+        _uiSounds = new Audio.UiSounds { Name = "UiSounds" };
+        AddChild(_uiSounds);
+        UI.Cursors.Install();
     }
 
     public override void _Ready()
@@ -336,6 +341,8 @@ public partial class Main : Node
     public async void QuitGame()
     {
         _music?.StopAll();
+        _uiSounds?.StopAll();
+        UI.Cursors.Uninstall();
         await ToSignal(GetTree().CreateTimer(0.15, processAlways: true), SceneTreeTimer.SignalName.Timeout);
         GetTree().Quit();
     }

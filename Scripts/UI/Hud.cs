@@ -85,6 +85,9 @@ public partial class Hud : CanvasLayer
         CreateBuildButtons(GetNode<HBoxContainer>("BuildBar/Rows/Buttons"));
         AddResourceIcons();
         GetNode<Minimap>("MinimapPanel/Minimap").Initialize(match);
+        var scoreboard = new Scoreboard { Name = "Scoreboard" };
+        AddChild(scoreboard);
+        scoreboard.Initialize(match);
         _selectionPanel = GetNode<Control>("SelectionPanel");
         _selectionTitle = GetNode<Label>("SelectionPanel/Rows/Title");
         _selectionTypes = GetNode<Container>("SelectionPanel/Rows/Types");

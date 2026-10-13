@@ -30,6 +30,7 @@ namespace Lordsio.Core;
 ///   --demo-select-mine       right before the screenshot, select the player's first mine
 ///   --demo-research=&lt;id&gt;     start researching an upgrade
 ///   --demo-no-fog            show the whole map (no fog of war)
+///   --demo-scoreboard        keep the players table (Tab) open
 /// </summary>
 public static class DevTools
 {
@@ -52,6 +53,8 @@ public static class DevTools
             match.AddBot(match.LocalFactionId, Sim.AI.BotDifficulty.Hard);
         if (Arg(args, "--demo-time-scale") is { } scale)
             Godot.Engine.TimeScale = double.Parse(scale, CultureInfo.InvariantCulture);
+        if (args.Contains("--demo-scoreboard"))
+            match.GetNode<UI.Scoreboard>("Hud/Scoreboard").Pinned = true;
         if (args.Contains("--demo-no-fog"))
             match.Fog.RevealAll();
         if (Arg(args, "--demo-research") is { } research)

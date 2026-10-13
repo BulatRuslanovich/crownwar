@@ -148,7 +148,7 @@ public static class ArtGenerator
         Scaled(400).SavePng(System.IO.Path.Combine(uiDir, "splash.png"));
 
         // .ico with PNG-compressed entries (supported since Windows Vista).
-        int[] sizes = { 16, 32, 48, 256 };
+        int[] sizes = { 16, 24, 32, 48, 64, 128, 256 };
         var images = Array.ConvertAll(sizes, s => Scaled(s).SavePngToBuffer());
         using var file = System.IO.File.Create(System.IO.Path.Combine(uiDir, "icon.ico"));
         using var w = new System.IO.BinaryWriter(file);

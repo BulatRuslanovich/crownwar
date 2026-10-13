@@ -39,9 +39,29 @@ public partial class SelectionController : Node2D
     private Vector2 _pressScreen;
     private Vector2 _pressWorld;
 
+    private bool _attackCursor;
+
     public void Initialize(MatchController match)
     {
         _match = match;
+    }
+
+    public override void _ExitTree() => Input.SetDefaultCursorShape(Input.CursorShape.Arrow);
+
+    /// <summary>The sword cursor: troops are selected and a right click here would attack someone.</summary>
+    private void UpdateCursor()
+    {
+        bool attack = false;
+        if (_match.Selection.Count > 0)
+        {
+            var world = GetGlobalMousePosition();
+            attack = PickUnit(world, EnemyUnits()) != null
+                     || PickBuilding(world) is { } building && _match.Sim.AreEnemies(_match.LocalFactionId, building.FactionId) && !_match.IsHidden(building);
+        }
+        if (attack == _attackCursor)
+            return;
+        _attackCursor = attack;
+        Input.SetDefaultCursorShape(attack ? UI.Cursors.Attack : Input.CursorShape.Arrow);
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -167,6 +187,7 @@ public partial class SelectionController : Node2D
 
     public override void _Process(double delta)
     {
+        UpdateCursor();
         // The box is anchored in the world, so it must follow the camera even without mouse motion.
         if (_boxActive)
             QueueRedraw();

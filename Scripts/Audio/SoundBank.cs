@@ -34,6 +34,14 @@ public static class SoundBank
     /// </summary>
     public static Dictionary<Sound, AudioStreamWav> CreateAll() => Build();
 
+    /// <summary>A soft wooden click for button presses.</summary>
+    public static AudioStreamWav UiClick() =>
+        Make(0.06f, (t, n) => Sine(1250 - 6000 * t, t) * Decay(t, 0.012f) * 0.8f + LowNoise(n) * Decay(t, 0.006f) * 0.4f);
+
+    /// <summary>A barely audible tick when the pointer moves onto a button.</summary>
+    public static AudioStreamWav UiHover() =>
+        Make(0.03f, (t, _) => Sine(2100, t) * Decay(t, 0.006f) * 0.5f);
+
     /// <summary>Dev-only: writes every sound to <paramref name="directory"/> as a .wav file for listening.</summary>
     public static void ExportAll(string directory)
     {
