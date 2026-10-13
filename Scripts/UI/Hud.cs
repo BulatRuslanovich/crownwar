@@ -52,6 +52,7 @@ public partial class Hud : CanvasLayer
         _placement = placement;
         _gold = GetNode<Label>("ResourceBar/Row/Gold");
         _income = GetNode<Label>("ResourceBar/Row/Income");
+        _income.MouseFilter = Control.MouseFilterEnum.Pass; // labels ignore the mouse by default: no tooltip
         _army = GetNode<Label>("ResourceBar/Row/Army");
         _buildHint = GetNode<Label>("BuildBar/Rows/Hint");
         _buildingPanel = GetNode<Control>("BuildingPanel");
@@ -73,7 +74,11 @@ public partial class Hud : CanvasLayer
         if (_match.Sim.GetFaction(_match.LocalFactionId) is { } faction)
         {
             _gold.Text = string.Format(Tr("HUD_GOLD"), faction.Treasury.Gold);
-            _income.Text = string.Format(Tr("HUD_INCOME"), faction.IncomePerSecond);
+            float net = faction.NetPerMinute / 60f;
+            _income.Text = string.Format(Tr("HUD_INCOME"), net);
+            _income.Modulate = net < 0f ? ProblemColor : Colors.White;
+            _income.TooltipText = string.Format(Tr("HUD_INCOME_TOOLTIP"), faction.IncomePerSecond,
+                faction.UpkeepPerMinute / 60f, faction.ArmyUpkeepPerMinute, _match.Sim.Rules.UpkeepAllowance);
             _army.Text = string.Format(Tr("HUD_ARMY"), faction.Population, faction.ArmyCap);
             _army.Modulate = faction.Population >= faction.ArmyCap ? ProblemColor : Colors.White;
             foreach (var (button, type) in _buildButtons)
@@ -141,6 +146,12 @@ public partial class Hud : CanvasLayer
                     ShowMessage(string.Format(Tr("MSG_BUILDING_LOST"), name));
                 else if (destroyed.KillerFactionId == player)
                     ShowMessage(string.Format(Tr("MSG_ENEMY_BUILDING_DESTROYED"), name));
+                break;
+            case DepositExhausted exhausted when exhausted.FactionId == player:
+                ShowMessage(string.Format(Tr("MSG_DEPOSIT_EXHAUSTED"), _match.Sim.Rules.DepositRegenSeconds));
+                break;
+            case DepositRestored restored when restored.FactionId == player:
+                ShowMessage(Tr("MSG_DEPOSIT_RESTORED"));
                 break;
             case FactionEliminated eliminated when eliminated.FactionId != player:
                 ShowMessage(string.Format(Tr("MSG_FACTION_FELL"), Names.Faction(eliminated.FactionId)));
@@ -215,7 +226,8 @@ public partial class Hud : CanvasLayer
             // Buttons stay clickable: the simulation is the judge and explains a refusal with a message.
             var error = _match.Sim.CanRecruit(_match.LocalFactionId, building.Id, typeId);
             button.Modulate = error == RecruitError.None ? Colors.White : ProblemColor;
-            button.TooltipText = error == RecruitError.None ? "" : Describe(error);
+            string upkeep = string.Format(Tr("INFO_UPKEEP"), type.Upkeep);
+            button.TooltipText = error == RecruitError.None ? upkeep : Describe(error) + "\n" + upkeep;
         }
 
         bool training = own && building.Queue.Count > 0;
@@ -262,7 +274,7 @@ public partial class Hud : CanvasLayer
     {
         var parts = new List<string>();
         if (type.IsMine)
-            parts.Add(instance?.Deposit is { } d ? string.Format(Tr("INFO_MINING"), d.Yield) : Tr("INFO_MINE"));
+            parts.Add(instance?.Deposit is { } d ? DescribeDeposit(d) : Tr("INFO_MINE"));
         if (type.Income > 0)
             parts.Add(string.Format(Tr("INFO_INCOME"), type.Income));
         if (type.ArmyCap > 0)
@@ -274,6 +286,14 @@ public partial class Hud : CanvasLayer
         if (type.IsCapital)
             parts.Add(Tr("INFO_CAPITAL"));
         return string.Join("  ·  ", parts);
+    }
+
+    private string DescribeDeposit(Lordsio.Sim.World.GoldDeposit d)
+    {
+        if (d.IsExhausted)
+            return string.Format(Tr("INFO_DEPOSIT_EXHAUSTED"), Mathf.CeilToInt(d.RegenTicksLeft / (float)Simulation.TicksPerSecond));
+        string mining = string.Format(Tr("INFO_MINING"), d.Yield);
+        return d.IsEndless ? mining : mining + "  ·  " + string.Format(Tr("INFO_DEPOSIT_RESERVE"), d.Reserve, d.Capacity);
     }
 
     private string Describe(RecruitError error) => Tr(error switch

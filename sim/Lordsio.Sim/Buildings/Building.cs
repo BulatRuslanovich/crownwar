@@ -79,8 +79,8 @@ public sealed class Building : Entity
     public bool IsComplete => ConstructionTicksLeft == 0;
     public float ConstructionProgress => _constructionTicks == 0 ? 1f : 1f - (float)ConstructionTicksLeft / _constructionTicks;
 
-    /// <summary>Gold per second this building earns once complete.</summary>
-    public int Income => !IsComplete ? 0 : Type.IsMine ? Deposit?.Yield ?? 0 : Type.Income;
+    /// <summary>Gold per second this building earns: once complete, and for a mine while its deposit is not exhausted.</summary>
+    public int Income => !IsComplete ? 0 : Type.IsMine ? Deposit is { IsExhausted: false } d ? d.Yield : 0 : Type.Income;
 
     public override int MaxHealth => Type.MaxHealth;
     public override float RangedArmor => Type.RangedArmor;

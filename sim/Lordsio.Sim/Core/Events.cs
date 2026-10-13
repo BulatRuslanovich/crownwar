@@ -5,6 +5,12 @@ namespace Lordsio.Sim.Core;
 /// <summary>Something that happened during a tick, for the view (messages, sounds, effects) and bots.</summary>
 public abstract record SimEvent(int FactionId);
 
+/// <summary>A mined deposit ran dry; <see cref="SimEvent.FactionId"/> owns the mine on it.</summary>
+public sealed record DepositExhausted(int FactionId, int DepositId) : SimEvent(FactionId);
+
+/// <summary>An exhausted deposit refilled; <see cref="SimEvent.FactionId"/> owns the mine on it, or -1.</summary>
+public sealed record DepositRestored(int FactionId, int DepositId) : SimEvent(FactionId);
+
 public enum RecruitError
 {
     None,

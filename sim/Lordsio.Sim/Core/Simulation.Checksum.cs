@@ -38,9 +38,15 @@ public sealed partial class Simulation
             hash.Add(BitConverter.SingleToInt32Bits(projectile.Position.Y));
             hash.Add(projectile.Target.Id);
         }
+        foreach (var deposit in _deposits)
+        {
+            hash.Add(deposit.Reserve);
+            hash.Add(deposit.RegenTicksLeft);
+        }
         foreach (var faction in _factions)
         {
             hash.Add(faction.Treasury.Gold);
+            hash.Add(faction.Treasury.Remainder);
             hash.Add(faction.IsEliminated ? 1 : 0);
         }
         return hash.Value;

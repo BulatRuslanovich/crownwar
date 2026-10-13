@@ -90,8 +90,8 @@ public class BalanceReport
         var difficulties = new[] { BotDifficulty.Easy, BotDifficulty.Normal, BotDifficulty.Hard };
         int[] checkpoints = { 30, 60, 120, 180, 300 };
         const int seeds = 8;
-        // [difficulty or idle][checkpoint] → (income, mines, earned) summed over seeds
-        var sums = new (int Income, int Mines, int Earned)[difficulties.Length + 1, checkpoints.Length];
+        // [difficulty or idle][checkpoint] → (income, upkeep per minute, mines, earned) summed over seeds
+        var sums = new (int Income, int Upkeep, int Mines, int Earned)[difficulties.Length + 1, checkpoints.Length];
 
         for (int seed = 1; seed <= seeds; seed++)
         {
@@ -112,7 +112,7 @@ public class BalanceReport
                 {
                     int mines = sim.Buildings.Count(b => b.FactionId == faction.Id && b.IsAlive && b.IsComplete && b.Type.IsMine);
                     var old = sums[faction.Id, next];
-                    sums[faction.Id, next] = (old.Income + faction.IncomePerSecond, old.Mines + mines,
+                    sums[faction.Id, next] = (old.Income + faction.IncomePerSecond, old.Upkeep + faction.UpkeepPerMinute, old.Mines + mines,
                         old.Earned + earned[faction.Id] / Simulation.TicksPerSecond);
                 }
                 next++;
@@ -120,11 +120,11 @@ public class BalanceReport
         }
 
         string[] names = difficulties.Select(d => d.ToString()).Append("idle").ToArray();
-        TestContext.Out.WriteLine($"average of {seeds} matches: income/s, mines, gold earned so far");
+        TestContext.Out.WriteLine($"average of {seeds} matches: income/s, upkeep/s, mines, gold earned so far (before upkeep)");
         for (int c = 0; c < checkpoints.Length; c++)
         {
             TestContext.Out.WriteLine($"{checkpoints[c] / 60}:{checkpoints[c] % 60:00}  " + string.Join("   ", names.Select((n, f) =>
-                $"{n,-6} {sums[f, c].Income / (float)seeds,4:0.0}/s {sums[f, c].Mines / (float)seeds,3:0.0} mines {sums[f, c].Earned / seeds,5}g")));
+                $"{n,-6} {sums[f, c].Income / (float)seeds,4:0.0}/s -{sums[f, c].Upkeep / 60f / seeds,3:0.0} {sums[f, c].Mines / (float)seeds,3:0.0} mines {sums[f, c].Earned / seeds,5}g")));
         }
     }
 

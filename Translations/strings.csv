@@ -27,7 +27,7 @@ END_DEFEAT,Defeat,Поражение
 END_STATS,"Match time: {0}:{1:00}\nTroops trained: {2}    lost: {3}    enemies killed: {4}\nBuildings built: {5}    lost: {6}    destroyed: {7}","Время матча: {0}:{1:00}\nНанято войск: {2}    потеряно: {3}    убито врагов: {4}\nПостроено зданий: {5}    потеряно: {6}    разрушено: {7}"
 END_KEEP_WATCHING,Keep watching,Смотреть дальше
 HUD_GOLD,Gold {0},Золото {0}
-HUD_INCOME,+{0}/s,+{0}/с
+HUD_INCOME,{0:+0.#;-0.#;0}/s,{0:+0.#;-0.#;0}/с
 HUD_ARMY,Army {0}/{1},Армия {0}/{1}
 HUD_GOLD_SHORT,g,з
 HUD_YOURS,yours,ваше
@@ -113,3 +113,13 @@ NET_NEED_TWO_TEAMS,"To start, you need at least two sides on different teams.",�
 NET_WAITING_HOST_START,Waiting for the host to start the match...,"Ждём, когда хост начнёт матч..."
 NET_WAITING,Waiting for other players...,Ожидание других игроков...
 NET_PLAYER_LEFT,{0} left the game — a bot takes over.,{0} покидает игру — управление переходит к боту.
+HUD_INCOME_TOOLTIP,"Castle and mines: +{0}/s
+Army upkeep: -{1:0.#}/s
+(the army costs {2} gold/min, the first {3} are free)","Замок и шахты: +{0}/с
+Содержание армии: -{1:0.#}/с
+(армия стоит {2} золота/мин, первые {3} бесплатно)"
+INFO_UPKEEP,Upkeep {0} gold/min,Содержание {0} золота/мин
+INFO_DEPOSIT_RESERVE,reserve {0}/{1},запас {0}/{1}
+INFO_DEPOSIT_EXHAUSTED,Deposit exhausted — refills in {0} s,Месторождение истощено — восстановится через {0} с
+MSG_DEPOSIT_EXHAUSTED,A mine has exhausted its deposit — it refills in {0:0} s,Шахта истощила месторождение — оно восстановится через {0:0} с
+MSG_DEPOSIT_RESTORED,A deposit has refilled — the mine is digging again,Месторождение восстановилось — шахта снова добывает золото

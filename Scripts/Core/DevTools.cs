@@ -25,6 +25,9 @@ namespace Lordsio.Core;
 ///   --pause                  open the pause menu right away
 ///   --debug-hud              show the developer overlay (F3 toggles it in game)
 ///   --demo-end=victory|defeat show the end screen (view only, the match goes on)
+///   --demo-autoplay          a Hard bot plays the player's faction (to watch a match unfold)
+///   --demo-time-scale=&lt;x&gt;    run the game x times faster (timers, including --screenshot-delay, scale too)
+///   --demo-select-mine       right before the screenshot, select the player's first mine
 /// </summary>
 public static class DevTools
 {
@@ -43,6 +46,10 @@ public static class DevTools
     {
         if (Arg(args, "--zoom-index") is { } zoom)
             match.Camera.SetZoomIndex(int.Parse(zoom, CultureInfo.InvariantCulture));
+        if (args.Contains("--demo-autoplay"))
+            match.AddBot(match.LocalFactionId, Sim.AI.BotDifficulty.Hard);
+        if (Arg(args, "--demo-time-scale") is { } scale)
+            Godot.Engine.TimeScale = double.Parse(scale, CultureInfo.InvariantCulture);
         if (Arg(args, "--demo-gold") is { } gold)
             match.Sim.GetFaction(match.LocalFactionId)!.Treasury.Add(int.Parse(gold, CultureInfo.InvariantCulture));
         if (args.Contains("--demo-build"))
@@ -64,6 +71,16 @@ public static class DevTools
             match.PreviewEndScreen(victory: end == "victory");
         if (args.Contains("--debug-hud"))
             match.GetNode<Godot.CanvasLayer>("DebugHud").Visible = true;
+    }
+
+    /// <summary>--demo-select-mine: shows a mine's panel in a screenshot taken late in a match.</summary>
+    public static void SelectFirstMine(MatchController match)
+    {
+        if (match.Sim.Buildings.FirstOrDefault(b => b.FactionId == match.LocalFactionId && b.Type.IsMine) is { } mine)
+        {
+            match.Selection.SelectBuilding(mine.Id);
+            match.Camera.CenterOn(SimConvert.ToWorld(mine.Position));
+        }
     }
 
     public static string? Arg(string[] args, string name)

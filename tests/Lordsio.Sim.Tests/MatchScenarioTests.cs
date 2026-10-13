@@ -94,6 +94,7 @@ public class MatchScenarioTests
         // Starting armies stand by their castles, far out of each other's sight.
         Assert.That(sim.IsOver, Is.False);
         Assert.That(sim.Units, Has.Count.EqualTo(units));
-        Assert.That(sim.GetFaction(0)!.Treasury.Gold, Is.EqualTo(200 + 300 * 3));
+        // Five minutes of castle income minus whatever upkeep of the starting army the allowance does not cover.
+        Assert.That(sim.GetFaction(0)!.Treasury.Gold, Is.EqualTo(200 + 300 * 3 - 5 * sim.GetFaction(0)!.UpkeepPerMinute));
     }
 }

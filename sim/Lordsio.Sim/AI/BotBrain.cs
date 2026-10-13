@@ -138,7 +138,8 @@ public sealed class BotBrain
                 }
             }
         }
-        if (OwnBuildings().Count(b => b.Type.IsMine) < _profile.MaxMines && MayStartMine())
+        // Exhausted mines do not count: while they refill, the bot may open new ones elsewhere.
+        if (OwnBuildings().Count(b => b.Type.IsMine && b.Deposit is not { IsExhausted: true }) < _profile.MaxMines && MayStartMine())
             _expansion ??= ChooseExpansion(capital);
         else
             _expansion = null;
@@ -240,7 +241,7 @@ public sealed class BotBrain
         int home = _sim.Map.ComponentOf(Cell.FromPosition(SpawnSide(capital)));
 
         return _sim.Deposits
-            .Where(d => d.MineId == 0 && IsSafe(d.Center))
+            .Where(d => d.MineId == 0 && !d.IsExhausted && IsSafe(d.Center))
             .Where(d => NearbyComponent(d.Center) == home)
             .Where(d => enemyCapitals.All(e => Vector2.Distance(d.Center, e.Position) > Vector2.Distance(d.Center, capital.Position) * 0.8f))
             .OrderBy(d => Vector2.Distance(d.Center, capital.Position) / d.Yield)

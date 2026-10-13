@@ -1,19 +1,25 @@
 {
   "startingGold": 200,
   "buildRadius": 5,
+  "depositReserveSeconds": 240,
+  "depositRegenSeconds": 90,
+  "upkeepAllowance": 60,
   "startingUnits": [{ "unit": "infantry", "count": 4 }],
   "units": [
     {
       "id": "infantry", "name": "Infantry", "speed": 3.5, "radius": 0.3, "cost": 50, "buildTime": 4,
-      "health": 100, "damage": 12, "attackRange": 0.25, "attackCooldown": 1.0, "sightRange": 6
+      "health": 100, "damage": 12, "attackRange": 0.25, "attackCooldown": 1.0, "sightRange": 6,
+      "upkeep": 12
     },
     {
       "id": "archer", "name": "Archer", "speed": 3.4, "radius": 0.3, "cost": 60, "buildTime": 5,
-      "health": 60, "damage": 9, "attackRange": 5, "attackCooldown": 1.4, "sightRange": 7, "projectileSpeed": 12
+      "health": 60, "damage": 9, "attackRange": 5, "attackCooldown": 1.4, "sightRange": 7, "projectileSpeed": 12,
+      "upkeep": 15
     },
     {
       "id": "heavy", "name": "Heavy", "speed": 2.6, "radius": 0.36, "cost": 110, "buildTime": 7,
-      "health": 240, "damage": 22, "attackRange": 0.3, "attackCooldown": 1.6, "sightRange": 6, "rangedArmor": 0.6
+      "health": 240, "damage": 22, "attackRange": 0.3, "attackCooldown": 1.6, "sightRange": 6, "rangedArmor": 0.6,
+      "upkeep": 24
     }
   ],
   "buildings": [

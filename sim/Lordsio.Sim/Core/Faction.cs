@@ -20,6 +20,15 @@ public sealed class Faction
     /// <summary>Gold per second from the capital and working mines; recomputed every tick.</summary>
     public int IncomePerSecond { get; internal set; }
 
+    /// <summary>Upkeep of the whole living army, gold per minute, before the free allowance.</summary>
+    public int ArmyUpkeepPerMinute { get; internal set; }
+
+    /// <summary>Gold per minute actually paid: army upkeep above the rules' free allowance; recomputed every tick.</summary>
+    public int UpkeepPerMinute { get; internal set; }
+
+    /// <summary>Income minus upkeep, in gold per minute. When negative, gold drains down to zero.</summary>
+    public int NetPerMinute => IncomePerSecond * 60 - UpkeepPerMinute;
+
     /// <summary>Maximum army size (living units plus units in training); recomputed every tick.</summary>
     public int ArmyCap { get; internal set; }
 

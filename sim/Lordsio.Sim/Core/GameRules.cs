@@ -12,13 +12,21 @@ public sealed class GameRules
     private readonly Dictionary<string, BuildingType> _buildingTypes;
 
     public GameRules(int startingGold, float buildRadius, IReadOnlyList<StartingUnits> startingUnits,
-        UnitCatalog units, IEnumerable<BuildingType> buildingTypes)
+        UnitCatalog units, IEnumerable<BuildingType> buildingTypes,
+        float depositReserveSeconds = 0f, float depositRegenSeconds = 0f, int upkeepAllowance = 0)
     {
         if (startingGold < 0)
             throw new ArgumentOutOfRangeException(nameof(startingGold));
         if (buildRadius <= 0f)
             throw new ArgumentOutOfRangeException(nameof(buildRadius));
+        if (depositReserveSeconds < 0f || depositRegenSeconds < 0f)
+            throw new ArgumentOutOfRangeException(nameof(depositReserveSeconds), "Deposit timings cannot be negative.");
+        if (upkeepAllowance < 0)
+            throw new ArgumentOutOfRangeException(nameof(upkeepAllowance));
         StartingGold = startingGold;
+        DepositReserveSeconds = depositReserveSeconds;
+        DepositRegenSeconds = depositRegenSeconds;
+        UpkeepAllowance = upkeepAllowance;
         BuildRadius = buildRadius;
         StartingUnits = startingUnits;
         Units = units;
@@ -51,6 +59,17 @@ public sealed class GameRules
     }
 
     public int StartingGold { get; }
+
+    /// <summary>
+    /// Seconds of mining a deposit holds (its reserve is yield × this); 0 means deposits never run out.
+    /// </summary>
+    public float DepositReserveSeconds { get; }
+
+    /// <summary>Seconds an exhausted deposit needs to refill completely; its mine earns nothing meanwhile.</summary>
+    public float DepositRegenSeconds { get; }
+
+    /// <summary>Army upkeep (gold per minute) each faction gets for free: a small garrison costs nothing.</summary>
+    public int UpkeepAllowance { get; }
 
     /// <summary>A building may only be placed this close (tiles, to its center) to one of the builder's units.</summary>
     public float BuildRadius { get; }
@@ -99,7 +118,8 @@ public sealed class GameRules
                 AttackCooldown: u.GetProperty("attackCooldown").GetSingle(),
                 SightRange: u.GetProperty("sightRange").GetSingle(),
                 ProjectileSpeed: OptionalSingle(u, "projectileSpeed"),
-                RangedArmor: OptionalSingle(u, "rangedArmor")));
+                RangedArmor: OptionalSingle(u, "rangedArmor"),
+                Upkeep: OptionalInt(u, "upkeep")));
         }
 
         var buildings = new List<BuildingType>();
@@ -142,7 +162,10 @@ public sealed class GameRules
             root.GetProperty("buildRadius").GetSingle(),
             startingUnits,
             new UnitCatalog(units),
-            buildings);
+            buildings,
+            OptionalSingle(root, "depositReserveSeconds"),
+            OptionalSingle(root, "depositRegenSeconds"),
+            OptionalInt(root, "upkeepAllowance"));
     }
 
     private static float OptionalSingle(JsonElement element, string name) =>

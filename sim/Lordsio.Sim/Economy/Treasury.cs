@@ -1,8 +1,9 @@
 namespace Lordsio.Sim.Economy;
 
 /// <summary>
-/// A faction's gold. Integer arithmetic only: income is given per second and paid out per tick,
-/// with the fractional part carried over, so N seconds of income always add exactly N × rate.
+/// A faction's gold. Integer arithmetic only: a rate is given per period (a second, a minute) and paid out
+/// per tick, with the fractional part carried over, so N periods always add exactly N × rate.
+/// A negative rate (upkeep above income) drains gold, but never below zero.
 /// </summary>
 public sealed class Treasury
 {
@@ -37,13 +38,21 @@ public sealed class Treasury
         Gold += amount;
     }
 
-    /// <summary>Pays one tick's share of <paramref name="incomePerSecond"/>.</summary>
-    public void AccrueTick(int incomePerSecond, int ticksPerSecond)
+    /// <summary>Pays (or, if negative, charges) one tick's share of <paramref name="amountPerPeriod"/>.</summary>
+    public void AccrueTick(int amountPerPeriod, int ticksPerPeriod)
     {
-        if (incomePerSecond < 0)
-            throw new ArgumentOutOfRangeException(nameof(incomePerSecond));
-        _incomeRemainder += incomePerSecond;
-        Gold += _incomeRemainder / ticksPerSecond;
-        _incomeRemainder %= ticksPerSecond;
+        if (ticksPerPeriod <= 0)
+            throw new ArgumentOutOfRangeException(nameof(ticksPerPeriod));
+        _incomeRemainder += amountPerPeriod;
+        int whole = (int)Math.Floor(_incomeRemainder / (double)ticksPerPeriod);
+        _incomeRemainder -= whole * ticksPerPeriod;
+        Gold += whole;
+        if (Gold < 0)
+        {
+            Gold = 0;
+            _incomeRemainder = 0; // no debt: an empty treasury simply stays empty
+        }
     }
+
+    internal int Remainder => _incomeRemainder;
 }

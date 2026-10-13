@@ -17,6 +17,12 @@ public partial class BuildingView : Node2D
     private static readonly Color BarBack = new(0f, 0f, 0f, 0.65f);
     private static readonly Color TrainingFill = new("7cff6b");
     private static readonly Color ConstructionFill = new("ffd44a");
+    private static readonly Color ReserveFill = new("e8b830");
+    private static readonly Color RegenFill = new("5fb4ff");
+    /// <summary>A mine on an exhausted deposit stands idle: drawn dimmed.</summary>
+    private static readonly Color IdleTint = new(0.42f, 0.42f, 0.5f);
+    /// <summary>The reserve bar shows up by itself once a deposit is this close to running dry.</summary>
+    private const float LowReserve = 0.25f;
 
     private Building _building = null!;
     private Sprite2D _body = null!;
@@ -24,7 +30,7 @@ public partial class BuildingView : Node2D
     private Node2D _overlay = null!;
     private Color _owner;
     private bool _selected;
-    private (int Health, bool Complete, float Construction, int Queue, float Training) _drawn;
+    private (int Health, bool Complete, float Construction, int Queue, float Training, bool Idle, int Deposit) _drawn;
 
     public void Initialize(Building building)
     {
@@ -58,14 +64,18 @@ public partial class BuildingView : Node2D
     public override void _Process(double delta)
     {
         var b = _building;
-        var now = (b.Health, b.IsComplete, b.ConstructionProgress, b.Queue.Count, b.Queue.Count > 0 ? b.Queue[0].Progress : 0f);
+        bool idle = b.Deposit is { IsExhausted: true };
+        // Deposit bars change in whole percents, so the overlay is not redrawn every tick.
+        int deposit = b.Deposit is { IsEndless: false } d ? (int)(DepositFraction(d) * 100f) : 0;
+        var now = (b.Health, b.IsComplete, b.ConstructionProgress, b.Queue.Count, b.Queue.Count > 0 ? b.Queue[0].Progress : 0f, idle, deposit);
         if (now == _drawn)
             return;
         _drawn = now;
-        // Sites fade in as they are built.
+        // Sites fade in as they are built; an idle mine is dimmed.
         float alpha = b.IsComplete ? 1f : 0.45f + 0.55f * b.ConstructionProgress;
-        _body.SelfModulate = Colors.White with { A = alpha };
-        _team.SelfModulate = Colors.White with { A = alpha };
+        var tint = idle ? IdleTint : Colors.White;
+        _body.SelfModulate = tint with { A = alpha };
+        _team.SelfModulate = tint with { A = alpha };
         _overlay.QueueRedraw();
     }
 
@@ -105,6 +115,19 @@ public partial class BuildingView : Node2D
             Bar(y, fraction, new Color(1f - fraction, 0.3f + 0.6f * fraction, 0.2f));
             y -= 5f;
         }
+        if (b.IsComplete && b.Deposit is { IsEndless: false } d)
+        {
+            if (d.IsExhausted)
+            {
+                Bar(y, d.RegenProgress, RegenFill);
+                y -= 5f;
+            }
+            else if (_selected || DepositFraction(d) < LowReserve)
+            {
+                Bar(y, DepositFraction(d), ReserveFill);
+                y -= 5f;
+            }
+        }
         if (b.Queue.Count > 0)
         {
             Bar(y, b.Queue[0].Progress, TrainingFill);
@@ -118,6 +141,10 @@ public partial class BuildingView : Node2D
             _overlay.DrawRect(new Rect2(-width / 2 + 1, barY + 1, (width - 2) * Mathf.Clamp(fraction, 0f, 1f), 2), fill);
         }
     }
+
+    /// <summary>Reserve left, or refill progress while exhausted, as 0..1.</summary>
+    private static float DepositFraction(Lordsio.Sim.World.GoldDeposit d) =>
+        d.IsExhausted ? d.RegenProgress : (float)d.Reserve / d.Capacity;
 
     private Sprite2D MakeSprite(string path, Color modulate)
     {

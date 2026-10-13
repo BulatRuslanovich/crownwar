@@ -66,7 +66,7 @@ public partial class Main : Node
         if (DevTools.Arg(args, "--screenshot") is { } screenshot)
         {
             double delay = double.Parse(DevTools.Arg(args, "--screenshot-delay") ?? "2", CultureInfo.InvariantCulture);
-            _ = TakeScreenshotAndQuit(screenshot, delay);
+            _ = TakeScreenshotAndQuit(screenshot, delay, System.Array.IndexOf(args, "--demo-select-mine") >= 0);
         }
     }
 
@@ -252,10 +252,15 @@ public partial class Main : Node
         GetTree().Quit();
     }
 
-    private async System.Threading.Tasks.Task TakeScreenshotAndQuit(string path, double delay)
+    private async System.Threading.Tasks.Task TakeScreenshotAndQuit(string path, double delay, bool selectMine)
     {
         // Process even while the game is paused, so paused screens can be captured too.
         await ToSignal(GetTree().CreateTimer(delay, processAlways: true), SceneTreeTimer.SignalName.Timeout);
+        if (selectMine && _screen is MatchController match)
+        {
+            DevTools.SelectFirstMine(match);
+            await ToSignal(GetTree().CreateTimer(0.2, processAlways: true), SceneTreeTimer.SignalName.Timeout);
+        }
         await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
         var error = GetViewport().GetTexture().GetImage().SavePng(path);
         GD.Print($"Screenshot saved to {path}: {error}");

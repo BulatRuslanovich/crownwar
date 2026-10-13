@@ -49,8 +49,12 @@ public sealed partial class Simulation
         _pathfinder = new Pathfinder(Map);
         _combat = new CombatSystem(Map, _pathfinder, _projectiles, e => _events.Add(e), AreEnemies);
 
+        int regenTicks = (int)MathF.Round(rules.DepositRegenSeconds * TicksPerSecond);
         foreach (var deposit in map.Deposits)
-            _deposits.Add(new GoldDeposit(_deposits.Count + 1, deposit.Anchor, deposit.Yield));
+        {
+            int capacity = (int)MathF.Round(deposit.Yield * rules.DepositReserveSeconds);
+            _deposits.Add(new GoldDeposit(_deposits.Count + 1, deposit.Anchor, deposit.Yield, capacity, regenTicks));
+        }
 
         var factionIds = Enumerable.Range(0, setup.FactionCount)
             .Concat(map.UnitSpawns.Select(u => u.FactionId))
@@ -130,6 +134,7 @@ public sealed partial class Simulation
         while (_pending.TryDequeue(out var command))
             Apply(command);
 
+        UpdateDeposits();
         UpdateEconomy(payIncome: true);
         AdvanceConstructionAndTraining();
 

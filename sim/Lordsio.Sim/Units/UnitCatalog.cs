@@ -6,6 +6,7 @@ namespace Lordsio.Sim.Units;
 /// <item><see cref="AttackRange"/> is measured edge to edge between the two bodies.</item>
 /// <item><see cref="ProjectileSpeed"/> of 0 means a melee attack that lands instantly.</item>
 /// <item><see cref="RangedArmor"/> is the fraction of projectile damage ignored (0..1).</item>
+/// <item><see cref="Upkeep"/> is gold per minute the owner pays while the unit lives.</item>
 /// </list>
 /// </summary>
 public sealed record UnitType(
@@ -21,7 +22,8 @@ public sealed record UnitType(
     float AttackCooldown,
     float SightRange,
     float ProjectileSpeed = 0f,
-    float RangedArmor = 0f)
+    float RangedArmor = 0f,
+    int Upkeep = 0)
 {
     public bool IsRanged => ProjectileSpeed > 0f;
 }
