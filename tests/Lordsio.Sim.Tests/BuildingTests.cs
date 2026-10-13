@@ -120,11 +120,13 @@ public class BuildingPlacementTests
     }
 
     [Test]
-    public void TowersAreLimitedToTwentyPerPlayer()
+    public void BuildingLimitsPerPlayer()
     {
         var rules = GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
         Assert.That(rules.GetBuildingType("tower").MaxCount, Is.EqualTo(20));
-        Assert.That(rules.GetBuildingType("barracks").MaxCount, Is.EqualTo(0), "other buildings are unlimited");
+        Assert.That(rules.GetBuildingType("barracks").MaxCount, Is.EqualTo(10));
+        Assert.That(rules.GetBuildingType("watchtower").MaxCount, Is.EqualTo(10));
+        Assert.That(rules.GetBuildingType("mine").MaxCount, Is.EqualTo(0), "mines are limited by the deposits only");
     }
 
     [Test]

@@ -34,7 +34,7 @@
       "mine": true
     },
     {
-      "id": "barracks", "name": "Barracks", "size": 2, "cost": 150, "buildTime": 20, "health": 700, "rangedArmor": 0.7,
+      "id": "barracks", "name": "Barracks", "size": 2, "cost": 150, "buildTime": 20, "health": 700, "rangedArmor": 0.7, "maxCount": 10,
       "armyCap": 10, "recruits": ["infantry", "archer", "heavy"]
     },
     {
@@ -42,7 +42,7 @@
       "attack": { "damage": 20, "range": 7, "cooldown": 1.0, "projectileSpeed": 15 }
     },
     {
-      "id": "watchtower", "name": "Watchtower", "size": 3, "cost": 300, "buildTime": 25, "health": 2000, "rangedArmor": 0.8,
+      "id": "watchtower", "name": "Watchtower", "size": 3, "cost": 300, "buildTime": 25, "health": 2000, "rangedArmor": 0.8, "maxCount": 10,
       "sight": 16
     }
   ],

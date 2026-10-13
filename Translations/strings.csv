@@ -37,8 +37,6 @@ HUD_UNDER_CONSTRUCTION,Under construction: {0:0}%,Строится: {0:0}%
 HUD_HEALTH,Health {0}/{1},Прочность {0}/{1}
 HUD_TRAINING,Training {0},Обучается: {0}
 HUD_QUEUED,(+{0} queued),(+{0} в очереди)
-BUILD_PLACING,"Placing {0}: {1}    (LMB place, Shift+LMB place more, RMB / Esc cancel)","Строим {0}: {1}    (ЛКМ поставить, Shift+ЛКМ ещё, ПКМ / Esc отмена)"
-BUILD_HINT,Build near your own troops. Mines go on gold deposits.,Стройте рядом со своими войсками. Шахты ставятся на месторождения золота.
 BUILD_OK,ok,можно строить
 BUILD_ERR_NO_UNITS,your troops must be nearby,рядом должны быть ваши войска
 BUILD_ERR_NEEDS_DEPOSIT,mines must stand on a gold deposit,шахта ставится только на месторождение
@@ -65,6 +63,7 @@ INFO_INCOME,Income +{0}/s,Доход +{0}/с
 INFO_ARMY_CAP,Army limit +{0},Лимит армии +{0}
 INFO_TRAINS,Trains troops,Обучает войска
 INFO_SHOOTS,Shoots enemies within {0:0} tiles,Стреляет по врагам в радиусе {0:0} клеток
+INFO_LIMIT,At most {0} per player,Не больше {0} на игрока
 INFO_SIGHT,Does not shoot · reveals the map within {0:0} tiles,Не стреляет · открывает обзор в радиусе {0:0} клеток
 INFO_CAPITAL,Lose it and you lose the match,Потеряете его — проиграете матч
 FACTION_N,Faction {0},Фракция {0}

@@ -145,9 +145,11 @@ public partial class Hud : CanvasLayer
 
     private void UpdateRest(double delta)
     {
-        _buildHint.Text = _placement.ActiveType is { } placing
-            ? string.Format(Tr("BUILD_PLACING"), Names.Of(placing), DescribePlacement(_placement.CurrentError))
-            : Tr("BUILD_HINT");
+        // Only while placing, and only to say why it cannot go here.
+        bool blocked = _placement.ActiveType != null && _placement.CurrentError != BuildError.None;
+        _buildHint.Visible = blocked;
+        if (blocked)
+            _buildHint.Text = DescribePlacement(_placement.CurrentError);
 
         UpdateBuildingPanel();
 
@@ -233,12 +235,15 @@ public partial class Hud : CanvasLayer
         _alert.PointAt(simPosition);
     }
 
-    /// <summary>Cost, how many of a limited kind stand already, and the hotkey; the name is in the tooltip.</summary>
+    /// <summary>
+    /// Two short lines next to the picture: the cost, then the hotkey and how many of a limited kind stand already.
+    /// The name and the rest are in the tooltip.
+    /// </summary>
     private string BuildButtonText(BuildingType type)
     {
-        string hotkey = BuildHotkeys.TryGetValue(type.Id, out var key) ? $"  [{key}]" : "";
-        string count = type.MaxCount > 0 ? $"  {_match.Sim.CountBuildings(_match.LocalFactionId, type.Id)}/{type.MaxCount}" : "";
-        return $"{type.Cost}{Tr("HUD_GOLD_SHORT")}{count}{hotkey}";
+        string hotkey = BuildHotkeys.TryGetValue(type.Id, out var key) ? $"[{key}]" : "";
+        string count = type.MaxCount > 0 ? $"{_match.Sim.CountBuildings(_match.LocalFactionId, type.Id)}/{type.MaxCount}" : "";
+        return $"{type.Cost}{Tr("HUD_GOLD_SHORT")}\n{string.Join(" ", new[] { hotkey, count }.Where(p => p.Length > 0))}";
     }
 
     private bool AtLimit(BuildingType type) =>
@@ -272,8 +277,13 @@ public partial class Hud : CanvasLayer
                 IconAlignment = HorizontalAlignment.Left,
                 ToggleMode = true,
                 FocusMode = Control.FocusModeEnum.None,
-                TooltipText = Names.Of(type) + "\n" + DescribeBuildingType(type),
+                TooltipText = Names.Of(type) + "\n" + DescribeBuildingType(type)
+                              + (type.MaxCount > 0 ? "\n" + string.Format(Tr("INFO_LIMIT"), type.MaxCount) : ""),
             };
+            // Compact: tall buildings are drawn narrower so every button stays about as high as the text.
+            button.AddThemeConstantOverride("icon_max_width", 22);
+            button.AddThemeConstantOverride("h_separation", 6);
+            button.AddThemeFontSizeOverride("font_size", 13);
             string id = type.Id;
             button.Pressed += () =>
             {
