@@ -75,7 +75,19 @@ dotnet test tests/Lordsio.Sim.Tests -c Release --filter "TestCategory=Balance"  
 Godot_v4.7.2-stable_mono_win64_console.exe --path .
 ```
 
-Dev-флаги (после `--`; любой, кроме `--screenshot*`, запускает матч сразу, минуя меню; полный список — `Scripts/Core/DevTools.cs`):
+### Сборка для Windows
+Нужны шаблоны экспорта Godot 4.7.2 mono (редактор → «Управление шаблонами экспорта»). Пресет «Windows Desktop»
+лежит в `export_presets.cfg` (включает `*.txt` и `*.json`):
+```sh
+mkdir -p build/windows
+Godot_v4.7.2-stable_mono_win64_console.exe --headless --path . --export-release "Windows Desktop" build/windows/Lordsio.exe
+```
+Получается `Lordsio.exe` + `Lordsio.pck` + папка `data_lordsio_windows_x86_64` со встроенным .NET (~180 МБ);
+устанавливать .NET игроку не нужно. В релизной сборке dev-флаги отключены.
+
+Аудит готовности к мультиплееру — [docs/multiplayer-audit.md](docs/multiplayer-audit.md).
+
+Dev-флаги (после `--`, только в отладочных сборках; любой, кроме `--screenshot*`, запускает матч сразу, минуя меню; полный список — `Scripts/Core/DevTools.cs`):
 - `--demo-move=<x>,<y>` — выделить всех юнитов игрока и отправить их в клетку (x, y);
 - `--zoom-index=<n>` — начальный шаг зума (0 = самый дальний);
 - `--demo-recruit=<n>` — выбрать замок игрока и заказать n юнитов;

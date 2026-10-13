@@ -23,7 +23,8 @@ public partial class Main : Node
 
     public override void _Ready()
     {
-        var args = OS.GetCmdlineUserArgs();
+        // Developer options only in debug builds; a released game ignores its command line.
+        var args = OS.IsDebugBuild() ? OS.GetCmdlineUserArgs() : System.Array.Empty<string>();
         if (DevTools.Arg(args, "--export-art") is { } previewDirectory)
         {
             Dev.ArtGenerator.ExportAll(ProjectSettings.GlobalizePath("res://"), previewDirectory);
