@@ -3,8 +3,12 @@
 [ext_resource type="Script" path="res://Scripts/Core/Main.cs" id="1_main"]
 [ext_resource type="PackedScene" path="res://Scenes/UI/MainMenu.tscn" id="2_menu"]
 [ext_resource type="PackedScene" path="res://Scenes/Match/Match.tscn" id="3_match"]
+[ext_resource type="PackedScene" path="res://Scenes/UI/NetMenu.tscn" id="4_netmenu"]
+[ext_resource type="PackedScene" path="res://Scenes/UI/Lobby.tscn" id="5_lobby"]
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
 MenuScene = ExtResource("2_menu")
 MatchScene = ExtResource("3_match")
+NetMenuScene = ExtResource("4_netmenu")
+LobbyScene = ExtResource("5_lobby")

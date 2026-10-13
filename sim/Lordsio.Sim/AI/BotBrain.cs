@@ -66,7 +66,18 @@ public sealed class BotBrain
     }
 
     public int FactionId { get; }
+
+    /// <summary>Where commands go: the simulation unless set (e.g. a networked bot sends them through lockstep).</summary>
+    public Action<Command>? CommandSink { get; set; }
     public BotMode Mode { get; private set; } = BotMode.Gather;
+
+    private void Issue(Command command)
+    {
+        if (CommandSink != null)
+            CommandSink(command);
+        else
+            _sim.Issue(command);
+    }
 
     public void Update()
     {
@@ -110,7 +121,7 @@ public sealed class BotBrain
                 var error = _sim.CanBuild(FactionId, mineType.Id, deposit.Anchor);
                 if (error == BuildError.None)
                 {
-                    _sim.Issue(new BuildCommand(FactionId, mineType.Id, deposit.Anchor));
+                    Issue(new BuildCommand(FactionId, mineType.Id, deposit.Anchor));
                     gold -= mineType.Cost;
                     _expansion = null;
                 }
@@ -171,7 +182,7 @@ public sealed class BotBrain
                 continue;
             if (gold - _nextUnit.Cost < reserve)
                 break;
-            _sim.Issue(new RecruitCommand(FactionId, building.Id, _nextUnit.Id));
+            Issue(new RecruitCommand(FactionId, building.Id, _nextUnit.Id));
             gold -= _nextUnit.Cost;
             population++;
             _nextUnit = null;
@@ -185,7 +196,7 @@ public sealed class BotBrain
 
         if (_profile.CountersComposition)
         {
-            var enemies = _sim.Units.Where(u => u.FactionId != FactionId && u.FactionId >= 0).ToList();
+            var enemies = _sim.Units.Where(u => _sim.AreEnemies(FactionId, u.FactionId) && u.FactionId >= 0).ToList();
             if (enemies.Count > 0)
             {
                 float rangedShare = enemies.Count(u => u.Type.IsRanged) / (float)enemies.Count;
@@ -217,7 +228,7 @@ public sealed class BotBrain
     private GoldDeposit? ChooseExpansion(Building capital)
     {
         var enemyCapitals = _sim.Factions
-            .Where(f => f.Id != FactionId && !f.IsEliminated)
+            .Where(f => _sim.AreEnemies(FactionId, f.Id) && !f.IsEliminated)
             .Select(f => _sim.GetBuilding(f.CapitalId)).OfType<Building>().ToList();
         int home = _sim.Map.ComponentOf(Cell.FromPosition(SpawnSide(capital)));
 
@@ -245,7 +256,7 @@ public sealed class BotBrain
             {
                 if (_sim.CanBuild(FactionId, type.Id, anchor) != BuildError.None || BlocksNeighbours(anchor, type.Size))
                     continue;
-                _sim.Issue(new BuildCommand(FactionId, type.Id, anchor));
+                Issue(new BuildCommand(FactionId, type.Id, anchor));
                 return true;
             }
         }
@@ -346,7 +357,7 @@ public sealed class BotBrain
         float bestScore = float.MaxValue;
         foreach (var building in _sim.Buildings)
         {
-            if (building.FactionId == FactionId)
+            if (!_sim.AreEnemies(FactionId, building.FactionId))
                 continue;
             if (building.Type.IsCapital && armyValue < _profile.CapitalAssaultValue)
                 continue;
@@ -388,7 +399,7 @@ public sealed class BotBrain
             .Where(u => mode == MoveMode.Move || u.Target == null || newGoal)
             .Select(u => u.Id).ToList();
         if (ids.Count > 0)
-            _sim.Issue(new MoveCommand(FactionId, ids, goal, mode));
+            Issue(new MoveCommand(FactionId, ids, goal, mode));
     }
 
     // ---------------------------------------------------------------- helpers
@@ -399,14 +410,14 @@ public sealed class BotBrain
     {
         var own = OwnBuildings().ToList();
         return _sim.Units
-            .Where(u => u.FactionId != FactionId && u.IsAlive && own.Any(b => b.SurfaceDistance(u.Position) <= ThreatRadius))
+            .Where(u => _sim.AreEnemies(FactionId, u.FactionId) && u.IsAlive && own.Any(b => b.SurfaceDistance(u.Position) <= ThreatRadius))
             .ToList();
     }
 
     /// <summary>No enemy units or buildings near the point.</summary>
     private bool IsSafe(Vector2 point) =>
-        !_sim.Units.Any(u => u.FactionId != FactionId && Vector2.Distance(u.Position, point) < DefenceRadius)
-        && !_sim.Buildings.Any(b => b.FactionId != FactionId && Vector2.Distance(b.Position, point) < DefenceRadius);
+        !_sim.Units.Any(u => _sim.AreEnemies(FactionId, u.FactionId) && Vector2.Distance(u.Position, point) < DefenceRadius)
+        && !_sim.Buildings.Any(b => _sim.AreEnemies(FactionId, b.FactionId) && Vector2.Distance(b.Position, point) < DefenceRadius);
 
     private Vector2 RallyPoint(Building capital) => SpawnSide(capital) + new Vector2(0f, 1.5f);
 

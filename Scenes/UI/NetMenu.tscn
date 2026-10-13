@@ -1,0 +1,103 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Scripts/UI/NetMenu.cs" id="1_net"]
+
+[node name="NetMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_net")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.11, 0.16, 0.11, 1)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="Center"]
+layout_mode = 2
+
+[node name="Rows" type="VBoxContainer" parent="Center/Panel"]
+custom_minimum_size = Vector2(460, 0)
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Center/Panel/Rows"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.86, 0.4, 1)
+theme_override_colors/font_outline_color = Color(0.2, 0.12, 0.04, 1)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 36
+text = "NET_TITLE"
+horizontal_alignment = 1
+
+[node name="NameRow" type="HBoxContainer" parent="Center/Panel/Rows"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="NameLabel" type="Label" parent="Center/Panel/Rows/NameRow"]
+layout_mode = 2
+text = "NET_YOUR_NAME"
+
+[node name="Name" type="LineEdit" parent="Center/Panel/Rows/NameRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+max_length = 16
+
+[node name="Host" type="Button" parent="Center/Panel/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "NET_HOST_GAME"
+
+[node name="FoundLabel" type="Label" parent="Center/Panel/Rows"]
+layout_mode = 2
+text = "NET_FOUND_GAMES"
+
+[node name="Games" type="VBoxContainer" parent="Center/Panel/Rows"]
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Empty" type="Label" parent="Center/Panel/Rows/Games"]
+modulate = Color(1, 1, 1, 0.6)
+layout_mode = 2
+text = "NET_SEARCHING"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="AddressRow" type="HBoxContainer" parent="Center/Panel/Rows"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Address" type="LineEdit" parent="Center/Panel/Rows/AddressRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "NET_ADDRESS_HINT"
+
+[node name="Join" type="Button" parent="Center/Panel/Rows/AddressRow"]
+layout_mode = 2
+text = "NET_JOIN"
+
+[node name="Status" type="Label" parent="Center/Panel/Rows"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.54, 0.5, 1)
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Back" type="Button" parent="Center/Panel/Rows"]
+layout_mode = 2
+text = "UI_BACK"

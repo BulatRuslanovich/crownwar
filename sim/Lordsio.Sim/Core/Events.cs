@@ -51,8 +51,8 @@ public sealed record UnitDied(int FactionId, int UnitId, int KillerFactionId, Ve
 /// <summary>The faction's capital fell: its army disbands and its buildings collapse.</summary>
 public sealed record FactionEliminated(int FactionId) : SimEvent(FactionId);
 
-/// <summary><see cref="SimEvent.FactionId"/> is the winner, or -1 if nobody survived.</summary>
-public sealed record MatchEnded(int FactionId) : SimEvent(FactionId);
+/// <summary>The match is over. <paramref name="WinningTeam"/> is the team that won, or -1 if nobody survived.</summary>
+public sealed record MatchEnded(int WinningTeam) : SimEvent(-1);
 
 /// <summary>
 /// A hit was applied (melee blow or arrow impact). Purely informational, for sounds and effects:

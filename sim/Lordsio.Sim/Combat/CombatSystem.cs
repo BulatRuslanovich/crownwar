@@ -30,13 +30,16 @@ internal sealed class CombatSystem
     private readonly Pathfinder _pathfinder;
     private readonly List<Projectile> _projectiles;
     private readonly Action<SimEvent> _emit;
+    private readonly Func<int, int, bool> _areEnemies;
 
-    public CombatSystem(TileGrid map, Pathfinder pathfinder, List<Projectile> projectiles, Action<SimEvent> emit)
+    public CombatSystem(TileGrid map, Pathfinder pathfinder, List<Projectile> projectiles, Action<SimEvent> emit,
+        Func<int, int, bool> areEnemies)
     {
         _map = map;
         _pathfinder = pathfinder;
         _projectiles = projectiles;
         _emit = emit;
+        _areEnemies = areEnemies;
     }
 
     public static bool InAttackRange(Unit attacker, Entity target) =>
@@ -172,17 +175,17 @@ internal sealed class CombatSystem
         return target.SurfaceDistance(unit.Position) <= limit;
     }
 
-    private static Unit? FindEnemyUnit(Unit unit, IReadOnlyList<Unit> units) =>
+    private Unit? FindEnemyUnit(Unit unit, IReadOnlyList<Unit> units) =>
         FindEnemyUnit(unit, units, unit.Type.SightRange);
 
     /// <summary>Nearest living unit of another faction within <paramref name="range"/> of the seeker's body.</summary>
-    private static Unit? FindEnemyUnit(Entity seeker, IReadOnlyList<Unit> units, float range)
+    private Unit? FindEnemyUnit(Entity seeker, IReadOnlyList<Unit> units, float range)
     {
         Unit? best = null;
         float bestDistance = float.MaxValue;
         foreach (var other in units)
         {
-            if (other.FactionId == seeker.FactionId || !other.IsAlive)
+            if (!_areEnemies(seeker.FactionId, other.FactionId) || !other.IsAlive)
                 continue;
             float distance = seeker.SurfaceDistance(other.Position);
             if (distance <= range && distance < bestDistance)
@@ -194,13 +197,13 @@ internal sealed class CombatSystem
         return best;
     }
 
-    private static Building? FindEnemyBuilding(Unit unit, IReadOnlyList<Building> buildings)
+    private Building? FindEnemyBuilding(Unit unit, IReadOnlyList<Building> buildings)
     {
         Building? best = null;
         float bestDistance = unit.Type.SightRange;
         foreach (var building in buildings)
         {
-            if (building.FactionId == unit.FactionId || !building.IsAlive)
+            if (!_areEnemies(unit.FactionId, building.FactionId) || !building.IsAlive)
                 continue;
             float distance = building.SurfaceDistance(unit.Position);
             if (distance <= bestDistance)

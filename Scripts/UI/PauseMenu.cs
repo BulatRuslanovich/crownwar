@@ -22,7 +22,9 @@ public partial class PauseMenu : CanvasLayer
         _menu = GetNode<Control>("Dim/Center");
         _settings = GetNode<SettingsPanel>("Settings");
         GetNode<Button>("Dim/Center/Panel/Rows/Resume").Pressed += () => _match.SetPaused(false);
-        GetNode<Button>("Dim/Center/Panel/Rows/Restart").Pressed += () => _match.RequestRestart();
+        var restart = GetNode<Button>("Dim/Center/Panel/Rows/Restart");
+        restart.Pressed += () => _match.RequestRestart();
+        restart.Visible = _match.Net == null;
         GetNode<Button>("Dim/Center/Panel/Rows/Settings").Pressed += () =>
         {
             _menu.Visible = false;

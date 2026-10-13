@@ -21,6 +21,9 @@ public partial class MainMenu : Control
     /// <summary>Raised with the chosen setup when the player presses Start.</summary>
     public event Action<MatchConfig>? StartRequested;
 
+    /// <summary>Raised when the player opens the network game screen.</summary>
+    public event Action? NetworkRequested;
+
     /// <summary>Pre-fills the form, e.g. with the setup of the match just left.</summary>
     public void Initialize(MatchConfig config) => _initial = config;
 
@@ -41,6 +44,7 @@ public partial class MainMenu : Control
         _seed.Text = _initial.Seed?.ToString(CultureInfo.InvariantCulture) ?? "";
 
         GetNode<Button>("Center/Panel/Rows/Start").Pressed += Start;
+        GetNode<Button>("Center/Panel/Rows/Network").Pressed += () => NetworkRequested?.Invoke();
         GetNode<Button>("Center/Panel/Rows/Settings").Pressed += () =>
         {
             _menuPanel.Visible = false;
@@ -55,6 +59,6 @@ public partial class MainMenu : Control
     private void Start()
     {
         int? seed = int.TryParse(_seed.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int s) ? s : null;
-        StartRequested?.Invoke(new MatchConfig((int)_bots.Value, Difficulties[Math.Max(0, _difficulty.Selected)], seed));
+        StartRequested?.Invoke(MatchConfig.Single((int)_bots.Value, Difficulties[Math.Max(0, _difficulty.Selected)], seed));
     }
 }

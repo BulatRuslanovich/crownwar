@@ -17,6 +17,7 @@ public partial class EndScreen : CanvasLayer
     private Label _title = null!;
     private Label _stats = null!;
     private Button _watch = null!;
+    private Button _restart = null!;
     private bool _shownForDefeat;
 
     public void Initialize(MatchController match)
@@ -25,7 +26,9 @@ public partial class EndScreen : CanvasLayer
         _title = GetNode<Label>("Dim/Center/Panel/Rows/Title");
         _stats = GetNode<Label>("Dim/Center/Panel/Rows/Stats");
         _watch = GetNode<Button>("Dim/Center/Panel/Rows/Buttons/Watch");
-        GetNode<Button>("Dim/Center/Panel/Rows/Buttons/Restart").Pressed += () => _match.RequestRestart();
+        _restart = GetNode<Button>("Dim/Center/Panel/Rows/Buttons/Restart");
+        _restart.Pressed += () => _match.RequestRestart();
+        _restart.Visible = _match.Net == null; // a network match cannot be replayed alone
         GetNode<Button>("Dim/Center/Panel/Rows/Buttons/Menu").Pressed += () => _match.RequestMenu();
         _watch.Pressed += () => Visible = false;
         Visible = false;
@@ -33,7 +36,7 @@ public partial class EndScreen : CanvasLayer
 
     public void OnSimEvent(SimEvent e)
     {
-        int player = MatchController.PlayerFactionId;
+        int player = _match.LocalFactionId;
         switch (e)
         {
             case FactionEliminated eliminated when eliminated.FactionId == player && !_shownForDefeat:
@@ -41,7 +44,7 @@ public partial class EndScreen : CanvasLayer
                 Present(victory: false, matchOver: false);
                 break;
             case MatchEnded ended:
-                Present(ended.FactionId == player, matchOver: true);
+                Present(ended.WinningTeam == _match.LocalTeam, matchOver: true);
                 break;
         }
     }
@@ -58,6 +61,21 @@ public partial class EndScreen : CanvasLayer
             seconds / 60, seconds % 60, s.UnitsTrained, s.UnitsLost, s.EnemiesKilled,
             s.BuildingsBuilt, s.BuildingsLost, s.BuildingsDestroyed);
         Visible = true;
-        GetNode<Button>("Dim/Center/Panel/Rows/Buttons/Restart").GrabFocus();
+        FocusFirstButton();
     }
+
+    /// <summary>The network game broke off (desync, host left): say why; the only way on is the menu.</summary>
+    public void ShowProblem(string reasonKey)
+    {
+        _title.Text = Tr("NET_GAME_INTERRUPTED");
+        _title.Modulate = DefeatColor;
+        _stats.Text = Tr(reasonKey);
+        _watch.Visible = false;
+        _restart.Visible = false;
+        Visible = true;
+        GetNode<Button>("Dim/Center/Panel/Rows/Buttons/Menu").GrabFocus();
+    }
+
+    private void FocusFirstButton() =>
+        (_restart.Visible ? _restart : GetNode<Button>("Dim/Center/Panel/Rows/Buttons/Menu")).GrabFocus();
 }

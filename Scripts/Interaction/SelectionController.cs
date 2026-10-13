@@ -139,25 +139,25 @@ public partial class SelectionController : Node2D
     /// </summary>
     private void IssueOrder(Vector2 world, bool retreat)
     {
-        int player = MatchController.PlayerFactionId;
+        int player = _match.LocalFactionId;
         int[] ids = _match.Selection.Ids.ToArray();
         Entity? enemy = null;
         if (!retreat)
         {
             enemy = PickUnit(world, EnemyUnits());
-            if (enemy == null && PickBuilding(world) is { } building && building.FactionId != player)
+            if (enemy == null && PickBuilding(world) is { } building && _match.Sim.AreEnemies(player, building.FactionId))
                 enemy = building;
         }
         if (enemy != null)
         {
-            _match.Sim.Issue(new AttackCommand(player, ids, enemy.Id));
+            _match.Issue(new AttackCommand(player, ids, enemy.Id));
             _markerPosition = SimConvert.ToWorld(enemy.Position);
             _markerColor = AttackMarkerColor;
         }
         else
         {
             var mode = retreat ? MoveMode.Move : MoveMode.AttackMove;
-            _match.Sim.Issue(new MoveCommand(player, ids, SimConvert.ToSim(world), mode));
+            _match.Issue(new MoveCommand(player, ids, SimConvert.ToSim(world), mode));
             _markerPosition = world;
             _markerColor = retreat ? RetreatMarkerColor : MarkerColor;
         }
@@ -195,10 +195,10 @@ public partial class SelectionController : Node2D
     }
 
     private IEnumerable<Unit> OwnUnits() =>
-        _match.Sim.Units.Where(u => u.FactionId == MatchController.PlayerFactionId);
+        _match.Sim.Units.Where(u => u.FactionId == _match.LocalFactionId);
 
     private IEnumerable<Unit> EnemyUnits() =>
-        _match.Sim.Units.Where(u => u.FactionId != MatchController.PlayerFactionId);
+        _match.Sim.Units.Where(u => _match.Sim.AreEnemies(_match.LocalFactionId, u.FactionId));
 
     private Rect2 VisibleWorldRect()
     {

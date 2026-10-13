@@ -39,22 +39,29 @@ public sealed partial class Simulation
     private readonly CombatSystem _combat;
     private List<SimEvent> _events = new();
     private int _nextEntityId = 1;
+    /// <summary>Team per faction id, for the hot enemy checks in combat.</summary>
+    private readonly int[] _teamOf;
 
     public Simulation(MapDefinition map, GameRules rules, MatchSetup setup)
     {
         Map = map.Grid;
         Rules = rules;
         _pathfinder = new Pathfinder(Map);
-        _combat = new CombatSystem(Map, _pathfinder, _projectiles, e => _events.Add(e));
+        _combat = new CombatSystem(Map, _pathfinder, _projectiles, e => _events.Add(e), AreEnemies);
 
         foreach (var deposit in map.Deposits)
             _deposits.Add(new GoldDeposit(_deposits.Count + 1, deposit.Anchor, deposit.Yield));
 
         var factionIds = Enumerable.Range(0, setup.FactionCount)
             .Concat(map.UnitSpawns.Select(u => u.FactionId))
-            .Where(id => id >= 0).Distinct().Order();
+            .Where(id => id >= 0).Distinct().Order().ToList();
+        _teamOf = new int[factionIds.Count == 0 ? 0 : factionIds[^1] + 1];
         foreach (int id in factionIds)
-            _factions.Add(new Faction(id, rules.StartingGold));
+        {
+            int team = setup.TeamOf(id);
+            _factions.Add(new Faction(id, team, rules.StartingGold));
+            _teamOf[id] = team;
+        }
 
         PlaceCapitals(map.StartPositions, setup);
 
@@ -79,8 +86,21 @@ public sealed partial class Simulation
     /// <summary>Set once a single contender (or nobody) is left; the world no longer changes.</summary>
     public bool IsOver { get; private set; }
 
-    /// <summary>The last faction standing, or -1 when the match ended without survivors or is still running.</summary>
-    public int WinnerId { get; private set; } = -1;
+    /// <summary>The winning team, or -1 when the match ended without survivors or is still running.</summary>
+    public int WinningTeam { get; private set; } = -1;
+
+    /// <summary>
+    /// Whether units of the two factions fight each other: different factions on different teams.
+    /// Neutral (-1) is hostile to everyone.
+    /// </summary>
+    public bool AreEnemies(int factionA, int factionB)
+    {
+        if (factionA == factionB)
+            return false;
+        if (factionA < 0 || factionB < 0 || factionA >= _teamOf.Length || factionB >= _teamOf.Length)
+            return true;
+        return _teamOf[factionA] != _teamOf[factionB];
+    }
 
     public Entity? GetEntity(int id) => _entitiesById.GetValueOrDefault(id);
     public Unit? GetUnit(int id) => GetEntity(id) as Unit;
@@ -199,7 +219,7 @@ public sealed partial class Simulation
 
     private void ApplyAttack(AttackCommand attack)
     {
-        if (GetEntity(attack.TargetId) is not { IsAlive: true } target || target.FactionId == attack.FactionId)
+        if (GetEntity(attack.TargetId) is not { IsAlive: true } target || !AreEnemies(attack.FactionId, target.FactionId))
             return;
         foreach (var unit in OwnLivingUnits(attack.FactionId, attack.UnitIds))
         {

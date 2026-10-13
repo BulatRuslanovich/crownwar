@@ -73,3 +73,43 @@ BUILDING_MINE,Gold Mine,Шахта
 BUILDING_BARRACKS,Barracks,Казармы
 BUILDING_TOWER,Archer Tower,Башня лучников
 MSG_UNDER_ATTACK,You are under attack! (Space — go there),Вас атакуют! (Пробел — к месту боя)
+MENU_NETWORK,Network game,Сетевая игра
+NET_TITLE,Network game,Сетевая игра
+NET_YOUR_NAME,Your name,Ваше имя
+NET_HOST_GAME,Host a game,Создать игру
+NET_FOUND_GAMES,Games on your network:,Игры в вашей сети:
+NET_SEARCHING,Searching... Games hosted on the same Wi-Fi appear here.,Поиск... Здесь появятся игры из той же сети Wi-Fi.
+NET_DISCOVERY_UNAVAILABLE,Cannot search the network (is another copy of the game open?). Enter the host's address below.,Не удаётся искать игры в сети (открыта ещё одна копия игры?). Введите адрес хоста ниже.
+NET_GAME_ENTRY,"{0} — {1}/{2} players ({3})","{0} — игроков {1}/{2} ({3})"
+NET_OTHER_VERSION,different game version,другая версия игры
+NET_GAME_FULL,full,мест нет
+NET_ADDRESS_HINT,Host IP address,IP-адрес хоста
+NET_JOIN,Join,Подключиться
+NET_ENTER_ADDRESS,Enter the host's IP address or pick a game from the list.,Введите IP-адрес хоста или выберите игру из списка.
+NET_CONNECTING,Connecting to {0}...,Подключение к {0}...
+NET_HOST_FAILED,Could not host a game: the port is busy (is a game already hosted on this PC?).,Не удалось создать игру: порт занят (на этом компьютере уже создана игра?).
+NET_CONNECT_FAILED,Could not connect to the host.,Не удалось подключиться к хосту.
+NET_REJECT_VERSION,The host runs a different version of the game.,У хоста другая версия игры.
+NET_REJECT_STARTED,The match has already started.,Матч уже начался.
+NET_REJECT_FULL,The game is full.,Свободных мест нет.
+NET_HOST_CLOSED,The host closed the game.,Хост закрыл игру.
+NET_HOST_LEFT,The host left the game.,Хост покинул игру.
+NET_DESYNC,The players' games went out of sync.,Игры у игроков рассинхронизировались.
+NET_GAME_INTERRUPTED,Game interrupted,Игра прервана
+NET_LOBBY,Lobby,Лобби
+NET_LEAVE,Leave,Выйти
+NET_HOST_ADDRESS,"Players on the same network will find this game in their list, or can join by address: {0}","Игроки из той же сети найдут эту игру в списке или подключатся по адресу: {0}"
+NET_SLOT_OPEN,Open,Свободно
+NET_SLOT_BOT_EASY,Bot (easy),Бот (лёгкий)
+NET_SLOT_BOT_NORMAL,Bot (normal),Бот (средний)
+NET_SLOT_BOT_HARD,Bot (hard),Бот (сложный)
+NET_SLOT_PLAYER,Player,Игрок
+NET_TEAM_N,Team {0},Команда {0}
+NET_BOT,Bot,Бот
+NET_YOU,(you),(вы)
+NET_HOST_MARK,[host],[хост]
+NET_HINT_HOST,Players on the same team are allies.,Игроки одной команды — союзники.
+NET_NEED_TWO_TEAMS,"To start, you need at least two sides on different teams.",Для начала нужны хотя бы две стороны в разных командах.
+NET_WAITING_HOST_START,Waiting for the host to start the match...,"Ждём, когда хост начнёт матч..."
+NET_WAITING,Waiting for other players...,Ожидание других игроков...
+NET_PLAYER_LEFT,{0} left the game — a bot takes over.,{0} покидает игру — управление переходит к боту.

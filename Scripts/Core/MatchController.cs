@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using Godot;
 using Lordsio.Audio;
 using Lordsio.Interaction;
+using Lordsio.Net;
 using Lordsio.Sim.AI;
 using Lordsio.Sim.Core;
+using Lordsio.Sim.Net;
 using Lordsio.Sim.World;
 using Lordsio.Buildings;
 using Lordsio.UI;
@@ -19,7 +22,43 @@ namespace Lordsio.Core;
 /// </summary>
 public partial class MatchController : Node2D
 {
-    public const int PlayerFactionId = 0;
+    /// <summary>The faction this machine controls (always 0 in single player).</summary>
+    public int LocalFactionId { get; private set; }
+
+    /// <summary>The local player's team: allies share it.</summary>
+    public int LocalTeam => Sim.GetFaction(LocalFactionId)?.Team ?? LocalFactionId;
+
+    /// <summary>
+    /// Sends a player command. All UI goes through here instead of calling the simulation directly,
+    /// so a networked match can route commands through the lockstep session.
+    /// </summary>
+    public void Issue(Command command)
+    {
+        if (Net != null)
+            Net.QueueLocal(command);
+        else
+            Sim.Issue(command);
+    }
+
+    /// <summary>Set by <see cref="Main"/> for network games before the match enters the tree; null in single player.</summary>
+    public NetMatchDriver? Net { get; set; }
+
+    /// <summary>A networked match is stalled until another player's commands arrive.</summary>
+    public bool WaitingForPlayers { get; private set; }
+
+    /// <summary>
+    /// Frames buffered further ahead than the input delay mean we fell behind the others: run ticks without
+    /// waiting for real time. (Up to the input delay is normal: our own inputs are sent that far ahead.)
+    /// </summary>
+    private const int LockstepCatchUpThreshold = LockstepHost.InputDelay + 2;
+
+    /// <summary>Hands a faction to the computer (bot slots at start, or a player who left).</summary>
+    public BotBrain AddBot(int factionId, BotDifficulty difficulty)
+    {
+        var bot = new BotBrain(Sim, factionId, difficulty, ActualSeed + factionId);
+        _bots.Add(bot);
+        return bot;
+    }
 
     /// <summary>Upper bound on catch-up ticks per frame so a long hitch does not snowball.</summary>
     private const int MaxStepsPerFrame = 5;
@@ -35,7 +74,7 @@ public partial class MatchController : Node2D
     private EffectsView _groundEffects = null!;
     private EffectsView _airEffects = null!;
     private MatchSounds _sounds = null!;
-    private readonly AttackAlerts _alerts = new(PlayerFactionId);
+    private AttackAlerts _alerts = null!;
 
     private readonly List<BotBrain> _bots = new();
 
@@ -49,7 +88,7 @@ public partial class MatchController : Node2D
     public event Action? MenuRequested;
 
     public Simulation Sim { get; private set; } = null!;
-    public MatchStats Stats { get; } = new(PlayerFactionId);
+    public MatchStats Stats { get; private set; } = null!;
     public int ActualSeed { get; private set; }
     public IReadOnlyList<BotBrain> Bots => _bots;
     public Selection Selection { get; } = new();
@@ -66,11 +105,14 @@ public partial class MatchController : Node2D
         var map = MapLoader.Parse(ReadText(MapPath));
         var rules = GameRules.Parse(ReadText(RulesPath));
         ActualSeed = Config.Seed ?? (int)(GD.Randi() & int.MaxValue);
-        Sim = new Simulation(map, rules, new MatchSetup(1 + Config.BotCount, ActualSeed));
-        foreach (var faction in Sim.Factions)
+        LocalFactionId = Config.LocalFactionId;
+        Sim = new Simulation(map, rules, new MatchSetup(Config.Slots.Count, ActualSeed, Teams: Config.Teams));
+        Stats = new MatchStats(LocalFactionId);
+        _alerts = new AttackAlerts(LocalFactionId);
+        for (int i = 0; i < Config.Slots.Count; i++)
         {
-            if (faction.Id != PlayerFactionId)
-                _bots.Add(new BotBrain(Sim, faction.Id, Config.Difficulty, ActualSeed + faction.Id));
+            if (Config.Slots[i].Kind == SlotKind.Bot)
+                AddBot(i, Config.Slots[i].Difficulty);
         }
 
         Camera = GetNode<CameraController>("Camera");
@@ -100,6 +142,8 @@ public partial class MatchController : Node2D
         _endScreen.Initialize(this);
         _pauseMenu = GetNode<PauseMenu>("PauseMenu");
         _pauseMenu.Initialize(this, placement);
+        if (Net != null)
+            Net.DesyncDetected += _ => ShowNetworkProblem("NET_DESYNC");
 
         _alerts.Alerted += position =>
         {
@@ -120,18 +164,23 @@ public partial class MatchController : Node2D
         }
     }
 
-    public bool IsPaused => GetTree().Paused;
+    /// <summary>The pause menu is open. In a network game the world keeps running behind it.</summary>
+    public bool IsPaused => Net != null ? _pauseMenu.Visible : GetTree().Paused;
 
     /// <summary>Freezes the match (simulation, camera, input) while menus stay responsive.</summary>
     public void SetPaused(bool paused)
     {
-        GetTree().Paused = paused;
+        if (Net == null)
+            GetTree().Paused = paused;
         _pauseMenu.Visible = paused;
     }
 
+    /// <summary>A network game cannot go on (desync, host gone): show why and offer the way out.</summary>
+    public void ShowNetworkProblem(string reasonKey) => _endScreen.ShowProblem(reasonKey);
+
     /// <summary>Dev-only: shows the end screen as if the match had ended, without touching the simulation.</summary>
     public void PreviewEndScreen(bool victory) =>
-        _endScreen.OnSimEvent(new MatchEnded(victory ? PlayerFactionId : PlayerFactionId + 1));
+        _endScreen.OnSimEvent(new MatchEnded(victory ? LocalTeam : -1));
 
     public void RequestRestart() => RestartRequested?.Invoke();
 
@@ -140,32 +189,20 @@ public partial class MatchController : Node2D
     /// <summary>The player's capital, else their first unit.</summary>
     private Vector2? StartingFocus()
     {
-        if (Sim.GetFaction(PlayerFactionId) is { } player && Sim.GetBuilding(player.CapitalId) is { } capital)
+        if (Sim.GetFaction(LocalFactionId) is { } player && Sim.GetBuilding(player.CapitalId) is { } capital)
             return SimConvert.ToWorld(capital.Position);
         foreach (var unit in Sim.Units)
-            if (unit.FactionId == PlayerFactionId)
+            if (unit.FactionId == LocalFactionId)
                 return SimConvert.ToWorld(unit.Position);
         return null;
     }
 
     public override void _Process(double delta)
     {
-        _accumulator += delta;
-        int steps = 0;
-        while (_accumulator >= Simulation.TickDuration && steps < MaxStepsPerFrame)
-        {
-            long start = Stopwatch.GetTimestamp();
-            Sim.Step();
-            // Bots decide right after a tick, like a player reacting to what they see.
-            foreach (var bot in _bots)
-                bot.Update();
-            double ms = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
-            StepMilliseconds = StepMilliseconds * 0.9 + ms * 0.1;
-            _accumulator -= Simulation.TickDuration;
-            steps++;
-        }
-        if (_accumulator >= Simulation.TickDuration)
-            _accumulator = 0; // drop the backlog after a hitch instead of fast-forwarding
+        if (Net != null)
+            ProcessNetworked(delta);
+        else
+            ProcessLocal(delta);
 
         foreach (var e in Sim.TakeEvents())
         {
@@ -178,6 +215,68 @@ public partial class MatchController : Node2D
             _alerts.OnSimEvent(e, Sim.Tick);
             _endScreen.OnSimEvent(e);
         }
+    }
+
+    private void ProcessLocal(double delta)
+    {
+        _accumulator += delta;
+        int steps = 0;
+        while (_accumulator >= Simulation.TickDuration && steps < MaxStepsPerFrame)
+        {
+            StepOnce();
+            _accumulator -= Simulation.TickDuration;
+            steps++;
+        }
+        if (_accumulator >= Simulation.TickDuration)
+            _accumulator = 0; // drop the backlog after a hitch instead of fast-forwarding
+    }
+
+    /// <summary>
+    /// Lockstep: a tick runs only once its frame (everyone's commands) has arrived. When frames pile up
+    /// (we fell behind) we catch up a few ticks per frame; when none is there we wait.
+    /// </summary>
+    private void ProcessNetworked(double delta)
+    {
+        var net = Net!;
+        net.Pump();
+        if (Sim.IsOver || net.IsDesynced)
+            return;
+
+        _accumulator += delta;
+        int steps = 0;
+        while (steps < MaxStepsPerFrame && net.HasFrame(Sim.Tick + 1)
+               && (_accumulator >= Simulation.TickDuration || net.HasFrame(Sim.Tick + 1 + LockstepCatchUpThreshold)))
+        {
+            var frame = net.TakeFrame(Sim.Tick + 1);
+            foreach (var command in frame.Commands)
+                Sim.Issue(command);
+            foreach (int faction in frame.Takeovers)
+            {
+                if (_bots.All(b => b.FactionId != faction))
+                {
+                    AddBot(faction, BotDifficulty.Normal);
+                    _hud.ShowNotice(string.Format(Tr("NET_PLAYER_LEFT"), Names.Faction(faction)));
+                }
+            }
+            StepOnce();
+            net.AfterStep(Sim.Tick, Sim);
+            _accumulator = Math.Max(0, _accumulator - Simulation.TickDuration);
+            steps++;
+        }
+        // While waiting for others, do not bank time to burst through later.
+        _accumulator = Math.Min(_accumulator, Simulation.TickDuration * 4);
+        WaitingForPlayers = !net.HasFrame(Sim.Tick + 1) && _accumulator >= Simulation.TickDuration * 4;
+    }
+
+    private void StepOnce()
+    {
+        long start = Stopwatch.GetTimestamp();
+        Sim.Step();
+        // Bots decide right after a tick, like a player reacting to what they see.
+        foreach (var bot in _bots)
+            bot.Update();
+        double ms = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+        StepMilliseconds = StepMilliseconds * 0.9 + ms * 0.1;
     }
 
     private static string ReadText(string path)

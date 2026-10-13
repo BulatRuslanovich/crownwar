@@ -37,7 +37,7 @@ public class BalanceReport
             }
             peak = Math.Max(peak, sim.Units.Count);
         }
-        return new MatchResult(sim.Tick / (float)Simulation.TicksPerSecond / 60f, sim.WinnerId, peak, recruited);
+        return new MatchResult(sim.Tick / (float)Simulation.TicksPerSecond / 60f, sim.WinningTeam, peak, recruited);
     }
 
     [Test]

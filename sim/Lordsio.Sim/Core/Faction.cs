@@ -4,13 +4,17 @@ namespace Lordsio.Sim.Core;
 
 public sealed class Faction
 {
-    internal Faction(int id, int startingGold)
+    internal Faction(int id, int team, int startingGold)
     {
         Id = id;
+        Team = team;
         Treasury = new Treasury(startingGold);
     }
 
     public int Id { get; }
+
+    /// <summary>Factions with the same team are allies: they never fight and win together.</summary>
+    public int Team { get; }
     public Treasury Treasury { get; }
 
     /// <summary>Gold per second from the capital and working mines; recomputed every tick.</summary>

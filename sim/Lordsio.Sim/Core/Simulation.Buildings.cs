@@ -298,7 +298,10 @@ public sealed partial class Simulation
         Map.SetOccupied(building.Footprint, false);
     }
 
-    /// <summary>Contenders whose capital fell are out; when one contender is left, it wins.</summary>
+    /// <summary>
+    /// Contenders whose capital fell are out. When the standing contenders all belong to one team,
+    /// that team wins (allies win together, even those already eliminated).
+    /// </summary>
     private void CheckEliminations()
     {
         foreach (var faction in _factions)
@@ -308,12 +311,13 @@ public sealed partial class Simulation
         }
 
         var contenders = _factions.Where(f => f.IsContender).ToList();
-        int standing = contenders.Count(f => !f.IsEliminated);
-        if (contenders.Count >= 2 && standing <= 1)
+        int teams = contenders.Select(f => f.Team).Distinct().Count();
+        var standingTeams = contenders.Where(f => !f.IsEliminated).Select(f => f.Team).Distinct().ToList();
+        if (teams >= 2 && standingTeams.Count <= 1)
         {
             IsOver = true;
-            WinnerId = contenders.FirstOrDefault(f => !f.IsEliminated)?.Id ?? -1;
-            _events.Add(new MatchEnded(WinnerId));
+            WinningTeam = standingTeams.Count == 1 ? standingTeams[0] : -1;
+            _events.Add(new MatchEnded(WinningTeam));
         }
     }
 

@@ -96,6 +96,6 @@ public class BotTests
         TestContext.Out.WriteLine($"tick {sim.Tick} ({sim.Tick / Simulation.TicksPerSecond / 60f:0.0} min): {summary}");
 
         Assert.That(sim.IsOver, Is.True, $"no winner after 30 minutes: {summary}");
-        Assert.That(sim.WinnerId, Is.InRange(0, 3));
+        Assert.That(sim.WinningTeam, Is.InRange(0, 3));
     }
 }

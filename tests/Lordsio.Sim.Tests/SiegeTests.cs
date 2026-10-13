@@ -98,13 +98,13 @@ public class SiegeTests
         RunSeconds(sim, 30f, () => sim.IsOver);
 
         Assert.That(sim.IsOver, Is.True);
-        Assert.That(sim.WinnerId, Is.EqualTo(1));
+        Assert.That(sim.WinningTeam, Is.EqualTo(1));
         Assert.That(sim.GetFaction(0)!.IsEliminated, Is.True);
         Assert.That(sim.Units.Any(u => u.FactionId == 0), Is.False, "the army disbands");
         Assert.That(sim.Buildings.Any(b => b.FactionId == 0), Is.False, "every building collapses");
         var events = sim.TakeEvents();
         Assert.That(events.OfType<FactionEliminated>().Single().FactionId, Is.EqualTo(0));
-        Assert.That(events.OfType<MatchEnded>().Single().FactionId, Is.EqualTo(1));
+        Assert.That(events.OfType<MatchEnded>().Single().WinningTeam, Is.EqualTo(1));
 
         int tick = sim.Tick;
         sim.Step();

@@ -70,7 +70,7 @@ public partial class Hud : CanvasLayer
 
     public override void _Process(double delta)
     {
-        if (_match.Sim.GetFaction(MatchController.PlayerFactionId) is { } faction)
+        if (_match.Sim.GetFaction(_match.LocalFactionId) is { } faction)
         {
             _gold.Text = string.Format(Tr("HUD_GOLD"), faction.Treasury.Gold);
             _income.Text = string.Format(Tr("HUD_INCOME"), faction.IncomePerSecond);
@@ -89,6 +89,10 @@ public partial class Hud : CanvasLayer
             : Tr("BUILD_HINT");
 
         UpdateBuildingPanel();
+
+        // Lockstep stall: keep the notice up for as long as we wait.
+        if (_match.WaitingForPlayers)
+            ShowMessage(Tr("NET_WAITING"));
 
         if (_messageTimeLeft > 0f)
         {
@@ -116,7 +120,7 @@ public partial class Hud : CanvasLayer
     /// <summary>Reacts to simulation events that concern the local player.</summary>
     public void OnSimEvent(SimEvent e)
     {
-        int player = MatchController.PlayerFactionId;
+        int player = _match.LocalFactionId;
         switch (e)
         {
             case RecruitRejected rejected when rejected.FactionId == player:
@@ -196,7 +200,7 @@ public partial class Hud : CanvasLayer
             RebuildRecruitButtons(building);
         }
 
-        bool own = building.FactionId == MatchController.PlayerFactionId;
+        bool own = building.FactionId == _match.LocalFactionId;
         _title.Text = $"{Names.Of(building.Type)} ({(own ? Tr("HUD_YOURS") : Names.Faction(building.FactionId))})";
         string status = building.IsComplete
             ? DescribeBuildingType(building.Type, building)
@@ -209,7 +213,7 @@ public partial class Hud : CanvasLayer
             var type = _match.Sim.Rules.Units.Get(typeId);
             button.Text = $"{Names.Of(type)}  {type.Cost}{Tr("HUD_GOLD_SHORT")}";
             // Buttons stay clickable: the simulation is the judge and explains a refusal with a message.
-            var error = _match.Sim.CanRecruit(MatchController.PlayerFactionId, building.Id, typeId);
+            var error = _match.Sim.CanRecruit(_match.LocalFactionId, building.Id, typeId);
             button.Modulate = error == RecruitError.None ? Colors.White : ProblemColor;
             button.TooltipText = error == RecruitError.None ? "" : Describe(error);
         }
@@ -236,12 +240,15 @@ public partial class Hud : CanvasLayer
         {
             var button = new Button { FocusMode = Control.FocusModeEnum.None };
             int buildingId = building.Id;
-            button.Pressed += () => _match.Sim.Issue(
-                new RecruitCommand(MatchController.PlayerFactionId, buildingId, typeId));
+            button.Pressed += () => _match.Issue(
+                new RecruitCommand(_match.LocalFactionId, buildingId, typeId));
             _recruitRow.AddChild(button);
             _recruitButtons.Add((button, typeId));
         }
     }
+
+    /// <summary>A short message in the middle of the screen, e.g. about other players in a network game.</summary>
+    public void ShowNotice(string text) => ShowMessage(text);
 
     private void ShowMessage(string text)
     {

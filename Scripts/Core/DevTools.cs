@@ -33,6 +33,9 @@ public static class DevTools
                       || a.StartsWith("--seed=", StringComparison.Ordinal)
                       || a.StartsWith("--zoom-index=", StringComparison.Ordinal) || a == "--pause" || a == "--debug-hud");
 
+    public static bool WantsNetwork(string[] args) =>
+        args.Any(a => a == "--net-host" || a == "--net-browse" || a.StartsWith("--net-join=", StringComparison.Ordinal));
+
     public static int? Seed(string[] args) => Arg(args, "--seed") is { } s ? int.Parse(s, CultureInfo.InvariantCulture) : null;
 
     /// <summary>Applies the demo options to a freshly started match.</summary>
@@ -41,7 +44,7 @@ public static class DevTools
         if (Arg(args, "--zoom-index") is { } zoom)
             match.Camera.SetZoomIndex(int.Parse(zoom, CultureInfo.InvariantCulture));
         if (Arg(args, "--demo-gold") is { } gold)
-            match.Sim.GetFaction(MatchController.PlayerFactionId)!.Treasury.Add(int.Parse(gold, CultureInfo.InvariantCulture));
+            match.Sim.GetFaction(match.LocalFactionId)!.Treasury.Add(int.Parse(gold, CultureInfo.InvariantCulture));
         if (args.Contains("--demo-build"))
             DemoBuild(match);
         if (Arg(args, "--demo-recruit") is { } recruit)
@@ -69,22 +72,22 @@ public static class DevTools
         return args.FirstOrDefault(a => a.StartsWith(prefix, StringComparison.Ordinal))?[prefix.Length..];
     }
 
-    private static Building PlayerCapital(Simulation sim) =>
-        sim.GetBuilding(sim.GetFaction(MatchController.PlayerFactionId)!.CapitalId)!;
+    private static Building PlayerCapital(MatchController match) =>
+        match.Sim.GetBuilding(match.Sim.GetFaction(match.LocalFactionId)!.CapitalId)!;
 
     private static void DemoRecruit(MatchController match, int count)
     {
-        var capital = PlayerCapital(match.Sim);
+        var capital = PlayerCapital(match);
         match.Selection.SelectBuilding(capital.Id);
         for (int i = 0; i < count; i++)
-            match.Sim.Issue(new RecruitCommand(MatchController.PlayerFactionId, capital.Id, capital.Type.Recruits[0]));
+            match.Issue(new RecruitCommand(match.LocalFactionId, capital.Id, capital.Type.Recruits[0]));
     }
 
     /// <summary>Orders a barracks and a tower on the first free spots around the player's capital.</summary>
     private static void DemoBuild(MatchController match)
     {
         var sim = match.Sim;
-        var capital = PlayerCapital(sim);
+        var capital = PlayerCapital(match);
         var taken = new HashSet<Cell>();
         foreach (string type in new[] { "barracks", "tower" })
         {
@@ -93,11 +96,11 @@ public static class DevTools
             {
                 var anchor = Enumerable.Range(-r, 2 * r + 1)
                     .SelectMany(dy => Enumerable.Range(-r, 2 * r + 1).Select(dx => new Cell(capital.Anchor.X + dx, capital.Anchor.Y + dy)))
-                    .FirstOrDefault(c => sim.CanBuild(MatchController.PlayerFactionId, type, c) == BuildError.None
+                    .FirstOrDefault(c => sim.CanBuild(match.LocalFactionId, type, c) == BuildError.None
                                          && !Building.FootprintOf(c, size).Any(taken.Contains));
                 if (anchor == default)
                     continue;
-                sim.Issue(new BuildCommand(MatchController.PlayerFactionId, type, anchor));
+                sim.Issue(new BuildCommand(match.LocalFactionId, type, anchor));
                 // Keep a one-tile gap so the second building does not clip the first one's footprint.
                 for (int y = -1; y <= size; y++)
                     for (int x = -1; x <= size; x++)
@@ -116,11 +119,11 @@ public static class DevTools
         var west = sim.Map.FindNearestInComponent(Cell.FromPosition(center + new SimVector2(-8f, 0f)), TileGrid.AnyComponent, 12)!.Value.Center;
         var east = sim.Map.FindNearestInComponent(Cell.FromPosition(center + new SimVector2(8f, 0f)), TileGrid.AnyComponent, 12)!.Value.Center;
         var a = Sim.Units.Formation.ComputeSlots(sim.Map, west, perSide, 0.36f)
-            .Select((p, i) => sim.SpawnUnit(types[i % 4], MatchController.PlayerFactionId, p).Id).ToList();
-        int enemy = sim.Factions.First(f => f.Id != MatchController.PlayerFactionId).Id;
+            .Select((p, i) => sim.SpawnUnit(types[i % 4], match.LocalFactionId, p).Id).ToList();
+        int enemy = sim.Factions.First(f => f.Id != match.LocalFactionId).Id;
         var b = Sim.Units.Formation.ComputeSlots(sim.Map, east, perSide, 0.36f)
             .Select((p, i) => sim.SpawnUnit(types[i % 4], enemy, p).Id).ToList();
-        sim.Issue(new MoveCommand(MatchController.PlayerFactionId, a, east, MoveMode.AttackMove));
+        sim.Issue(new MoveCommand(match.LocalFactionId, a, east, MoveMode.AttackMove));
         sim.Issue(new MoveCommand(enemy, b, west, MoveMode.AttackMove));
     }
 
@@ -130,8 +133,8 @@ public static class DevTools
         var target = new SimVector2(
             float.Parse(parts[0], CultureInfo.InvariantCulture) + 0.5f,
             float.Parse(parts[1], CultureInfo.InvariantCulture) + 0.5f);
-        var ids = match.Sim.Units.Where(u => u.FactionId == MatchController.PlayerFactionId).Select(u => u.Id).ToArray();
+        var ids = match.Sim.Units.Where(u => u.FactionId == match.LocalFactionId).Select(u => u.Id).ToArray();
         match.Selection.Select(ids, additive: false);
-        match.Sim.Issue(new MoveCommand(MatchController.PlayerFactionId, ids, target, MoveMode.AttackMove));
+        match.Issue(new MoveCommand(match.LocalFactionId, ids, target, MoveMode.AttackMove));
     }
 }

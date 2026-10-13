@@ -54,7 +54,7 @@ public partial class MatchSounds : Node
 
     public void OnSimEvent(SimEvent e)
     {
-        int player = MatchController.PlayerFactionId;
+        int player = _match.LocalFactionId;
         switch (e)
         {
             case AttackLanded hit:
@@ -83,7 +83,7 @@ public partial class MatchSounds : Node
                 PlayUi(Sound.Defeat, 0f);
                 break;
             case MatchEnded ended:
-                PlayUi(ended.FactionId == player ? Sound.Victory : Sound.Defeat, 0f);
+                PlayUi(ended.WinningTeam == _match.LocalTeam ? Sound.Victory : Sound.Defeat, 0f);
                 break;
         }
     }

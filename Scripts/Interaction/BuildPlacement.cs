@@ -51,7 +51,7 @@ public partial class BuildPlacement : Node2D
         if (_type == null)
             return;
         _anchor = AnchorUnderCursor(_type);
-        CurrentError = _match.Sim.CanBuild(MatchController.PlayerFactionId, _type.Id, _anchor);
+        CurrentError = _match.Sim.CanBuild(_match.LocalFactionId, _type.Id, _anchor);
         QueueRedraw();
     }
 
@@ -63,7 +63,7 @@ public partial class BuildPlacement : Node2D
         {
             case InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true } left:
                 // Always send the command: the simulation decides and explains a refusal.
-                _match.Sim.Issue(new BuildCommand(MatchController.PlayerFactionId, _type.Id, _anchor));
+                _match.Issue(new BuildCommand(_match.LocalFactionId, _type.Id, _anchor));
                 if (!left.ShiftPressed)
                     Cancel();
                 GetViewport().SetInputAsHandled();
@@ -96,7 +96,7 @@ public partial class BuildPlacement : Node2D
         foreach (var unit in _match.Sim.Units)
         {
             var p = SimConvert.ToWorld(unit.Position);
-            if (unit.FactionId == MatchController.PlayerFactionId && p.DistanceTo(center) < radius * 3f)
+            if (unit.FactionId == _match.LocalFactionId && p.DistanceTo(center) < radius * 3f)
                 DrawArc(p, radius, 0f, Mathf.Tau, 48, RadiusColor, 1f / _match.Camera.ZoomLevel);
         }
     }

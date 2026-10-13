@@ -25,6 +25,9 @@ public partial class GameSettings : Node
     public bool EdgePan { get; set; } = true;
     public string Language { get; set; } = "";
 
+    /// <summary>Name shown to other players in network games.</summary>
+    public string PlayerName { get; set; } = DefaultPlayerName();
+
     public override void _EnterTree() => Instance = this;
 
     public override void _ExitTree()
@@ -56,6 +59,7 @@ public partial class GameSettings : Node
         config.SetValue(Section, "ui_scale", UiScale);
         config.SetValue(Section, "edge_pan", EdgePan);
         config.SetValue(Section, "language", Language);
+        config.SetValue(Section, "player_name", PlayerName);
         var error = config.Save(FilePath);
         if (error != Error.Ok)
             GD.PushWarning($"Could not save settings to {FilePath}: {error}");
@@ -71,5 +75,15 @@ public partial class GameSettings : Node
         UiScale = Mathf.Clamp((float)config.GetValue(Section, "ui_scale", UiScale), 0.5f, 3f);
         EdgePan = (bool)config.GetValue(Section, "edge_pan", EdgePan);
         Language = (string)config.GetValue(Section, "language", Language);
+        PlayerName = (string)config.GetValue(Section, "player_name", PlayerName);
+    }
+
+    /// <summary>The OS user name, trimmed to fit the lobby; "Player" if unavailable.</summary>
+    private static string DefaultPlayerName()
+    {
+        string name = System.Environment.UserName;
+        if (string.IsNullOrWhiteSpace(name))
+            return "Player";
+        return name.Length > 16 ? name[..16] : name;
     }
 }

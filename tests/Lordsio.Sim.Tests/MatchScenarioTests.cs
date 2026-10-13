@@ -60,7 +60,7 @@ public class MatchScenarioTests
             sim.Step();
 
         Assert.That(sim.IsOver, Is.True, "the capital should fall within two minutes");
-        Assert.That(sim.WinnerId, Is.EqualTo(0));
+        Assert.That(sim.WinningTeam, Is.EqualTo(0));
     }
 
     /// <summary>Roughly equal gold on both sides; the counter relationships the unit data is meant to create.</summary>
