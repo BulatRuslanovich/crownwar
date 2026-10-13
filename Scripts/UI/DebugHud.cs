@@ -64,7 +64,7 @@ public partial class DebugHud : CanvasLayer
             AppendGroupSummary();
 
         _text.Append("\nLMB select / drag box  ·  Shift add  ·  double click same type  ·  Ctrl+A all\n");
-        _text.Append("RMB advance (attacks on the way) / attack enemy  ·  Ctrl+RMB retreat\n");
+        _text.Append("RMB go (ignores enemies) / attack enemy  ·  Ctrl+RMB advance (attacks on the way)\n");
         _text.Append("WASD / arrows / screen edge pan  ·  MMB drag  ·  wheel zoom");
         _label.Text = _text.ToString();
     }

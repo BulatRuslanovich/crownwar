@@ -13,7 +13,8 @@ namespace Lordsio.Interaction;
 /// Turns mouse and keyboard input into selection changes and simulation commands.
 /// LMB click / drag: select a unit / box-select (Shift adds, Shift+click toggles);
 /// double click: all units of that type on screen; Ctrl+A: all own units;
-/// RMB: advance / attack the clicked enemy; Ctrl+RMB: retreat ignoring enemies.
+/// RMB: go there no matter what (the order beats any fight) / attack the clicked enemy;
+/// Ctrl+RMB: advance, fighting whatever is met on the way.
 /// </summary>
 public partial class SelectionController : Node2D
 {
@@ -25,7 +26,6 @@ public partial class SelectionController : Node2D
 
     private static readonly Color MarkerColor = new("7cff6b");
     private static readonly Color AttackMarkerColor = new("ff5a4a");
-    private static readonly Color RetreatMarkerColor = new("8ec5ff");
     private static readonly Color BoxFill = new(0.48f, 1f, 0.42f, 0.12f);
     private static readonly Color BoxOutline = new(0.48f, 1f, 0.42f, 0.9f);
 
@@ -48,14 +48,15 @@ public partial class SelectionController : Node2D
 
     public override void _ExitTree() => Input.SetDefaultCursorShape(Input.CursorShape.Arrow);
 
-    /// <summary>The sword cursor: troops are selected and a right click here would attack someone.</summary>
+    /// <summary>The sword cursor: troops are selected and a right click here would attack someone (or advance with Ctrl).</summary>
     private void UpdateCursor()
     {
         bool attack = false;
         if (_match.Selection.Count > 0)
         {
             var world = GetGlobalMousePosition();
-            attack = PickUnit(world, EnemyUnits()) != null
+            attack = Input.IsKeyPressed(Key.Ctrl)
+                     || PickUnit(world, EnemyUnits()) != null
                      || PickBuilding(world) is { } building && _match.Sim.AreEnemies(_match.LocalFactionId, building.FactionId) && !_match.IsHidden(building);
         }
         if (attack == _attackCursor)
@@ -81,7 +82,7 @@ public partial class SelectionController : Node2D
                 break;
 
             case InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } right when _match.Selection.Count > 0:
-                IssueOrder(GetGlobalMousePosition(), retreat: right.CtrlPressed);
+                IssueOrder(GetGlobalMousePosition(), advance: right.CtrlPressed);
                 GetViewport().SetInputAsHandled();
                 break;
 
@@ -154,15 +155,16 @@ public partial class SelectionController : Node2D
     }
 
     /// <summary>
-    /// Right click: on an enemy unit or building — attack it; on the ground — advance, fighting
-    /// whatever is met; with Ctrl — retreat, ignoring enemies.
+    /// Right click: on an enemy unit or building — attack it; on the ground — go there, dropping any fight
+    /// (the player's order comes first: this is how troops are pulled back); with Ctrl — advance, fighting
+    /// whatever is met.
     /// </summary>
-    private void IssueOrder(Vector2 world, bool retreat)
+    private void IssueOrder(Vector2 world, bool advance)
     {
         int player = _match.LocalFactionId;
         int[] ids = _match.Selection.Ids.ToArray();
         Entity? enemy = null;
-        if (!retreat)
+        if (!advance)
         {
             enemy = PickUnit(world, EnemyUnits());
             if (enemy == null && PickBuilding(world) is { } building && _match.Sim.AreEnemies(player, building.FactionId)
@@ -177,10 +179,10 @@ public partial class SelectionController : Node2D
         }
         else
         {
-            var mode = retreat ? MoveMode.Move : MoveMode.AttackMove;
+            var mode = advance ? MoveMode.AttackMove : MoveMode.Move;
             _match.Issue(new MoveCommand(player, ids, SimConvert.ToSim(world), mode));
             _markerPosition = world;
-            _markerColor = retreat ? RetreatMarkerColor : MarkerColor;
+            _markerColor = advance ? AttackMarkerColor : MarkerColor;
         }
         _markerTimeLeft = MarkerDuration;
     }

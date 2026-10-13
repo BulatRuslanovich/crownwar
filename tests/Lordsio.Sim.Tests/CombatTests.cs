@@ -160,6 +160,24 @@ public class CombatTests
     }
 
     [Test]
+    public void MoveOrderPullsUnitsOutOfAFight()
+    {
+        var sim = EmptySim();
+        var unit = sim.SpawnUnit("infantry", 0, new Vector2(2.5f, 2.5f));
+        var dummy = sim.SpawnUnit("dummy", 1, new Vector2(3.1f, 2.5f));
+        RunSeconds(sim, 2.5f);
+        Assert.That(dummy.Health, Is.LessThan(100), "the unit should be fighting before the recall");
+
+        int healthAtRecall = dummy.Health;
+        var retreat = new Vector2(18.5f, 8.5f);
+        sim.Issue(new MoveCommand(0, new[] { unit.Id }, retreat, MoveMode.Move));
+        RunSeconds(sim, 8f);
+
+        Assert.That(dummy.Health, Is.EqualTo(healthAtRecall));
+        Assert.That(Vector2.Distance(unit.Position, retreat), Is.LessThan(0.01f));
+    }
+
+    [Test]
     public void AttackMoveFightsOnTheWayThenContinues()
     {
         var sim = EmptySim();

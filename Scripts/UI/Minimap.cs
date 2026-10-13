@@ -142,7 +142,7 @@ public partial class Minimap : Control
                 AcceptEvent();
                 break;
             case InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } right when _match.Selection.Count > 0:
-                var mode = right.CtrlPressed ? MoveMode.Move : MoveMode.AttackMove;
+                var mode = right.CtrlPressed ? MoveMode.AttackMove : MoveMode.Move;
                 _match.Issue(new MoveCommand(_match.LocalFactionId, _match.Selection.Ids.ToArray(), ToSim(right.Position), mode));
                 AcceptEvent();
                 break;

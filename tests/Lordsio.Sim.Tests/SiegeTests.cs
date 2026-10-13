@@ -85,6 +85,27 @@ public class SiegeTests
     }
 
     [Test]
+    public void MoveOrderPullsTroopsAwayFromABuildingTheyAreBreaking()
+    {
+        var sim = TestMaps.WithCapitals(2, Field, "start 1 1", "start 20 8", "unit dummy 0 6 6");
+        var capital = sim.GetBuilding(sim.GetFaction(0)!.CapitalId)!;
+        var army = Enumerable.Range(0, 3).Select(i => sim.SpawnUnit("infantry", 1, new Vector2(4.5f + i * 0.7f, 4.5f))).ToList();
+        var ids = army.Select(a => a.Id).ToList();
+        sim.Issue(new AttackCommand(1, ids, capital.Id));
+        RunSeconds(sim, 5f);
+        Assert.That(capital.Health, Is.LessThan(capital.MaxHealth), "the troops should be hitting the castle before the recall");
+
+        // Plain move (the default right click): the order beats the fight, whatever stands nearby.
+        sim.Issue(new MoveCommand(1, ids, new Vector2(18.5f, 9.5f), MoveMode.Move));
+        sim.Step();
+        int healthAtRecall = capital.Health;
+        RunSeconds(sim, 10f);
+
+        Assert.That(capital.Health, Is.EqualTo(healthAtRecall));
+        Assert.That(army.All(u => Vector2.Distance(u.Position, new Vector2(18.5f, 9.5f)) < 3f), Is.True);
+    }
+
+    [Test]
     public void DestroyingTheCapitalEliminatesFactionAndEndsMatch()
     {
         var sim = TestMaps.WithCapitals(2, Field, "start 1 1", "start 20 8", "unit dummy 0 6 6");
