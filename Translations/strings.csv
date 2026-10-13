@@ -44,6 +44,7 @@ BUILD_ERR_ON_DEPOSIT,keep gold deposits free for mines,месторождени�
 BUILD_ERR_OCCUPIED,something is already built here,здесь уже что-то построено
 BUILD_ERR_TERRAIN,"needs open ground (no water, rocks or roads)","нужна свободная земля (не вода, не горы, не дорога)"
 BUILD_ERR_OUT_OF_BOUNDS,outside the map,за пределами карты
+BUILD_ERR_LIMIT,you already have as many of these as allowed,больше таких зданий строить нельзя (достигнут лимит)
 BUILD_ERR_NOT_BUILDABLE,cannot be built,нельзя построить
 ERR_NOT_ENOUGH_GOLD,Not enough gold,Не хватает золота
 ERR_ARMY_CAP,Army limit reached — build barracks,Достигнут лимит армии — постройте казармы

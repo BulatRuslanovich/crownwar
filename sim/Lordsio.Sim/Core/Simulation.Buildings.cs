@@ -11,6 +11,10 @@ public sealed partial class Simulation
     /// <summary>Recruits and starting units appear this far in front of (below) their building's wall.</summary>
     private const float SpawnDistanceFromWall = 0.8f;
 
+    /// <summary>Standing buildings of one kind a faction has, construction sites included.</summary>
+    public int CountBuildings(int factionId, string buildingTypeId) =>
+        _buildings.Count(b => b.FactionId == factionId && b.IsAlive && b.Type.Id == buildingTypeId);
+
     /// <summary>
     /// Whether a <see cref="BuildCommand"/> would currently succeed: the same check the command runs,
     /// exposed so the UI can colour the placement ghost and bots can plan without guessing the rules.
@@ -22,6 +26,8 @@ public sealed partial class Simulation
         var type = Rules.GetBuildingType(buildingTypeId);
         if (!type.IsBuildable || GetFaction(factionId) is not { IsEliminated: false } faction)
             return BuildError.NotBuildable;
+        if (type.MaxCount > 0 && CountBuildings(factionId, type.Id) >= type.MaxCount)
+            return BuildError.LimitReached;
 
         foreach (var cell in Building.FootprintOf(anchor, type.Size))
         {

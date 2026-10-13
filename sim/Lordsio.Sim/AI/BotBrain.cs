@@ -159,14 +159,23 @@ public sealed class BotBrain
 
         // 3. Towers next to own mines.
         var towerType = _sim.Rules.BuildingTypes.FirstOrDefault(t => t.Attack != null && t.IsBuildable);
-        if (_profile.BuildsTowers && towerType != null && !threatened)
+        if (_profile.BuildsTowers && towerType != null && !threatened
+            && (towerType.MaxCount == 0 || _sim.CountBuildings(FactionId, towerType.Id) < towerType.MaxCount))
         {
             foreach (var mine in OwnBuildings().Where(b => b.Type.IsMine && b.IsComplete))
             {
-                int guards = OwnBuildings().Count(b => b.Type.Id == towerType.Id && Vector2.Distance(b.Position, mine.Position) < 5f);
-                if (guards >= TowersPerMine || gold - reserve < towerType.Cost)
+                // Big towers need room: search further out, and count a tower as this mine's guard that far too.
+                int maxRadius = 3 + towerType.Size;
+                int guards = OwnBuildings().Count(b => b.Type.Id == towerType.Id && Vector2.Distance(b.Position, mine.Position) < maxRadius + towerType.Size);
+                if (guards >= TowersPerMine)
                     continue;
-                if (TryPlaceNear(towerType, mine.Position, 2, 4))
+                if (gold - reserve < towerType.Cost)
+                {
+                    // A tower is a big purchase: save up for it (one at a time) instead of spending all on troops.
+                    reserve += towerType.Cost;
+                    break;
+                }
+                if (TryPlaceNear(towerType, mine.Position, 2, maxRadius))
                     gold -= towerType.Cost;
             }
         }

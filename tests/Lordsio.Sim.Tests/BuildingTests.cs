@@ -93,6 +93,41 @@ public class BuildingPlacementTests
     }
 
     [Test]
+    public void BuildingLimitCountsSitesAndFreesUpWhenOneFalls()
+    {
+        var rules = new GameRules(100, 4f, Array.Empty<StartingUnits>(), TestMaps.Rules.Units,
+            new[] { TestMaps.Castle, TestMaps.Mine, TestMaps.Barracks, TestMaps.Tower with { MaxCount = 2 } });
+        var sim = new Simulation(TestMaps.Parse(Field, "start 1 1", "gold 14 1", "gold 3 7", "unit infantry 0 11 2"),
+            rules, new MatchSetup(1, ShuffleStarts: false));
+        sim.GetFaction(0)!.Treasury.Add(500);
+
+        // Both orders in one tick: the second site already counts against the first.
+        sim.Issue(new BuildCommand(0, "tower", new Cell(10, 0)));
+        sim.Issue(new BuildCommand(0, "tower", new Cell(12, 0)));
+        sim.Issue(new BuildCommand(0, "tower", new Cell(10, 3)));
+        sim.Step();
+
+        Assert.That(sim.CountBuildings(0, "tower"), Is.EqualTo(2));
+        Assert.That(sim.TakeEvents().OfType<BuildRejected>().Single().Reason, Is.EqualTo(BuildError.LimitReached));
+        Assert.That(sim.CanBuild(0, "tower", new Cell(10, 3)), Is.EqualTo(BuildError.LimitReached));
+
+        for (int i = 0; i < (TestMaps.Tower.BuildTime + 0.2f) * Simulation.TicksPerSecond; i++)
+            sim.Step();
+        sim.Buildings.First(b => b.Type.Id == "tower").Health = 0;
+        sim.Step();
+        Assert.That(sim.CountBuildings(0, "tower"), Is.EqualTo(1));
+        Assert.That(sim.CanBuild(0, "tower", new Cell(10, 3)), Is.EqualTo(BuildError.None));
+    }
+
+    [Test]
+    public void TowersAreLimitedToTwentyPerPlayer()
+    {
+        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
+        Assert.That(rules.GetBuildingType("tower").MaxCount, Is.EqualTo(20));
+        Assert.That(rules.GetBuildingType("barracks").MaxCount, Is.EqualTo(0), "other buildings are unlimited");
+    }
+
+    [Test]
     public void UnitsStandingOnTheSiteStepAside()
     {
         var sim = CreateSim();

@@ -588,24 +588,42 @@ public static class ArtGenerator
         return c;
     }
 
-    /// <summary>16×44, bottom-centre origin; footprint 1 tile. Conical roof in faction colours.</summary>
+    /// <summary>
+    /// 32×58, bottom-centre origin; footprint 2×2 tiles. A walled plinth with a gate, a stone keep behind it,
+    /// a wooden archers' gallery and a conical roof in faction colours.
+    /// </summary>
     private static PixelCanvas Tower()
     {
-        var c = new PixelCanvas(16, 44);
-        Bricks(c, 3, 15, 10, 28, Stone);
-        c.Rect(6, 36, 4, 7, Door);
-        c.Rect(7, 21, 2, 5, Window);
-        c.Rect(1, 11, 14, 4, Wood);
-        c.Rect(1, 14, 14, 1, WoodDark);
-        for (int x = 2; x < 15; x += 3)
-            c.Rect(x, 11, 1, 3, WoodDark);
-        for (int row = 0; row < 10; row++)
+        var c = new PixelCanvas(32, 58);
+        Flag(c, 15, 0);
+        // Keep, drawn first: the plinth wall stands in front of its foot.
+        Bricks(c, 7, 24, 18, 20, StoneLight);
+        c.Rect(15, 28, 2, 5, Window); // arrow slits
+        c.Rect(10, 31, 1, 4, Window);
+        c.Rect(21, 31, 1, 4, Window);
+        // Archers' gallery under the roof, with loopholes between the posts.
+        c.Rect(3, 19, 26, 5, Wood);
+        c.Rect(3, 23, 26, 1, WoodDark);
+        for (int x = 4; x < 29; x += 4)
+            c.Rect(x, 19, 1, 4, WoodDark);
+        for (int x = 6; x < 27; x += 8)
+            c.Rect(x, 20, 2, 2, Window);
+        for (int row = 0; row < 13; row++)
         {
-            int half = 1 + row * 7 / 9;
-            for (int x = 8 - half; x < 8 + half; x++)
-                c.Team(x, 1 + row, x < 8 ? 0.95f : 0.65f);
+            int half = 2 + row * 12 / 12;
+            for (int x = 16 - half; x < 16 + half; x++)
+                c.Team(x, 6 + row, row == 12 ? 0.55f : x < 16 ? 0.95f : 0.65f);
         }
-        c.Rect(7, 0, 2, 1, new Color("4a3a2a"));
+        // Plinth: a low wall with corner merlons, banners and a gate.
+        Crenellations(c, 2, 39, 28, Stone);
+        Bricks(c, 2, 42, 28, 15, Stone);
+        c.Rect(2, 55, 28, 2, StoneDark);
+        c.Rect(13, 47, 6, 9, Door);
+        c.Rect(14, 46, 4, 1, Door);
+        c.Rect(15, 48, 1, 8, WoodDark);
+        c.Rect(12, 45, 8, 1, StoneDark);
+        Banner(c, 4, 44, 4, 6);
+        Banner(c, 24, 44, 4, 6);
         c.Outline(Outline);
         return c;
     }

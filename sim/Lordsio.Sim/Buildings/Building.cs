@@ -11,7 +11,8 @@ public sealed record BuildingAttack(int Damage, float Range, float Cooldown, flo
 /// <summary>
 /// Static stats of a building kind. Size is the side of its square footprint in tiles.
 /// Income is gold per second; a mine instead earns the yield of the deposit it stands on.
-/// A faction whose capital is destroyed is eliminated.
+/// A faction whose capital is destroyed is eliminated. <paramref name="MaxCount"/> caps how many of the kind one
+/// faction may have at once, sites included (0 = no limit).
 /// </summary>
 public sealed record BuildingType(
     string Id,
@@ -27,7 +28,8 @@ public sealed record BuildingType(
     bool IsCapital = false,
     bool IsMine = false,
     BuildingAttack? Attack = null,
-    float SightRange = 0f)
+    float SightRange = 0f,
+    int MaxCount = 0)
 {
     /// <summary>Capitals are placed at match start and cannot be built by players.</summary>
     public bool IsBuildable => !IsCapital;

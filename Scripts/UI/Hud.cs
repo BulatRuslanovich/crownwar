@@ -104,7 +104,7 @@ public partial class Hud : CanvasLayer
             foreach (var (button, type) in _buildButtons)
             {
                 button.Text = BuildButtonText(type); // follows a language change
-                MarkAvailable(button, faction.Treasury.CanAfford(type.Cost));
+                MarkAvailable(button, faction.Treasury.CanAfford(type.Cost) && !AtLimit(type));
                 button.ButtonPressed = _placement.ActiveType == type;
             }
         }
@@ -227,12 +227,16 @@ public partial class Hud : CanvasLayer
         _alert.PointAt(simPosition);
     }
 
-    /// <summary>Cost and hotkey under the building's picture; the name is in the tooltip.</summary>
+    /// <summary>Cost, how many of a limited kind stand already, and the hotkey; the name is in the tooltip.</summary>
     private string BuildButtonText(BuildingType type)
     {
         string hotkey = BuildHotkeys.TryGetValue(type.Id, out var key) ? $"  [{key}]" : "";
-        return $"{type.Cost}{Tr("HUD_GOLD_SHORT")}{hotkey}";
+        string count = type.MaxCount > 0 ? $"  {_match.Sim.CountBuildings(_match.LocalFactionId, type.Id)}/{type.MaxCount}" : "";
+        return $"{type.Cost}{Tr("HUD_GOLD_SHORT")}{count}{hotkey}";
     }
+
+    private bool AtLimit(BuildingType type) =>
+        type.MaxCount > 0 && _match.Sim.CountBuildings(_match.LocalFactionId, type.Id) >= type.MaxCount;
 
     /// <summary>A coin before the gold and a soldier before the army size.</summary>
     private void AddResourceIcons()
@@ -540,6 +544,7 @@ public partial class Hud : CanvasLayer
         BuildError.Occupied => "BUILD_ERR_OCCUPIED",
         BuildError.BlockedTerrain => "BUILD_ERR_TERRAIN",
         BuildError.OutOfBounds => "BUILD_ERR_OUT_OF_BOUNDS",
+        BuildError.LimitReached => "BUILD_ERR_LIMIT",
         _ => "BUILD_ERR_NOT_BUILDABLE",
     });
 }

@@ -46,6 +46,8 @@ public enum BuildError
     NeedsDeposit,
     OnDeposit,
     NoUnitsNearby,
+    /// <summary>The faction already has as many of this building as the rules allow.</summary>
+    LimitReached,
 }
 
 public sealed record RecruitRejected(int FactionId, int BuildingId, string UnitTypeId, RecruitError Reason) : SimEvent(FactionId);
