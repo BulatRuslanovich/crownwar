@@ -176,7 +176,8 @@ public sealed class GameRules
                     : Array.Empty<string>(),
                 IsCapital: OptionalBool(b, "capital"),
                 IsMine: OptionalBool(b, "mine"),
-                Attack: attack));
+                Attack: attack,
+                SightRange: OptionalSingle(b, "sight")));
         }
 
         var startingUnits = root.GetProperty("startingUnits").EnumerateArray()

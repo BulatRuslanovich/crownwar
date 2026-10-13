@@ -29,6 +29,7 @@ namespace Lordsio.Core;
 ///   --demo-time-scale=&lt;x&gt;    run the game x times faster (timers, including --screenshot-delay, scale too)
 ///   --demo-select-mine       right before the screenshot, select the player's first mine
 ///   --demo-research=&lt;id&gt;     start researching an upgrade
+///   --demo-no-fog            show the whole map (no fog of war)
 /// </summary>
 public static class DevTools
 {
@@ -51,6 +52,8 @@ public static class DevTools
             match.AddBot(match.LocalFactionId, Sim.AI.BotDifficulty.Hard);
         if (Arg(args, "--demo-time-scale") is { } scale)
             Godot.Engine.TimeScale = double.Parse(scale, CultureInfo.InvariantCulture);
+        if (args.Contains("--demo-no-fog"))
+            match.Fog.RevealAll();
         if (Arg(args, "--demo-research") is { } research)
             match.Issue(new ResearchCommand(match.LocalFactionId, research));
         if (Arg(args, "--demo-gold") is { } gold)

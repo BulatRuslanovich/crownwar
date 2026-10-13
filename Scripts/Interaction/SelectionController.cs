@@ -145,7 +145,8 @@ public partial class SelectionController : Node2D
         if (!retreat)
         {
             enemy = PickUnit(world, EnemyUnits());
-            if (enemy == null && PickBuilding(world) is { } building && _match.Sim.AreEnemies(player, building.FactionId))
+            if (enemy == null && PickBuilding(world) is { } building && _match.Sim.AreEnemies(player, building.FactionId)
+                && !_match.IsHidden(building))
                 enemy = building;
         }
         if (enemy != null)
@@ -198,7 +199,7 @@ public partial class SelectionController : Node2D
         _match.Sim.Units.Where(u => u.FactionId == _match.LocalFactionId);
 
     private IEnumerable<Unit> EnemyUnits() =>
-        _match.Sim.Units.Where(u => _match.Sim.AreEnemies(_match.LocalFactionId, u.FactionId));
+        _match.Sim.Units.Where(u => _match.Sim.AreEnemies(_match.LocalFactionId, u.FactionId) && !_match.IsHidden(u));
 
     private Rect2 VisibleWorldRect()
     {

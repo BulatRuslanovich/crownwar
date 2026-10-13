@@ -47,6 +47,27 @@ public partial class BuildingView : Node2D
         AddChild(_overlay);
     }
 
+    public Building Building => _building;
+
+    /// <summary>
+    /// Out of sight: drawn dimmed as last seen, without bars, and no longer updated from the live building.
+    /// </summary>
+    public bool Ghost
+    {
+        get => _ghost;
+        set
+        {
+            if (_ghost == value)
+                return;
+            _ghost = value;
+            Modulate = value ? GhostTint : Colors.White;
+            _overlay.Visible = !value;
+        }
+    }
+
+    private bool _ghost;
+    private static readonly Color GhostTint = new(0.75f, 0.75f, 0.8f, 0.85f);
+
     public bool Selected
     {
         set
@@ -63,6 +84,8 @@ public partial class BuildingView : Node2D
 
     public override void _Process(double delta)
     {
+        if (_ghost)
+            return; // frozen as last seen
         var b = _building;
         bool idle = b.Deposit is { IsExhausted: true };
         // Deposit bars change in whole percents, so the overlay is not redrawn every tick.

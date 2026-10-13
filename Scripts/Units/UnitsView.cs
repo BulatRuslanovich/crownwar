@@ -35,6 +35,7 @@ public partial class UnitsView : Node2D
                 _views.Add(unit.Id, view);
                 AddChild(view);
             }
+            view.Visible = !_match.IsHidden(unit);
             view.Position = InterpolatedPosition(unit, alpha);
             view.Selected = _match.Selection.Contains(unit.Id);
         }

@@ -88,6 +88,10 @@ public partial class MatchController : Node2D
     public event Action? MenuRequested;
 
     public Simulation Sim { get; private set; } = null!;
+
+    /// <summary>What the local team sees; enemies outside it are not drawn, heard or clickable.</summary>
+    public Visibility Fog { get; private set; } = null!;
+    private int _fogTick = -1;
     public MatchStats Stats { get; private set; } = null!;
     public int ActualSeed { get; private set; }
     public IReadOnlyList<BotBrain> Bots => _bots;
@@ -108,6 +112,8 @@ public partial class MatchController : Node2D
         LocalFactionId = Config.LocalFactionId;
         Sim = new Simulation(map, rules, new MatchSetup(Config.Slots.Count, ActualSeed, Teams: Config.Teams));
         Stats = new MatchStats(LocalFactionId);
+        Fog = new Visibility(Sim.Map.Width, Sim.Map.Height);
+        UpdateFog();
         _alerts = new AttackAlerts(LocalFactionId);
         for (int i = 0; i < Config.Slots.Count; i++)
         {
@@ -126,6 +132,7 @@ public partial class MatchController : Node2D
         _unitsView = GetNode<UnitsView>("Actors/UnitsView");
         _unitsView.Initialize(this);
         GetNode<ProjectilesView>("ProjectilesView").Initialize(this);
+        GetNode<FogView>("FogView").Initialize(this);
         _groundEffects = GetNode<EffectsView>("GroundEffects");
         _groundEffects.Initialize(this);
         _airEffects = GetNode<EffectsView>("AirEffects");
@@ -204,18 +211,52 @@ public partial class MatchController : Node2D
         else
             ProcessLocal(delta);
 
+        UpdateFog();
+
         foreach (var e in Sim.TakeEvents())
         {
             Stats.OnSimEvent(e);
             _hud.OnSimEvent(e);
+            _alerts.OnSimEvent(e, Sim.Tick);
+            _endScreen.OnSimEvent(e);
+            if (e is FactionEliminated { FactionId: var fallen } && fallen == LocalFactionId || e is MatchEnded)
+                Fog.RevealAll(); // spectating: the rest of the match in full view
+            if (!CanSee(e))
+                continue; // a fight in the fog makes no sparks or sounds
             _unitsView.OnSimEvent(e);
             _groundEffects.OnSimEvent(e);
             _airEffects.OnSimEvent(e);
             _sounds.OnSimEvent(e);
-            _alerts.OnSimEvent(e, Sim.Tick);
-            _endScreen.OnSimEvent(e);
         }
     }
+
+    private void UpdateFog()
+    {
+        if (Sim.Tick == _fogTick)
+            return;
+        _fogTick = Sim.Tick;
+        Fog.Update(Sim, LocalTeam);
+    }
+
+    private bool IsFriendly(int factionId) => factionId >= 0 && Sim.GetFaction(factionId)?.Team == LocalTeam;
+
+    /// <summary>An enemy (or neutral) unit out of the local team's sight.</summary>
+    public bool IsHidden(Sim.Units.Unit unit) => !IsFriendly(unit.FactionId) && !Fog.IsVisible(unit.Position);
+
+    /// <summary>An enemy building none of whose tiles the local team sees.</summary>
+    public bool IsHidden(Sim.Buildings.Building building) =>
+        !IsFriendly(building.FactionId) && !Fog.IsAnyVisible(building.Anchor, building.Type.Size);
+
+    /// <summary>Whether the player may see (and hear) where an event happened.</summary>
+    private bool CanSee(SimEvent e) => e switch
+    {
+        AttackLanded hit => Fog.IsVisible(hit.Position),
+        ProjectileFired shot => Fog.IsVisible(shot.Position),
+        UnitDied died => IsFriendly(died.FactionId) || Fog.IsVisible(died.Position),
+        BuildingDestroyed destroyed => IsFriendly(destroyed.FactionId) || Fog.IsVisible(destroyed.Position),
+        BuildingCompleted completed => IsFriendly(completed.FactionId),
+        _ => true,
+    };
 
     private void ProcessLocal(double delta)
     {

@@ -23,6 +23,8 @@ public partial class ProjectilesView : Node2D
         float alpha = _match.InterpolationAlpha;
         foreach (var p in _match.Sim.Projectiles)
         {
+            if (!_match.Fog.IsVisible(p.Position))
+                continue;
             var position = SimConvert.ToWorld(System.Numerics.Vector2.Lerp(p.PreviousPosition, p.Position, alpha));
             // Arrows fly at chest height, not along the ground.
             position += new Vector2(0, -6);

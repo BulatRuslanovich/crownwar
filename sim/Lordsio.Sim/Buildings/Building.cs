@@ -26,10 +26,17 @@ public sealed record BuildingType(
     IReadOnlyList<string> Recruits,
     bool IsCapital = false,
     bool IsMine = false,
-    BuildingAttack? Attack = null)
+    BuildingAttack? Attack = null,
+    float SightRange = 0f)
 {
     /// <summary>Capitals are placed at match start and cannot be built by players.</summary>
     public bool IsBuildable => !IsCapital;
+
+    /// <summary>
+    /// How far the building sees (tiles from its center), for the fog of war: <see cref="SightRange"/> if set,
+    /// otherwise a little beyond its walls, and always at least as far as it shoots.
+    /// </summary>
+    public float EffectiveSight => MathF.Max(SightRange > 0f ? SightRange : Size / 2f + 3f, Attack is { } a ? a.Range + 1f : 0f);
 }
 
 public sealed class ProductionItem
