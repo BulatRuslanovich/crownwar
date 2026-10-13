@@ -19,6 +19,7 @@ public partial class Hud : CanvasLayer
 
     private static readonly Color ProblemColor = new("ff8a80");
     private static readonly Color ResearchColor = new("9fd8ff");
+    private static readonly Color DefaultTextColor = new(0.95f, 0.9f, 0.8f);
 
     /// <summary>Physical hotkey per building type id; types without one are still on the bar.</summary>
     private static readonly Dictionary<string, Key> BuildHotkeys = new()
@@ -29,6 +30,12 @@ public partial class Hud : CanvasLayer
     };
 
     private readonly List<(Button Button, string UnitTypeId)> _recruitButtons = new();
+    private Control _selectionPanel = null!;
+    private Label _selectionTitle = null!;
+    private Container _selectionTypes = null!;
+    private ProgressBar _selectionHealth = null!;
+    /// <summary>The selection's unit counts by type as last shown, so the buttons are rebuilt only when it changes.</summary>
+    private string _shownComposition = "";
     private readonly List<(Button Button, BuildingType Type)> _buildButtons = new();
     private MatchController _match = null!;
     private BuildPlacement _placement = null!;
@@ -76,6 +83,13 @@ public partial class Hud : CanvasLayer
         _buildingPanel.Visible = false;
         _message.Visible = false;
         CreateBuildButtons(GetNode<HBoxContainer>("BuildBar/Rows/Buttons"));
+        AddResourceIcons();
+        GetNode<Minimap>("MinimapPanel/Minimap").Initialize(match);
+        _selectionPanel = GetNode<Control>("SelectionPanel");
+        _selectionTitle = GetNode<Label>("SelectionPanel/Rows/Title");
+        _selectionTypes = GetNode<Container>("SelectionPanel/Rows/Types");
+        _selectionHealth = GetNode<ProgressBar>("SelectionPanel/Rows/Health");
+        _selectionPanel.Visible = false;
         UpdateResourceBar(); // filled from the start, even if the match opens paused
     }
 
@@ -87,11 +101,22 @@ public partial class Hud : CanvasLayer
             foreach (var (button, type) in _buildButtons)
             {
                 button.Text = BuildButtonText(type); // follows a language change
-                button.Modulate = faction.Treasury.CanAfford(type.Cost) ? Colors.White : ProblemColor;
+                MarkAvailable(button, faction.Treasury.CanAfford(type.Cost));
                 button.ButtonPressed = _placement.ActiveType == type;
             }
         }
         UpdateRest(delta);
+    }
+
+    /// <summary>An unaffordable button keeps its picture (dimmed) and shows its price in red.</summary>
+    private static void MarkAvailable(Button button, bool available)
+    {
+        var text = available ? DefaultTextColor : ProblemColor;
+        foreach (string slot in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color" })
+            button.AddThemeColorOverride(slot, text);
+        var icon = available ? Colors.White : new Color(1f, 1f, 1f, 0.55f);
+        foreach (string slot in new[] { "icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color" })
+            button.AddThemeColorOverride(slot, icon);
     }
 
     private void UpdateResourceBar()
@@ -197,10 +222,28 @@ public partial class Hud : CanvasLayer
         _alert.PointAt(simPosition);
     }
 
+    /// <summary>Cost and hotkey under the building's picture; the name is in the tooltip.</summary>
     private string BuildButtonText(BuildingType type)
     {
-        string hotkey = BuildHotkeys.TryGetValue(type.Id, out var key) ? $" [{key}]" : "";
-        return $"{Names.Of(type)} {type.Cost}{Tr("HUD_GOLD_SHORT")}{hotkey}";
+        string hotkey = BuildHotkeys.TryGetValue(type.Id, out var key) ? $"  [{key}]" : "";
+        return $"{type.Cost}{Tr("HUD_GOLD_SHORT")}{hotkey}";
+    }
+
+    /// <summary>A coin before the gold and a soldier before the army size.</summary>
+    private void AddResourceIcons()
+    {
+        var row = _gold.GetParent();
+        var coin = new TextureRect { Texture = Icons.Coin(), StretchMode = TextureRect.StretchModeEnum.KeepCentered };
+        row.AddChild(coin);
+        row.MoveChild(coin, _gold.GetIndex());
+        var soldier = new TextureRect
+        {
+            Texture = Icons.Unit("infantry", FactionColors.Get(_match.LocalFactionId), scale: 1),
+            StretchMode = TextureRect.StretchModeEnum.KeepCentered,
+        };
+        row.AddChild(soldier);
+        row.MoveChild(soldier, _army.GetIndex());
+        ((HBoxContainer)row).AddThemeConstantOverride("separation", 10);
     }
 
     private void CreateBuildButtons(HBoxContainer row)
@@ -210,9 +253,11 @@ public partial class Hud : CanvasLayer
             var button = new Button
             {
                 Text = BuildButtonText(type),
+                Icon = Icons.Building(type.Id, FactionColors.Get(_match.LocalFactionId)),
+                IconAlignment = HorizontalAlignment.Left,
                 ToggleMode = true,
                 FocusMode = Control.FocusModeEnum.None,
-                TooltipText = DescribeBuildingType(type),
+                TooltipText = Names.Of(type) + "\n" + DescribeBuildingType(type),
             };
             string id = type.Id;
             button.Pressed += () =>
@@ -227,8 +272,48 @@ public partial class Hud : CanvasLayer
         }
     }
 
+    /// <summary>
+    /// Selected troops: how many of each type (a click keeps only that type) and how healthy they are.
+    /// Hidden while a building is selected, whose panel takes the same place.
+    /// </summary>
+    private void UpdateSelectionPanel()
+    {
+        var units = _match.Selection.Ids.Select(id => _match.Sim.GetUnit(id)).OfType<Sim.Units.Unit>().ToList();
+        _selectionPanel.Visible = units.Count > 0 && _match.Selection.BuildingId == null;
+        if (!_selectionPanel.Visible)
+        {
+            _shownComposition = "";
+            return;
+        }
+        _selectionTitle.Text = string.Format(Tr("HUD_SELECTED"), units.Count);
+        _selectionHealth.Value = 100.0 * units.Sum(u => u.Health) / System.Math.Max(1, units.Sum(u => u.MaxHealth));
+
+        var groups = units.GroupBy(u => u.Type.Id).OrderBy(g => g.Key).Select(g => (Id: g.Key, Count: g.Count())).ToList();
+        string composition = string.Join(",", groups.Select(g => $"{g.Id}:{g.Count}"));
+        if (composition == _shownComposition)
+            return;
+        _shownComposition = composition;
+        foreach (var child in _selectionTypes.GetChildren())
+            child.QueueFree();
+        foreach (var (id, count) in groups)
+        {
+            var type = _match.Sim.Rules.Units.Get(id);
+            var button = new Button
+            {
+                Text = $"×{count}",
+                Icon = Icons.Unit(id, FactionColors.Get(_match.LocalFactionId)),
+                FocusMode = Control.FocusModeEnum.None,
+                TooltipText = Names.Of(type) + "\n" + Tr("HUD_SELECT_ONLY_TYPE"),
+            };
+            button.Pressed += () => _match.Selection.Select(
+                _match.Selection.Ids.Where(uid => _match.Sim.GetUnit(uid)?.Type.Id == id).ToList(), additive: false);
+            _selectionTypes.AddChild(button);
+        }
+    }
+
     private void UpdateBuildingPanel()
     {
+        UpdateSelectionPanel();
         var building = _match.Selection.BuildingId is { } id ? _match.Sim.GetBuilding(id) : null;
         _buildingPanel.Visible = building != null;
         if (building == null)
@@ -253,11 +338,11 @@ public partial class Hud : CanvasLayer
         foreach (var (button, typeId) in _recruitButtons)
         {
             var type = _match.Sim.Rules.Units.Get(typeId);
-            button.Text = $"{Names.Of(type)}  {type.Cost}{Tr("HUD_GOLD_SHORT")}";
+            button.Text = $"{type.Cost}{Tr("HUD_GOLD_SHORT")}";
             // Buttons stay clickable: the simulation is the judge and explains a refusal with a message.
             var error = _match.Sim.CanRecruit(_match.LocalFactionId, building.Id, typeId);
-            button.Modulate = error == RecruitError.None ? Colors.White : ProblemColor;
-            string upkeep = string.Format(Tr("INFO_UPKEEP"), type.Upkeep);
+            MarkAvailable(button, error == RecruitError.None);
+            string upkeep = Names.Of(type) + "\n" + string.Format(Tr("INFO_UPKEEP"), type.Upkeep);
             button.TooltipText = error == RecruitError.None ? upkeep : Describe(error) + "\n" + upkeep;
         }
 
@@ -379,7 +464,11 @@ public partial class Hud : CanvasLayer
 
         foreach (string typeId in building.Type.Recruits)
         {
-            var button = new Button { FocusMode = Control.FocusModeEnum.None };
+            var button = new Button
+            {
+                FocusMode = Control.FocusModeEnum.None,
+                Icon = Icons.Unit(typeId, FactionColors.Get(_match.LocalFactionId)),
+            };
             int buildingId = building.Id;
             button.Pressed += () => _match.Issue(
                 new RecruitCommand(_match.LocalFactionId, buildingId, typeId));

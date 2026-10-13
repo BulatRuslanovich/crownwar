@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://Scripts/UI/Hud.cs" id="1_hud"]
 [ext_resource type="Script" path="res://Scripts/UI/AlertIndicator.cs" id="2_alert"]
+[ext_resource type="Script" path="res://Scripts/UI/Minimap.cs" id="3_minimap"]
 
 [node name="Hud" type="CanvasLayer"]
 script = ExtResource("1_hud")
@@ -109,6 +110,50 @@ layout_mode = 2
 custom_minimum_size = Vector2(0, 8)
 layout_mode = 2
 show_percentage = false
+
+[node name="SelectionPanel" type="PanelContainer" parent="."]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = -110.0
+offset_right = 370.0
+offset_bottom = -8.0
+grow_vertical = 0
+
+[node name="Rows" type="VBoxContainer" parent="SelectionPanel"]
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
+
+[node name="Title" type="Label" parent="SelectionPanel/Rows"]
+theme_type_variation = &"HeaderSmall"
+layout_mode = 2
+
+[node name="Types" type="HFlowContainer" parent="SelectionPanel/Rows"]
+layout_mode = 2
+
+[node name="Health" type="ProgressBar" parent="SelectionPanel/Rows"]
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+show_percentage = false
+
+[node name="MinimapPanel" type="PanelContainer" parent="."]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -268.0
+offset_top = -188.0
+offset_right = -8.0
+offset_bottom = -8.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="Minimap" type="Control" parent="MinimapPanel"]
+custom_minimum_size = Vector2(236, 158)
+layout_mode = 2
+script = ExtResource("3_minimap")
 
 [node name="Message" type="Label" parent="."]
 anchors_preset = 5
