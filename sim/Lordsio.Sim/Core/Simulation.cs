@@ -163,7 +163,7 @@ public sealed partial class Simulation
     {
         if (!Map.IsWalkable(Cell.FromPosition(position)))
             throw new ArgumentException($"Cannot spawn a unit on a blocked tile at {position}.");
-        var type = GetFaction(factionId)?.Technology.Unit(typeId) ?? Rules.Units.Get(typeId);
+        var type = Rules.Units.Get(typeId);
         var unit = new Unit(_nextEntityId++, type, factionId, position);
         _units.Add(unit);
         _entitiesById.Add(unit.Id, unit);
@@ -188,8 +188,8 @@ public sealed partial class Simulation
             case BuildCommand build:
                 ApplyBuild(build);
                 break;
-            case ResearchCommand research:
-                ApplyResearch(research);
+            case UpgradeCommand upgrade:
+                ApplyUpgrade(upgrade);
                 break;
             default:
                 throw new NotSupportedException($"Unhandled command type {command.GetType().Name}.");

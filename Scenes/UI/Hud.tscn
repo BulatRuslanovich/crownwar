@@ -98,14 +98,15 @@ custom_minimum_size = Vector2(0, 8)
 layout_mode = 2
 show_percentage = false
 
-[node name="ResearchTitle" type="Label" parent="BuildingPanel/Rows"]
-layout_mode = 2
-text = "HUD_RESEARCH"
-
-[node name="ResearchButtons" type="HFlowContainer" parent="BuildingPanel/Rows"]
+[node name="UpgradeTitle" type="Label" parent="BuildingPanel/Rows"]
 layout_mode = 2
 
-[node name="ResearchProgress" type="ProgressBar" parent="BuildingPanel/Rows"]
+[node name="UpgradeButton" type="Button" parent="BuildingPanel/Rows"]
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_font_sizes/font_size = 14
+
+[node name="UpgradeProgress" type="ProgressBar" parent="BuildingPanel/Rows"]
 custom_minimum_size = Vector2(0, 8)
 layout_mode = 2
 show_percentage = false

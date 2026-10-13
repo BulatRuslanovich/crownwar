@@ -31,7 +31,11 @@
     },
     {
       "id": "mine", "name": "Gold Mine", "size": 2, "cost": 100, "buildTime": 10, "health": 450, "rangedArmor": 0.7,
-      "mine": true
+      "mine": true,
+      "tiers": [
+        { "cost": 150, "time": 20, "health": 750, "yieldBonus": 2 },
+        { "cost": 300, "time": 30, "health": 1100, "yieldBonus": 4 }
+      ]
     },
     {
       "id": "barracks", "name": "Barracks", "size": 2, "cost": 150, "buildTime": 20, "health": 700, "rangedArmor": 0.7, "maxCount": 10,
@@ -39,51 +43,15 @@
     },
     {
       "id": "tower", "name": "Archer Tower", "size": 2, "cost": 250, "buildTime": 30, "health": 2000, "rangedArmor": 0.8, "maxCount": 20,
-      "attack": { "damage": 20, "range": 7, "cooldown": 1.0, "projectileSpeed": 15 }
+      "attack": { "damage": 20, "range": 7, "cooldown": 1.0, "projectileSpeed": 15 },
+      "tiers": [
+        { "cost": 250, "time": 25, "health": 2800, "damage": 28 },
+        { "cost": 400, "time": 35, "health": 3800, "damage": 36, "range": 8 }
+      ]
     },
     {
       "id": "watchtower", "name": "Watchtower", "size": 3, "cost": 300, "buildTime": 25, "health": 2000, "rangedArmor": 0.8, "maxCount": 10,
       "sight": 16
-    }
-  ],
-  "upgrades": [
-    {
-      "id": "deep_mines", "name": "Deep Mines", "cost": 250, "researchTime": 45,
-      "effects": [{ "stat": "mineYield", "amount": 1 }]
-    },
-    {
-      "id": "forged_blades", "name": "Forged Blades", "cost": 200, "researchTime": 40,
-      "effects": [{ "stat": "damage", "amount": 25, "targets": ["infantry", "heavy"] }]
-    },
-    {
-      "id": "longbows", "name": "Longbows", "cost": 200, "researchTime": 40,
-      "effects": [
-        { "stat": "range", "amount": 1.5, "targets": ["archer"] },
-        { "stat": "damage", "amount": 15, "targets": ["archer"] }
-      ]
-    },
-    {
-      "id": "chainmail", "name": "Chainmail", "cost": 250, "researchTime": 50,
-      "effects": [{ "stat": "health", "amount": 20, "targets": ["infantry", "archer", "heavy"] }]
-    },
-    {
-      "id": "fortified_towers", "name": "Fortified Towers", "cost": 200, "researchTime": 40,
-      "effects": [
-        { "stat": "health", "amount": 50, "targets": ["tower"] },
-        { "stat": "damage", "amount": 40, "targets": ["tower"] }
-      ]
-    },
-    {
-      "id": "great_barracks", "name": "Great Barracks", "cost": 200, "researchTime": 40,
-      "effects": [{ "stat": "armyCap", "amount": 5, "targets": ["barracks"] }]
-    },
-    {
-      "id": "supply_train", "name": "Supply Train", "cost": 250, "researchTime": 50,
-      "effects": [{ "stat": "upkeep", "amount": -30 }]
-    },
-    {
-      "id": "steel_weapons", "name": "Steel Weapons", "cost": 400, "researchTime": 60, "requires": "forged_blades",
-      "effects": [{ "stat": "damage", "amount": 25, "targets": ["infantry", "archer", "heavy"] }]
     }
   ]
 }

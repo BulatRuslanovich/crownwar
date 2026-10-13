@@ -6,7 +6,8 @@ namespace Lordsio.Buildings;
 
 /// <summary>
 /// A building drawn from Assets/Sprites/&lt;type&gt;.png plus its faction-colour mask (&lt;type&gt;_team.png),
-/// with scaffolding while under construction and construction / health / training bars above.
+/// with scaffolding while under construction and construction / upgrade / health / training bars above.
+/// Higher levels have their own pictures, &lt;type&gt;_t2.png and so on; the view swaps them when an upgrade completes.
 /// The node origin is the bottom-centre of the footprint, so tall buildings y-sort correctly with units.
 /// </summary>
 public partial class BuildingView : Node2D
@@ -19,6 +20,7 @@ public partial class BuildingView : Node2D
     private static readonly Color ConstructionFill = new("ffd44a");
     private static readonly Color ReserveFill = new("e8b830");
     private static readonly Color RegenFill = new("5fb4ff");
+    private static readonly Color UpgradeFill = new("9fd8ff");
     /// <summary>A mine on an exhausted deposit stands idle: drawn dimmed.</summary>
     private static readonly Color IdleTint = new(0.42f, 0.42f, 0.5f);
     /// <summary>The reserve bar shows up by itself once a deposit is this close to running dry.</summary>
@@ -32,7 +34,8 @@ public partial class BuildingView : Node2D
     private Node2D _overlay = null!;
     private Color _owner;
     private bool _selected;
-    private (int Health, bool Complete, float Construction, int Queue, float Training, bool Idle, int Deposit) _drawn;
+    private (int Health, bool Complete, float Construction, int Queue, float Training, bool Idle, int Deposit, int Tier, float Upgrade) _drawn;
+    private int _shownTier;
 
     public void Initialize(Building building)
     {
@@ -41,9 +44,9 @@ public partial class BuildingView : Node2D
         var bottom = building.Position + new System.Numerics.Vector2(0f, building.Type.Size / 2f);
         Position = SimConvert.ToWorld(bottom);
 
-        string id = building.Type.Id;
-        _body = MakeSprite($"res://Assets/Sprites/{id}.png", Colors.White);
-        _team = MakeSprite($"res://Assets/Sprites/{id}_team.png", _owner);
+        _body = MakeSprite(Colors.White);
+        _team = MakeSprite(_owner);
+        ShowLevel(building.Type);
         _overlay = new Node2D { Name = "Overlay" };
         _overlay.Draw += DrawOverlay;
         AddChild(_overlay);
@@ -92,10 +95,13 @@ public partial class BuildingView : Node2D
         bool idle = b.Deposit is { IsExhausted: true };
         // Deposit bars change in whole percents, so the overlay is not redrawn every tick.
         int deposit = b.Deposit is { IsEndless: false } d ? (int)(DepositFraction(d) * 100f) : 0;
-        var now = (b.Health, b.IsComplete, b.ConstructionProgress, b.Queue.Count, b.Queue.Count > 0 ? b.Queue[0].Progress : 0f, idle, deposit);
+        var now = (b.Health, b.IsComplete, b.ConstructionProgress, b.Queue.Count, b.Queue.Count > 0 ? b.Queue[0].Progress : 0f, idle, deposit,
+            b.Type.Tier, b.UpgradeProgress);
         if (now == _drawn)
             return;
         _drawn = now;
+        if (b.Type.Tier != _shownTier)
+            ShowLevel(b.Type);
         // Sites fade in as they are built; an idle mine is dimmed.
         float alpha = b.IsComplete ? 1f : 0.45f + 0.55f * b.ConstructionProgress;
         var tint = idle ? IdleTint : Colors.White;
@@ -132,6 +138,11 @@ public partial class BuildingView : Node2D
         if (!b.IsComplete)
         {
             Bar(y, b.ConstructionProgress, ConstructionFill);
+            y -= 5f;
+        }
+        if (b.IsUpgrading)
+        {
+            Bar(y, b.UpgradeProgress, UpgradeFill);
             y -= 5f;
         }
         if (b.Health < b.MaxHealth || _selected)
@@ -176,17 +187,33 @@ public partial class BuildingView : Node2D
     private static float DepositFraction(Lordsio.Sim.World.GoldDeposit d) =>
         d.IsExhausted ? d.RegenProgress : (float)d.Reserve / d.Capacity;
 
-    private Sprite2D MakeSprite(string path, Color modulate)
+    private Sprite2D MakeSprite(Color modulate)
     {
-        var texture = GD.Load<Texture2D>(path);
-        var sprite = new Sprite2D
-        {
-            Texture = texture,
-            Centered = false,
-            Offset = new Vector2(-texture.GetWidth() / 2f, -texture.GetHeight()),
-            Modulate = modulate,
-        };
+        var sprite = new Sprite2D { Centered = false, Modulate = modulate };
         AddChild(sprite);
         return sprite;
+    }
+
+    /// <summary>The pictures of the building's level (the first level's if a higher one has none of its own).</summary>
+    private void ShowLevel(BuildingType type)
+    {
+        _shownTier = type.Tier;
+        string name = SpriteName(type);
+        SetTexture(_body, $"res://Assets/Sprites/{name}.png");
+        SetTexture(_team, $"res://Assets/Sprites/{name}_team.png");
+        QueueRedraw();
+    }
+
+    public static string SpriteName(BuildingType type)
+    {
+        string tiered = $"{type.Id}_t{type.Tier}";
+        return type.Tier > 1 && ResourceLoader.Exists($"res://Assets/Sprites/{tiered}.png") ? tiered : type.Id;
+    }
+
+    private static void SetTexture(Sprite2D sprite, string path)
+    {
+        var texture = GD.Load<Texture2D>(path);
+        sprite.Texture = texture;
+        sprite.Offset = new Vector2(-texture.GetWidth() / 2f, -texture.GetHeight());
     }
 }

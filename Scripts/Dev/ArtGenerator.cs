@@ -73,7 +73,8 @@ public static class ArtGenerator
 
         foreach (var (name, canvas) in new (string, PixelCanvas)[]
                  {
-                     ("castle", Castle()), ("barracks", Barracks()), ("tower", Tower()), ("watchtower", Watchtower()), ("mine", Mine()),
+                     ("castle", Castle()), ("barracks", Barracks()), ("tower", Tower()), ("tower_t2", Tower(2)), ("tower_t3", Tower(3)), ("watchtower", Watchtower()),
+                     ("mine", Mine()), ("mine_t2", Mine(2)), ("mine_t3", Mine(3)),
                  })
         {
             canvas.Save(System.IO.Path.Combine(assets, "Sprites", name + ".png"),
@@ -590,29 +591,57 @@ public static class ArtGenerator
 
     /// <summary>
     /// 32×58, bottom-centre origin; footprint 2×2 tiles. A walled plinth with a gate, a stone keep behind it,
-    /// a wooden archers' gallery and a conical roof in faction colours.
+    /// an archers' gallery and a conical roof in faction colours. Level 2: stone gallery, iron bands, bigger banners;
+    /// level 3: gilded eaves, finial and gate.
     /// </summary>
-    private static PixelCanvas Tower()
+    private static PixelCanvas Tower(int tier = 1)
     {
         var c = new PixelCanvas(32, 58);
         Flag(c, 15, 0);
-        // Keep, drawn first: the plinth wall stands in front of its foot.
+        // Keep, drawn first: the plinth wall stands in front of its foot. Higher levels are bound with iron.
         Bricks(c, 7, 24, 18, 20, StoneLight);
         c.Rect(15, 28, 2, 5, Window); // arrow slits
         c.Rect(10, 31, 1, 4, Window);
         c.Rect(21, 31, 1, 4, Window);
-        // Archers' gallery under the roof, with loopholes between the posts.
-        c.Rect(3, 19, 26, 5, Wood);
-        c.Rect(3, 23, 26, 1, WoodDark);
-        for (int x = 4; x < 29; x += 4)
-            c.Rect(x, 19, 1, 4, WoodDark);
+        if (tier >= 2)
+        {
+            c.Rect(7, 27, 18, 1, SteelDark);
+            c.Rect(7, 36, 18, 1, SteelDark);
+        }
+        // Archers' gallery under the roof, with loopholes between the posts: timber, then stone.
+        if (tier == 1)
+        {
+            c.Rect(3, 19, 26, 5, Wood);
+            c.Rect(3, 23, 26, 1, WoodDark);
+            for (int x = 4; x < 29; x += 4)
+                c.Rect(x, 19, 1, 4, WoodDark);
+        }
+        else
+        {
+            Bricks(c, 3, 19, 26, 5, Stone);
+            c.Rect(3, 23, 26, 1, StoneDark);
+        }
         for (int x = 6; x < 27; x += 8)
             c.Rect(x, 20, 2, 2, Window);
         for (int row = 0; row < 13; row++)
         {
             int half = 2 + row * 12 / 12;
             for (int x = 16 - half; x < 16 + half; x++)
-                c.Team(x, 6 + row, row == 12 ? 0.55f : x < 16 ? 0.95f : 0.65f);
+            {
+                if (tier >= 3 && row == 12)
+                    c.Px(x, 6 + row, x % 2 == 0 ? Gold : GoldDark); // gilded eaves
+                else
+                    c.Team(x, 6 + row, row == 12 ? 0.55f : x < 16 ? 0.95f : 0.65f);
+            }
+        }
+        if (tier >= 3)
+        {
+            c.Rect(15, 5, 2, 2, Gold); // finial
+            // A great banner on the keep, edged in gold, and gilded merlons on the gallery.
+            c.Rect(12, 25, 8, 13, GoldDark);
+            Banner(c, 13, 26, 6, 10);
+            for (int x = 3; x < 29; x += 4)
+                c.Rect(x, 18, 2, 1, Gold);
         }
         // Plinth: a low wall with corner merlons, banners and a gate.
         Crenellations(c, 2, 39, 28, Stone);
@@ -621,9 +650,18 @@ public static class ArtGenerator
         c.Rect(13, 47, 6, 9, Door);
         c.Rect(14, 46, 4, 1, Door);
         c.Rect(15, 48, 1, 8, WoodDark);
-        c.Rect(12, 45, 8, 1, StoneDark);
-        Banner(c, 4, 44, 4, 6);
-        Banner(c, 24, 44, 4, 6);
+        c.Rect(12, 45, 8, 1, tier >= 3 ? Gold : StoneDark);
+        if (tier >= 2)
+        {
+            c.Rect(13, 50, 6, 1, SteelDark); // iron-bound gate
+            Banner(c, 3, 43, 5, 8);
+            Banner(c, 24, 43, 5, 8);
+        }
+        else
+        {
+            Banner(c, 4, 44, 4, 6);
+            Banner(c, 24, 44, 4, 6);
+        }
         c.Outline(Outline);
         return c;
     }
@@ -674,35 +712,65 @@ public static class ArtGenerator
         return c;
     }
 
-    /// <summary>32×36, bottom-centre origin; footprint 2×2 tiles on a gold deposit.</summary>
-    private static PixelCanvas Mine()
+    /// <summary>
+    /// 32×36, bottom-centre origin; footprint 2×2 tiles on a gold deposit. Level 2: stone-framed tunnel, lantern,
+    /// braced headframe, a second cart; level 3: steel headframe with a gilded wheel, a retaining wall, a heap of gold.
+    /// </summary>
+    private static PixelCanvas Mine(int tier = 1)
     {
+        var lamp = new Color("ffd25a");
         var c = new PixelCanvas(32, 36);
-        // Rock mound with a timbered tunnel mouth.
+        // Rock mound with a tunnel mouth: timbered, then framed in stone.
         for (int y = 22; y < 35; y++)
         {
             int half = 6 + (y - 22) * 9 / 12;
             for (int x = 16 - half; x < 16 + half; x++)
                 c.Px(x, y, Hash(x, y, 21) < 150 ? RockLight : Rock);
         }
+        if (tier >= 3)
+        {
+            Bricks(c, 2, 31, 28, 4, Stone); // retaining wall
+        }
         c.Rect(11, 26, 9, 9, Door);
-        c.Rect(10, 25, 1, 10, Wood);
-        c.Rect(20, 25, 1, 10, Wood);
-        c.Rect(10, 25, 11, 1, WoodLight);
-        // Headframe with a pulley wheel.
-        c.Rect(5, 7, 2, 18, Wood);
-        c.Rect(25, 7, 2, 18, Wood);
-        c.Rect(4, 6, 24, 2, WoodDark);
-        c.Line(6, 9, 15, 16, Wood);
-        c.Line(26, 9, 17, 16, Wood);
-        c.Disc(16, 10, 3f, StoneDark);
-        c.Px(16, 10, Steel);
-        // Cart full of gold.
+        var frame = tier >= 2 ? StoneLight : Wood;
+        c.Rect(10, 25, 1, 10, frame);
+        c.Rect(20, 25, 1, 10, frame);
+        c.Rect(10, 25, 11, 1, tier >= 2 ? Stone : WoodLight);
+        if (tier >= 2)
+        {
+            c.Rect(9, 24, 13, 1, StoneDark);
+            c.Px(8, 27, lamp); // lantern by the entrance
+            c.Px(8, 28, SteelDark);
+        }
+        // Headframe with a pulley wheel: timber, then steel; the top level's wheel is gilded.
+        var post = tier >= 3 ? SteelDark : Wood;
+        c.Rect(5, 7, 2, 18, post);
+        c.Rect(25, 7, 2, 18, post);
+        c.Rect(4, 6, 24, 2, tier >= 3 ? Steel : WoodDark);
+        c.Line(6, 9, 15, 16, post);
+        c.Line(26, 9, 17, 16, post);
+        if (tier >= 2)
+            c.Line(6, 20, 26, 12, post); // cross brace
+        c.Disc(16, 10, 3f, tier >= 3 ? GoldDark : StoneDark);
+        c.Px(16, 10, tier >= 3 ? Gold : Steel);
+        // Carts full of gold: one, then two, then a heap beside them.
         c.Rect(22, 29, 8, 4, WoodDark);
         c.Rect(23, 27, 6, 2, Gold);
         c.Px(25, 26, GoldDark);
         c.Rect(23, 33, 2, 2, Outline);
         c.Rect(27, 33, 2, 2, Outline);
+        if (tier >= 2)
+        {
+            c.Rect(2, 29, 7, 4, WoodDark);
+            c.Rect(3, 27, 5, 2, Gold);
+            c.Rect(3, 33, 2, 2, Outline);
+            c.Rect(6, 33, 2, 2, Outline);
+        }
+        if (tier >= 3)
+        {
+            for (int row = 0; row < 3; row++)
+                c.Rect(12 + row, 22 - row, 7 - 2 * row, 1, row == 2 ? Gold : GoldDark);
+        }
         Flag(c, 3, 0);
         c.Outline(Outline);
         return c;

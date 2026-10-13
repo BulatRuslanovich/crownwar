@@ -27,8 +27,8 @@ namespace Lordsio.Core;
 ///   --demo-end=victory|defeat show the end screen (view only, the match goes on)
 ///   --demo-autoplay          a Hard bot plays the player's faction (to watch a match unfold)
 ///   --demo-time-scale=&lt;x&gt;    run the game x times faster (timers, including --screenshot-delay, scale too)
-///   --demo-select-mine       right before the screenshot, select the player's first mine
-///   --demo-research=&lt;id&gt;     start researching an upgrade
+///   --demo-select=&lt;type&gt;     right before the screenshot, select the player's first building of that type (e.g. mine)
+///   --demo-upgrade           keep upgrading the player's finished towers and mines to their highest level
 ///   --demo-no-fog            show the whole map (no fog of war)
 ///   --demo-scoreboard        keep the players table (Tab) open
 /// </summary>
@@ -57,8 +57,8 @@ public static class DevTools
             match.GetNode<UI.Scoreboard>("Hud/Scoreboard").Pinned = true;
         if (args.Contains("--demo-no-fog"))
             match.Fog.RevealAll();
-        if (Arg(args, "--demo-research") is { } research)
-            match.Issue(new ResearchCommand(match.LocalFactionId, research));
+        if (args.Contains("--demo-upgrade"))
+            DemoUpgrade(match);
         if (Arg(args, "--demo-gold") is { } gold)
             match.Sim.GetFaction(match.LocalFactionId)!.Treasury.Add(int.Parse(gold, CultureInfo.InvariantCulture));
         if (args.Contains("--demo-build"))
@@ -82,13 +82,13 @@ public static class DevTools
             match.GetNode<Godot.CanvasLayer>("DebugHud").Visible = true;
     }
 
-    /// <summary>--demo-select-mine: shows a mine's panel in a screenshot taken late in a match.</summary>
-    public static void SelectFirstMine(MatchController match)
+    /// <summary>--demo-select=TYPE: shows a building's panel in a screenshot.</summary>
+    public static void SelectFirst(MatchController match, string typeId)
     {
-        if (match.Sim.Buildings.FirstOrDefault(b => b.FactionId == match.LocalFactionId && b.Type.IsMine) is { } mine)
+        if (match.Sim.Buildings.FirstOrDefault(b => b.FactionId == match.LocalFactionId && b.Type.Id == typeId) is { } building)
         {
-            match.Selection.SelectBuilding(mine.Id);
-            match.Camera.CenterOn(SimConvert.ToWorld(mine.Position));
+            match.Selection.SelectBuilding(building.Id);
+            match.Camera.CenterOn(SimConvert.ToWorld(building.Position));
         }
     }
 
@@ -134,6 +134,19 @@ public static class DevTools
                 break;
             }
         }
+    }
+
+    /// <summary>Every half second, orders the next level for each finished building of the player that has one.</summary>
+    private static void DemoUpgrade(MatchController match)
+    {
+        if (!Godot.GodotObject.IsInstanceValid(match) || !match.IsInsideTree())
+            return;
+        foreach (var building in match.Sim.Buildings)
+        {
+            if (match.Sim.CanUpgrade(match.LocalFactionId, building.Id) == UpgradeError.None)
+                match.Issue(new UpgradeCommand(match.LocalFactionId, building.Id));
+        }
+        match.GetTree().CreateTimer(0.5).Timeout += () => DemoUpgrade(match);
     }
 
     /// <summary>Stress test: two armies of <paramref name="perSide"/> units clash in the middle of the camera view.</summary>

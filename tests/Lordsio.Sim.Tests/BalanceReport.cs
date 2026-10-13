@@ -111,7 +111,7 @@ public class BalanceReport
                     int mines = sim.Buildings.Count(b => b.FactionId == faction.Id && b.IsAlive && b.IsComplete && b.Type.IsMine);
                     var old = sums[faction.Id, next];
                     sums[faction.Id, next] = (old.Income + faction.IncomePerSecond, old.Upkeep + faction.UpkeepPerMinute, old.Mines + mines,
-                        old.Earned + earned[faction.Id] / Simulation.TicksPerSecond, old.Upgrades + faction.Technology.Researched.Count);
+                        old.Earned + earned[faction.Id] / Simulation.TicksPerSecond, old.Upgrades + sim.Buildings.Where(b => b.FactionId == faction.Id && b.IsAlive).Sum(b => b.Type.Tier - 1));
                 }
                 next++;
             }

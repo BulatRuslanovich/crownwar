@@ -1,43 +1,46 @@
+using Lordsio.Sim.Buildings;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.Net;
-using Lordsio.Sim.Units;
 using Lordsio.Sim.World;
 
 namespace Lordsio.Sim.Tests;
 
+/// <summary>Building levels: archer towers and mines can be upgraded twice, one building at a time.</summary>
 public class UpgradeTests
 {
-    private const float ResearchSeconds = 2f;
+    private const float UpgradeSeconds = 2f;
 
-    private static readonly UnitType Soldier = TestMaps.Infantry with { Upkeep = 120 };
-
-    private static UpgradeType Upgrade(string id, int cost, params UpgradeEffect[] effects) =>
-        new(id, id, cost, ResearchSeconds, effects);
-
-    private static UpgradeEffect Effect(UpgradeStat stat, float amount, params string[] targets) => new(stat, amount, targets);
-
-    private static readonly UpgradeType[] Upgrades =
+    private static readonly BuildingType Tower3 = TestMaps.Tower with
     {
-        Upgrade("blades", 50, Effect(UpgradeStat.Damage, 25, "infantry")),
-        Upgrade("mail", 50, Effect(UpgradeStat.Health, 50, "infantry"), Effect(UpgradeStat.Range, 1, "infantry")),
-        Upgrade("towers", 50, Effect(UpgradeStat.Damage, 40, "tower"), Effect(UpgradeStat.Health, 50, "tower")),
-        Upgrade("barracks", 50, Effect(UpgradeStat.ArmyCap, 5, "barracks")),
-        Upgrade("mines", 50, Effect(UpgradeStat.MineYield, 2)),
-        Upgrade("supply", 50, Effect(UpgradeStat.Upkeep, -50)),
-        new("steel", "steel", 50, ResearchSeconds, new[] { Effect(UpgradeStat.Damage, 25, "infantry") }, Requires: "blades"),
+        Tier = 3, MaxHealth = 300, Attack = TestMaps.Tower.Attack! with { Damage = 30, Range = 5f },
     };
+    private static readonly BuildingType Tower2 = TestMaps.Tower with
+    {
+        Tier = 2, MaxHealth = 200, Attack = TestMaps.Tower.Attack! with { Damage = 20 },
+        NextTier = Tower3, UpgradeCost = 80, UpgradeTime = UpgradeSeconds,
+    };
+    private static readonly BuildingType Tower = TestMaps.Tower with { NextTier = Tower2, UpgradeCost = 50, UpgradeTime = UpgradeSeconds };
+
+    private static readonly BuildingType Mine3 = TestMaps.Mine with { Tier = 3, MaxHealth = 300, YieldBonus = 4 };
+    private static readonly BuildingType Mine2 = TestMaps.Mine with
+    {
+        Tier = 2, MaxHealth = 200, YieldBonus = 2, NextTier = Mine3, UpgradeCost = 80, UpgradeTime = UpgradeSeconds,
+    };
+    private static readonly BuildingType Mine = TestMaps.Mine with { NextTier = Mine2, UpgradeCost = 50, UpgradeTime = UpgradeSeconds };
 
     private static readonly GameRules Rules = new(
         startingGold: 1000,
         buildRadius: 6f,
         startingUnits: Array.Empty<StartingUnits>(),
-        new UnitCatalog(new[] { Soldier, TestMaps.Dummy }),
-        new[] { TestMaps.Castle, TestMaps.Mine, TestMaps.Barracks, TestMaps.Tower },
-        upgrades: Upgrades);
+        TestMaps.Rules.Units,
+        new[] { TestMaps.Castle, Mine, TestMaps.Barracks, Tower },
+        depositReserveSeconds: 100f,
+        depositRegenSeconds: 10f);
 
-    private static Simulation CreateSim(params string[] extra) =>
-        new(TestMaps.Parse(TestMaps.Field(20, 10), new[] { "start 1 1", "gold 8 1", "unit infantry 0 8 5 2" }.Concat(extra).ToArray()),
-            Rules, new MatchSetup(1, ShuffleStarts: false));
+    /// <summary>Faction 0 (capital at 1,1) with troops at 8,5 and a deposit at 8,1; faction 1 far east.</summary>
+    private static Simulation CreateSim() =>
+        new(TestMaps.Parse(TestMaps.Field(30, 10), "start 1 1", "start 26 6", "gold 8 1", "unit infantry 0 8 5 2"),
+            Rules, new MatchSetup(2, ShuffleStarts: false));
 
     private static void RunSeconds(Simulation sim, float seconds)
     {
@@ -45,169 +48,139 @@ public class UpgradeTests
             sim.Step();
     }
 
-    private static void Research(Simulation sim, string id)
+    private static Building Build(Simulation sim, string typeId, int x, int y)
     {
-        sim.Issue(new ResearchCommand(0, id));
-        RunSeconds(sim, ResearchSeconds + 0.1f);
-        Assert.That(sim.GetFaction(0)!.Technology.Has(id), Is.True, $"{id} should be researched");
-    }
-
-    [Test]
-    public void ResearchCostsGoldTakesTimeAndAnnouncesItself()
-    {
-        var sim = CreateSim();
-        var faction = sim.GetFaction(0)!;
-        int gold = faction.Treasury.Gold;
-
-        sim.Issue(new ResearchCommand(0, "blades"));
+        sim.Issue(new BuildCommand(0, typeId, new Cell(x, y)));
         sim.Step();
-        Assert.That(faction.Treasury.Gold, Is.EqualTo(gold - 50 + 0).Within(1), "paid up front (plus one tick of income)");
-        Assert.That(faction.Technology.Current?.Id, Is.EqualTo("blades"));
-        Assert.That(sim.TakeEvents().OfType<ResearchStarted>().Single().UpgradeId, Is.EqualTo("blades"));
+        var building = sim.Buildings.Single(b => b.Type.Id == typeId && b.FactionId == 0);
+        RunSeconds(sim, Rules.GetBuildingType(typeId).BuildTime + 0.1f);
+        Assert.That(building.IsComplete, Is.True);
+        sim.TakeEvents();
+        return building;
+    }
 
-        RunSeconds(sim, ResearchSeconds - 0.2f);
-        Assert.That(faction.Technology.Has("blades"), Is.False);
-        Assert.That(faction.Technology.ResearchProgress, Is.GreaterThan(0.8f));
-
-        RunSeconds(sim, 0.3f);
-        Assert.That(faction.Technology.Has("blades"), Is.True);
-        Assert.That(faction.Technology.Current, Is.Null);
-        Assert.That(sim.TakeEvents().OfType<ResearchCompleted>().Single().UpgradeId, Is.EqualTo("blades"));
+    private static void Upgrade(Simulation sim, Building building)
+    {
+        sim.Issue(new UpgradeCommand(0, building.Id));
+        RunSeconds(sim, UpgradeSeconds + 0.1f);
     }
 
     [Test]
-    public void UnitUpgradesApplyToExistingAndNewUnits()
+    public void UpgradeCostsGoldTakesTimeAndRaisesTheLevel()
     {
         var sim = CreateSim();
-        var veteran = sim.Units.First();
-        Combat.CombatSystem.ApplyDamage(veteran, 30, ranged: false, attackerFactionId: 1);
+        var tower = Build(sim, "tower", 11, 5);
+        var treasury = sim.GetFaction(0)!.Treasury;
+        int gold = treasury.Gold;
 
-        Research(sim, "blades");
-        Research(sim, "mail");
+        sim.Issue(new UpgradeCommand(0, tower.Id));
+        sim.Step();
+        Assert.That(gold - treasury.Gold, Is.EqualTo(50).Within(1), "paid up front (plus a tick of income)");
+        Assert.That(tower.IsUpgrading, Is.True);
+        Assert.That(sim.TakeEvents().OfType<BuildingUpgradeStarted>().Single().BuildingId, Is.EqualTo(tower.Id));
 
-        Assert.That(veteran.Type.Damage, Is.EqualTo(Soldier.Damage * 125 / 100));
-        Assert.That(veteran.MaxHealth, Is.EqualTo(Soldier.MaxHealth * 150 / 100));
-        Assert.That(veteran.Health, Is.EqualTo(Soldier.MaxHealth - 30 + Soldier.MaxHealth / 2), "existing wounds stay, the bonus is added");
-        Assert.That(veteran.Type.AttackRange, Is.EqualTo(Soldier.AttackRange + 1f));
-        Assert.That(veteran.Type.SightRange, Is.EqualTo(Soldier.SightRange + 1f), "sight keeps covering the range");
+        RunSeconds(sim, UpgradeSeconds - 0.5f);
+        Assert.That(tower.Type.Tier, Is.EqualTo(1), "still the old level while the work goes on");
+        Assert.That(tower.UpgradeProgress, Is.InRange(0.5f, 1f));
 
-        var recruit = sim.SpawnUnit("infantry", 0, new System.Numerics.Vector2(10.5f, 8.5f));
-        Assert.That(recruit.Type, Is.EqualTo(veteran.Type));
-        Assert.That(recruit.Health, Is.EqualTo(recruit.MaxHealth));
+        RunSeconds(sim, 0.6f);
+        Assert.That(tower.Type.Tier, Is.EqualTo(2));
+        Assert.That(tower.IsUpgrading, Is.False);
+        Assert.That((tower.MaxHealth, tower.Type.Attack!.Damage), Is.EqualTo((200, 20)));
+        var done = sim.TakeEvents().OfType<BuildingUpgraded>().Single();
+        Assert.That((done.BuildingId, done.Tier), Is.EqualTo((tower.Id, 2)));
     }
 
     [Test]
-    public void UpgradesDoNotTouchOtherFactions()
-    {
-        var sim = new Simulation(TestMaps.Parse(TestMaps.Field(20, 10), "start 1 1", "start 16 6", "unit infantry 1 12 8"),
-            Rules, new MatchSetup(2, ShuffleStarts: false));
-        sim.Issue(new ResearchCommand(0, "blades"));
-        RunSeconds(sim, ResearchSeconds + 0.1f);
-
-        Assert.That(sim.Units.Single(u => u.FactionId == 1).Type.Damage, Is.EqualTo(Soldier.Damage));
-        Assert.That(sim.GetFaction(1)!.Technology.Unit("infantry").Damage, Is.EqualTo(Soldier.Damage));
-    }
-
-    [Test]
-    public void PercentagesOfOneStatAddUpOnTheBaseValue()
+    public void DamageTakenIsKeptAndTheNewHealthIsAddedOnTop()
     {
         var sim = CreateSim();
-        Research(sim, "blades");
-        Research(sim, "steel");
+        var tower = Build(sim, "tower", 11, 5);
+        tower.Health -= 40;
 
-        Assert.That(sim.Units.First().Type.Damage, Is.EqualTo((int)MathF.Round(Soldier.Damage * 1.5f)));
+        Upgrade(sim, tower);
+
+        Assert.That(tower.Health, Is.EqualTo(TestMaps.Tower.MaxHealth - 40 + (200 - TestMaps.Tower.MaxHealth)));
     }
 
     [Test]
-    public void BuildingUpgradesApplyToTowersAndBarracks()
+    public void MineLevelsAddGoldPerSecondWithoutDrainingTheDepositFaster()
     {
         var sim = CreateSim();
-        sim.Issue(new BuildCommand(0, "tower", new Cell(11, 5)));
-        sim.Issue(new BuildCommand(0, "barracks", new Cell(5, 5)));
-        RunSeconds(sim, 3);
-        var tower = sim.Buildings.Single(b => b.Type.Id == "tower");
-        int capBefore = sim.GetFaction(0)!.ArmyCap;
+        var mine = Build(sim, "mine", 8, 1);
+        var deposit = mine.Deposit!;
+        Assert.That(mine.Income, Is.EqualTo(deposit.Yield));
 
-        Research(sim, "towers");
-        Research(sim, "barracks");
+        Upgrade(sim, mine);
+        Assert.That(mine.Income, Is.EqualTo(deposit.Yield + 2));
+        Upgrade(sim, mine);
+        Assert.That(mine.Income, Is.EqualTo(deposit.Yield + 4));
+        sim.Step();
+        Assert.That(sim.GetFaction(0)!.IncomePerSecond, Is.EqualTo(TestMaps.Castle.Income + deposit.Yield + 4));
 
-        Assert.That(tower.Type.Attack!.Damage, Is.EqualTo(TestMaps.Tower.Attack!.Damage * 140 / 100));
-        Assert.That(tower.MaxHealth, Is.EqualTo(TestMaps.Tower.MaxHealth * 150 / 100));
-        Assert.That(tower.Health, Is.EqualTo(tower.MaxHealth));
-        Assert.That(sim.GetFaction(0)!.ArmyCap, Is.EqualTo(capBefore + 5));
+        int reserve = deposit.Reserve;
+        RunSeconds(sim, 10f);
+        Assert.That(reserve - deposit.Reserve, Is.EqualTo(10 * deposit.Yield).Within(deposit.Yield), "only the deposit's own yield drains it");
+    }
 
-        // Buildings placed later come with the upgrades.
+    [Test]
+    public void TwoLevelsAtMostThenTheBuildingIsMaxed()
+    {
+        var sim = CreateSim();
+        var tower = Build(sim, "tower", 11, 5);
+
+        Upgrade(sim, tower);
+        Upgrade(sim, tower);
+
+        Assert.That(tower.Type.Tier, Is.EqualTo(3));
+        Assert.That(tower.Type.Attack!.Range, Is.EqualTo(5f));
+        Assert.That(tower.Type.MaxTier, Is.EqualTo(3));
+        Assert.That(sim.CanUpgrade(0, tower.Id), Is.EqualTo(UpgradeError.MaxTier));
+    }
+
+    [Test]
+    public void InvalidUpgradesAreRejectedAndCostNothing()
+    {
+        var sim = CreateSim();
+        var tower = Build(sim, "tower", 11, 5);
+        var barracks = Build(sim, "barracks", 11, 7);
+        var enemyCastle = sim.GetBuilding(sim.GetFaction(1)!.CapitalId)!;
+
+        Assert.That(sim.CanUpgrade(0, barracks.Id), Is.EqualTo(UpgradeError.MaxTier), "only towers and mines have levels");
+        Assert.That(sim.CanUpgrade(0, sim.GetFaction(0)!.CapitalId), Is.EqualTo(UpgradeError.MaxTier));
+        Assert.That(sim.CanUpgrade(0, enemyCastle.Id), Is.EqualTo(UpgradeError.NotOwner));
+        Assert.That(sim.CanUpgrade(0, 9999), Is.EqualTo(UpgradeError.UnknownBuilding));
+
+        sim.Issue(new UpgradeCommand(0, tower.Id));
+        sim.Step();
+        Assert.That(sim.CanUpgrade(0, tower.Id), Is.EqualTo(UpgradeError.InProgress));
+
         sim.Issue(new BuildCommand(0, "tower", new Cell(13, 5)));
         sim.Step();
-        Assert.That(sim.Buildings.Last().Type.Attack!.Damage, Is.EqualTo(tower.Type.Attack.Damage));
-    }
+        var site = sim.Buildings.Single(b => b.Type.Id == "tower" && !b.IsComplete);
+        Assert.That(sim.CanUpgrade(0, site.Id), Is.EqualTo(UpgradeError.NotComplete));
 
-    [Test]
-    public void MineYieldBonusAddsToEveryWorkingMine()
-    {
-        var sim = CreateSim();
-        sim.Issue(new BuildCommand(0, "mine", new Cell(8, 1)));
-        RunSeconds(sim, TestMaps.Mine.BuildTime + 0.1f);
-        int income = sim.GetFaction(0)!.IncomePerSecond;
+        var treasury = sim.GetFaction(0)!.Treasury;
+        treasury.TrySpend(treasury.Gold);
+        RunSeconds(sim, UpgradeSeconds + 0.1f);
+        treasury.TrySpend(treasury.Gold);
+        Assert.That(sim.CanUpgrade(0, tower.Id), Is.EqualTo(UpgradeError.NotEnoughGold));
 
-        Research(sim, "mines");
-
-        Assert.That(sim.GetFaction(0)!.IncomePerSecond, Is.EqualTo(income + 2));
-    }
-
-    [Test]
-    public void UpkeepUpgradeCutsArmyUpkeep()
-    {
-        var sim = CreateSim();
-        Assert.That(sim.GetFaction(0)!.UpkeepPerMinute, Is.EqualTo(240));
-
-        Research(sim, "supply");
-
-        Assert.That(sim.GetFaction(0)!.UpkeepPerMinute, Is.EqualTo(120));
-    }
-
-    [TestCase("nope", ResearchError.UnknownUpgrade)]
-    [TestCase("steel", ResearchError.MissingRequirement)]
-    public void InvalidResearchIsRejected(string id, ResearchError expected)
-    {
-        var sim = CreateSim();
-        Assert.That(sim.CanResearch(0, id), Is.EqualTo(expected));
-        sim.Issue(new ResearchCommand(0, id));
+        sim.TakeEvents();
+        sim.Issue(new UpgradeCommand(0, tower.Id));
         sim.Step();
-        Assert.That(sim.TakeEvents().OfType<ResearchRejected>().Single().Reason, Is.EqualTo(expected));
+        Assert.That(sim.TakeEvents().OfType<UpgradeRejected>().Single().Reason, Is.EqualTo(UpgradeError.NotEnoughGold));
+        Assert.That(tower.Type.Tier, Is.EqualTo(2));
     }
 
     [Test]
-    public void OneResearchAtATimeAndNeverTwice()
-    {
-        var sim = CreateSim();
-        sim.Issue(new ResearchCommand(0, "blades"));
-        sim.Step();
-        Assert.That(sim.CanResearch(0, "mail"), Is.EqualTo(ResearchError.ResearchInProgress));
-
-        RunSeconds(sim, ResearchSeconds);
-        Assert.That(sim.CanResearch(0, "blades"), Is.EqualTo(ResearchError.AlreadyResearched));
-        Assert.That(sim.CanResearch(0, "mail"), Is.EqualTo(ResearchError.None));
-    }
-
-    [Test]
-    public void ResearchNeedsGoldAndACapital()
-    {
-        var poor = new Simulation(TestMaps.Parse(TestMaps.Field(20, 10), "start 1 1"),
-            new GameRules(10, 4f, Array.Empty<StartingUnits>(), Rules.Units, Rules.BuildingTypes, upgrades: Upgrades),
-            new MatchSetup(1, ShuffleStarts: false));
-        Assert.That(poor.CanResearch(0, "blades"), Is.EqualTo(ResearchError.NotEnoughGold));
-
-        var homeless = new Simulation(TestMaps.Parse(TestMaps.Field(20, 10), "unit infantry 0 5 5"), Rules, MatchSetup.Sandbox);
-        Assert.That(homeless.CanResearch(0, "blades"), Is.EqualTo(ResearchError.NoCapital));
-    }
-
-    [Test]
-    public void ResearchIsFingerprintedForLockstep()
+    public void UpgradesAreFingerprintedForLockstep()
     {
         var a = CreateSim();
         var b = CreateSim();
-        a.Issue(new ResearchCommand(0, "blades"));
+        var towerA = Build(a, "tower", 11, 5);
+        Build(b, "tower", 11, 5);
+        a.Issue(new UpgradeCommand(0, towerA.Id));
         a.Step();
         b.Step();
 
@@ -215,32 +188,43 @@ public class UpgradeTests
     }
 
     [Test]
-    public void ResearchCommandSurvivesTheNetworkCodec()
+    public void UpgradeCommandSurvivesTheNetworkCodec()
     {
-        var input = new InputMessage(42, new Command[] { new ResearchCommand(3, "deep_mines") });
+        var input = new InputMessage(42, new Command[] { new UpgradeCommand(3, 77) });
 
         var decoded = (InputMessage)NetCodec.Decode(NetCodec.Encode(input));
 
-        Assert.That(decoded.Commands.Single(), Is.EqualTo(new ResearchCommand(3, "deep_mines")));
+        Assert.That(decoded.Commands.Single(), Is.EqualTo(new UpgradeCommand(3, 77)));
     }
 
     [Test]
-    public void RulesRejectBadUpgrades()
+    public void TiersInTheRulesFileCarryOverWhatTheyDoNotChange()
     {
-        GameRules Make(params UpgradeType[] upgrades) =>
-            new(0, 4f, Array.Empty<StartingUnits>(), Rules.Units, Rules.BuildingTypes, upgrades: upgrades);
+        string json = File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json"));
+        var rules = GameRules.Parse(json);
 
-        Assert.Throws<ArgumentException>(() => Make(Upgrade("x", 10, Effect(UpgradeStat.Damage, 10, "dragon"))));
-        Assert.Throws<ArgumentException>(() => Make(new UpgradeType("x", "x", 10, 1f, Array.Empty<UpgradeEffect>(), Requires: "y")));
-        Assert.Throws<ArgumentException>(() => Make(Upgrade("x", 10), Upgrade("x", 10)));
+        var tower = rules.GetBuildingType("tower");
+        Assert.That(tower.MaxTier, Is.EqualTo(3));
+        Assert.That(tower.NextTier!.Attack!.Cooldown, Is.EqualTo(tower.Attack!.Cooldown), "unchanged stats carry over");
+        Assert.That(tower.NextTier.Attack.Range, Is.EqualTo(tower.Attack.Range));
+        Assert.That(tower.NextTier.NextTier!.Attack!.Range, Is.GreaterThan(tower.Attack.Range));
+        Assert.That(tower.NextTier.Id, Is.EqualTo("tower"));
+
+        var mine = rules.GetBuildingType("mine");
+        Assert.That(mine.MaxTier, Is.EqualTo(3));
+        Assert.That(new[] { mine.YieldBonus, mine.NextTier!.YieldBonus, mine.NextTier.NextTier!.YieldBonus }, Is.Ordered.Ascending);
+        Assert.That(new[] { mine.MaxHealth, mine.NextTier.MaxHealth, mine.NextTier.NextTier.MaxHealth }, Is.Ordered.Ascending);
+        Assert.That(mine.UpgradeCost, Is.GreaterThan(0));
+
+        foreach (string id in new[] { "castle", "barracks", "watchtower" })
+            Assert.That(rules.GetBuildingType(id).MaxTier, Is.EqualTo(1), $"{id} has no levels");
     }
 
     [Test]
-    public void ShippedRulesHaveUpgrades()
+    public void RulesRejectLevelsThatChangeTheFootprint()
     {
-        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
-
-        Assert.That(rules.Upgrades, Has.Count.GreaterThanOrEqualTo(5));
-        Assert.That(rules.FindUpgrade("steel_weapons")!.Requires, Is.EqualTo("forged_blades"));
+        var broken = Tower with { NextTier = Tower2 with { Size = 3 } };
+        Assert.Throws<ArgumentException>(() =>
+            new GameRules(0, 4f, Array.Empty<StartingUnits>(), Rules.Units, new[] { TestMaps.Castle, broken }));
     }
 }

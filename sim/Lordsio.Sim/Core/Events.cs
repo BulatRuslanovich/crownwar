@@ -22,14 +22,15 @@ public enum RecruitError
     ArmyCapReached,
 }
 
-public enum ResearchError
+public enum UpgradeError
 {
     None,
-    UnknownUpgrade,
-    NoCapital,
-    AlreadyResearched,
-    ResearchInProgress,
-    MissingRequirement,
+    UnknownBuilding,
+    NotOwner,
+    NotComplete,
+    /// <summary>The building is at its highest level, or its kind has no levels at all.</summary>
+    MaxTier,
+    InProgress,
     NotEnoughGold,
 }
 
@@ -59,11 +60,12 @@ public sealed record BuildingPlaced(int FactionId, int BuildingId) : SimEvent(Fa
 
 public sealed record BuildingCompleted(int FactionId, int BuildingId) : SimEvent(FactionId);
 
-public sealed record ResearchStarted(int FactionId, string UpgradeId) : SimEvent(FactionId);
+public sealed record BuildingUpgradeStarted(int FactionId, int BuildingId) : SimEvent(FactionId);
 
-public sealed record ResearchCompleted(int FactionId, string UpgradeId) : SimEvent(FactionId);
+/// <summary>A building reached the next level (<paramref name="Tier"/>).</summary>
+public sealed record BuildingUpgraded(int FactionId, int BuildingId, int Tier) : SimEvent(FactionId);
 
-public sealed record ResearchRejected(int FactionId, string UpgradeId, ResearchError Reason) : SimEvent(FactionId);
+public sealed record UpgradeRejected(int FactionId, int BuildingId, UpgradeError Reason) : SimEvent(FactionId);
 
 /// <summary><see cref="SimEvent.FactionId"/> is the former owner.</summary>
 public sealed record BuildingDestroyed(int FactionId, int BuildingId, string BuildingTypeId, int KillerFactionId, Vector2 Position, int Size)

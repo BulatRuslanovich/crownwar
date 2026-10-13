@@ -13,6 +13,9 @@ public sealed record BuildingAttack(int Damage, float Range, float Cooldown, flo
 /// Income is gold per second; a mine instead earns the yield of the deposit it stands on.
 /// A faction whose capital is destroyed is eliminated. <paramref name="MaxCount"/> caps how many of the kind one
 /// faction may have at once, sites included (0 = no limit).
+/// A kind may have upgrade levels: each level is a type of its own (same id, <paramref name="Tier"/> 1, 2, 3…) that
+/// knows the <paramref name="NextTier"/> and what it costs to get there; a mine's level adds <paramref name="YieldBonus"/>
+/// gold per second on top of its deposit.
 /// </summary>
 public sealed record BuildingType(
     string Id,
@@ -29,10 +32,18 @@ public sealed record BuildingType(
     bool IsMine = false,
     BuildingAttack? Attack = null,
     float SightRange = 0f,
-    int MaxCount = 0)
+    int MaxCount = 0,
+    int Tier = 1,
+    BuildingType? NextTier = null,
+    int UpgradeCost = 0,
+    float UpgradeTime = 0f,
+    int YieldBonus = 0)
 {
     /// <summary>Capitals are placed at match start and cannot be built by players.</summary>
     public bool IsBuildable => !IsCapital;
+
+    /// <summary>The highest level this kind can reach.</summary>
+    public int MaxTier => NextTier?.MaxTier ?? Tier;
 
     /// <summary>
     /// How far the building sees (tiles from its center), for the fog of war: <see cref="SightRange"/> if set,
@@ -74,8 +85,8 @@ public sealed class Building : Entity
         ConstructionTicksLeft = constructionTicks;
     }
 
-    /// <summary>The owner's version of the building type: replaced when the owner researches an upgrade.</summary>
-    public BuildingType Type { get; internal set; }
+    /// <summary>The building's kind at its current level: replaced by the next level when an upgrade completes.</summary>
+    public BuildingType Type { get; private set; }
 
     /// <summary>Top-left cell of the footprint.</summary>
     public Cell Anchor { get; }
@@ -87,8 +98,18 @@ public sealed class Building : Entity
     public bool IsComplete => ConstructionTicksLeft == 0;
     public float ConstructionProgress => _constructionTicks == 0 ? 1f : 1f - (float)ConstructionTicksLeft / _constructionTicks;
 
-    /// <summary>Gold per second this building earns: once complete, and for a mine while its deposit is not exhausted.</summary>
-    public int Income => !IsComplete ? 0 : Type.IsMine ? Deposit is { IsExhausted: false } d ? d.Yield : 0 : Type.Income;
+    /// <summary>
+    /// Gold per second this building earns: once complete, and for a mine while its deposit is not exhausted
+    /// (the deposit's yield plus the mine's level bonus; only the yield drains the deposit).
+    /// </summary>
+    public int Income => !IsComplete ? 0 : Type.IsMine ? Deposit is { IsExhausted: false } d ? d.Yield + Type.YieldBonus : 0 : Type.Income;
+
+    /// <summary>Ticks until the upgrade under way completes; 0 when none.</summary>
+    public int UpgradeTicksLeft { get; private set; }
+    private int _upgradeTicks;
+
+    public bool IsUpgrading => UpgradeTicksLeft > 0;
+    public float UpgradeProgress => _upgradeTicks == 0 || !IsUpgrading ? 0f : 1f - (float)UpgradeTicksLeft / _upgradeTicks;
 
     public override int MaxHealth => Type.MaxHealth;
     public override float RangedArmor => Type.RangedArmor;
@@ -135,6 +156,28 @@ public sealed class Building : Entity
         Health = Math.Min(Health, MaxHealth);
         ConstructionTicksLeft--;
         return ConstructionTicksLeft == 0;
+    }
+
+    internal void StartUpgrade(int ticks)
+    {
+        _upgradeTicks = Math.Max(1, ticks);
+        UpgradeTicksLeft = _upgradeTicks;
+    }
+
+    /// <summary>
+    /// One tick of the upgrade under way. On the last one the building becomes the next level; it keeps the damage
+    /// it had taken, so the extra health of the new level is added on top.
+    /// </summary>
+    /// <returns>True on the tick the upgrade completes.</returns>
+    internal bool AdvanceUpgrade()
+    {
+        if (UpgradeTicksLeft == 0 || --UpgradeTicksLeft > 0)
+            return false;
+        var next = Type.NextTier!;
+        int gained = next.MaxHealth - Type.MaxHealth;
+        Type = next;
+        Health = Math.Clamp(Health + gained, 1, MaxHealth);
+        return true;
     }
 
     internal void Enqueue(ProductionItem item) => _queue.Add(item);

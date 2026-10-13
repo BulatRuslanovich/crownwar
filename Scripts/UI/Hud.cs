@@ -18,7 +18,6 @@ public partial class Hud : CanvasLayer
     private const float MessageDuration = 2.5f;
 
     private static readonly Color ProblemColor = new("ff8a80");
-    private static readonly Color ResearchColor = new("9fd8ff");
     private static readonly Color DefaultTextColor = new(0.95f, 0.9f, 0.8f);
 
     /// <summary>Physical hotkey per building type id; types without one are still on the bar.</summary>
@@ -50,10 +49,9 @@ public partial class Hud : CanvasLayer
     private Container _recruitRow = null!;
     private Label _queue = null!;
     private ProgressBar _progress = null!;
-    private Label _researchTitle = null!;
-    private Container _researchRow = null!;
-    private ProgressBar _researchProgress = null!;
-    private readonly List<(Button Button, UpgradeType Upgrade)> _researchButtons = new();
+    private Label _upgradeTitle = null!;
+    private Button _upgradeButton = null!;
+    private ProgressBar _upgradeProgress = null!;
     private Label _message = null!;
     private AlertIndicator _alert = null!;
     private int? _panelBuildingId;
@@ -74,10 +72,11 @@ public partial class Hud : CanvasLayer
         _recruitRow = GetNode<Container>("BuildingPanel/Rows/RecruitButtons");
         _queue = GetNode<Label>("BuildingPanel/Rows/Queue");
         _progress = GetNode<ProgressBar>("BuildingPanel/Rows/Progress");
-        _researchTitle = GetNode<Label>("BuildingPanel/Rows/ResearchTitle");
-        _researchRow = GetNode<Container>("BuildingPanel/Rows/ResearchButtons");
-        _researchProgress = GetNode<ProgressBar>("BuildingPanel/Rows/ResearchProgress");
-        CreateResearchButtons();
+        _upgradeTitle = GetNode<Label>("BuildingPanel/Rows/UpgradeTitle");
+        _upgradeButton = GetNode<Button>("BuildingPanel/Rows/UpgradeButton");
+        _upgradeButton.FocusMode = Control.FocusModeEnum.None;
+        _upgradeButton.Pressed += UpgradeSelected;
+        _upgradeProgress = GetNode<ProgressBar>("BuildingPanel/Rows/UpgradeProgress");
         _message = GetNode<Label>("Message");
         _alert = GetNode<AlertIndicator>("AlertIndicator");
         _alert.Initialize(match);
@@ -171,6 +170,12 @@ public partial class Hud : CanvasLayer
     {
         if (@event is not InputEventKey { Pressed: true, Echo: false, CtrlPressed: false } key)
             return;
+        if (key.PhysicalKeycode == Key.U)
+        {
+            UpgradeSelected();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         foreach (var (_, type) in _buildButtons)
         {
             if (BuildHotkeys.TryGetValue(type.Id, out var hotkey) && key.PhysicalKeycode == hotkey)
@@ -207,13 +212,13 @@ public partial class Hud : CanvasLayer
                 else if (destroyed.KillerFactionId == player)
                     ShowMessage(string.Format(Tr("MSG_ENEMY_BUILDING_DESTROYED"), name));
                 break;
-            case ResearchStarted started when started.FactionId == player && _match.Sim.Rules.FindUpgrade(started.UpgradeId) is { } upgrade:
-                ShowMessage(string.Format(Tr("MSG_RESEARCH_STARTED"), Names.Of(upgrade)));
+            case BuildingUpgradeStarted started when started.FactionId == player && _match.Sim.GetBuilding(started.BuildingId) is { } building:
+                ShowMessage(string.Format(Tr("MSG_UPGRADE_STARTED"), Names.Of(building.Type), building.Type.Tier + 1));
                 break;
-            case ResearchCompleted completed when completed.FactionId == player && _match.Sim.Rules.FindUpgrade(completed.UpgradeId) is { } upgrade:
-                ShowMessage(string.Format(Tr("MSG_RESEARCH_COMPLETED"), Names.Of(upgrade)));
+            case BuildingUpgraded upgraded when upgraded.FactionId == player && _match.Sim.GetBuilding(upgraded.BuildingId) is { } building:
+                ShowMessage(string.Format(Tr("MSG_UPGRADE_DONE"), Names.Of(building.Type), upgraded.Tier));
                 break;
-            case ResearchRejected rejected when rejected.FactionId == player:
+            case UpgradeRejected rejected when rejected.FactionId == player:
                 ShowMessage(Describe(rejected.Reason));
                 break;
             case DepositExhausted exhausted when exhausted.FactionId == player:
@@ -353,7 +358,9 @@ public partial class Hud : CanvasLayer
         }
 
         bool own = building.FactionId == _match.LocalFactionId;
-        _title.Text = $"{Names.Of(building.Type)} ({(own ? Tr("HUD_YOURS") : Names.Faction(building.FactionId))})";
+        string level = building.Type.MaxTier > 1 ? " " + string.Format(Tr("HUD_TIER"), building.Type.Tier) : "";
+        // Own buildings need no owner in the title (and the short title keeps the panel clear of the build bar).
+        _title.Text = $"{Names.Of(building.Type)}{level}" + (own ? "" : $" ({Names.Faction(building.FactionId)})");
         string status = building.IsComplete
             ? DescribeBuildingType(building.Type, building)
             : string.Format(Tr("HUD_UNDER_CONSTRUCTION"), building.ConstructionProgress * 100f);
@@ -371,7 +378,7 @@ public partial class Hud : CanvasLayer
             button.TooltipText = error == RecruitError.None ? upkeep : Describe(error) + "\n" + upkeep;
         }
 
-        UpdateResearch(own && building.IsComplete && building.Type.IsCapital);
+        UpdateUpgrade(building, own);
 
         bool training = own && building.Queue.Count > 0;
         _queue.Visible = training;
@@ -385,101 +392,69 @@ public partial class Hud : CanvasLayer
         }
     }
 
-    private void CreateResearchButtons()
+    /// <summary>
+    /// The level section of a tower's or mine's panel: its level, the button for the next one (cost, hotkey U, and
+    /// what changes in the tooltip), or the progress of the upgrade under way.
+    /// </summary>
+    private void UpdateUpgrade(Building building, bool own)
     {
-        foreach (var upgrade in _match.Sim.Rules.Upgrades)
-        {
-            var button = new Button { FocusMode = Control.FocusModeEnum.None };
-            button.AddThemeFontSizeOverride("font_size", 14);
-            string id = upgrade.Id;
-            button.Pressed += () => _match.Issue(new ResearchCommand(_match.LocalFactionId, id));
-            _researchRow.AddChild(button);
-            _researchButtons.Add((button, upgrade));
-        }
-    }
-
-    /// <summary>The research section of the castle panel: what can be researched, what is under way, what is done.</summary>
-    private void UpdateResearch(bool visible)
-    {
-        bool any = visible && _researchButtons.Count > 0;
-        _researchTitle.Visible = any;
-        _researchRow.Visible = any;
-        _researchProgress.Visible = false;
-        if (!any || _match.Sim.GetFaction(_match.LocalFactionId) is not { } faction)
+        var type = building.Type;
+        bool visible = own && building.IsComplete && type.MaxTier > 1;
+        _upgradeTitle.Visible = visible;
+        _upgradeButton.Visible = visible && !building.IsUpgrading && type.NextTier != null;
+        _upgradeProgress.Visible = visible && building.IsUpgrading;
+        if (!visible)
             return;
 
-        var tech = faction.Technology;
-        _researchTitle.Text = string.Format(Tr("HUD_RESEARCH"), tech.Researched.Count, _researchButtons.Count);
-        _researchTitle.TooltipText = tech.Researched.Count == 0
-            ? ""
-            : Tr("HUD_RESEARCHED") + "\n" + string.Join("\n", tech.Researched.Select(u => "• " + Names.Of(u)));
-        _researchTitle.MouseFilter = Control.MouseFilterEnum.Pass;
-        foreach (var (button, upgrade) in _researchButtons)
+        if (building.IsUpgrading)
         {
-            // Researched upgrades leave the list; the title counts them and lists them in its tooltip.
-            button.Visible = !tech.Has(upgrade.Id);
-            if (!button.Visible)
-                continue;
-            bool current = tech.Current == upgrade;
-            var error = _match.Sim.CanResearch(_match.LocalFactionId, upgrade.Id);
-            button.Text = current
-                ? $"{Names.Of(upgrade)} {tech.ResearchProgress * 100f:0}%"
-                : $"{Names.Of(upgrade)} {upgrade.Cost}{Tr("HUD_GOLD_SHORT")}";
-            // Red only for what gold would fix; waiting (another research, a prerequisite) is just dimmed.
-            button.Modulate = current ? ResearchColor : error switch
-            {
-                ResearchError.None => Colors.White,
-                ResearchError.NotEnoughGold => ProblemColor,
-                _ => Colors.White with { A = 0.5f },
-            };
-            string description = DescribeUpgrade(upgrade);
-            button.TooltipText = error is ResearchError.None or ResearchError.AlreadyResearched || current
-                ? description
-                : Describe(error, upgrade) + "\n" + description;
+            _upgradeTitle.Text = string.Format(Tr("HUD_UPGRADING"), type.Tier + 1, building.UpgradeProgress * 100f);
+            _upgradeProgress.Value = building.UpgradeProgress * 100f;
+            return;
         }
-        if (tech.Current != null)
-        {
-            _researchProgress.Visible = true;
-            _researchProgress.Value = tech.ResearchProgress * 100f;
-        }
+        _upgradeTitle.Text = string.Format(Tr(type.NextTier == null ? "HUD_LEVEL_MAX" : "HUD_LEVEL"), type.Tier, type.MaxTier);
+        if (type.NextTier is not { } next)
+            return;
+        _upgradeButton.Text = string.Format(Tr("HUD_UPGRADE_BUTTON"), next.Tier, type.UpgradeCost);
+        var error = _match.Sim.CanUpgrade(_match.LocalFactionId, building.Id);
+        MarkAvailable(_upgradeButton, error == UpgradeError.None);
+        string changes = DescribeUpgrade(type, next);
+        _upgradeButton.TooltipText = error == UpgradeError.None ? changes : Describe(error) + "\n" + changes;
     }
 
-    /// <summary>The upgrade's effects, cost and time, built from the rules so new upgrades describe themselves.</summary>
-    private string DescribeUpgrade(UpgradeType upgrade)
+    /// <summary>What the next level changes, "before → after", built from the rules so new levels describe themselves.</summary>
+    private string DescribeUpgrade(BuildingType from, BuildingType to)
     {
-        var rules = _match.Sim.Rules;
-        string Targets(UpgradeEffect effect) => string.Join(", ", effect.Targets.Select(t =>
-            rules.Units.Contains(t) ? Names.Of(rules.Units.Get(t)) : Names.Of(rules.GetBuildingType(t))));
-
-        var lines = upgrade.Effects.Select(e => e.Stat switch
+        var lines = new List<string> { string.Format(Tr("UPGRADE_HEALTH"), from.MaxHealth, to.MaxHealth) };
+        if (from.Attack is { } a && to.Attack is { } b)
         {
-            UpgradeStat.Damage => string.Format(Tr("EFFECT_DAMAGE"), Targets(e), e.Amount),
-            UpgradeStat.Health => string.Format(Tr("EFFECT_HEALTH"), Targets(e), e.Amount),
-            UpgradeStat.Range => string.Format(Tr("EFFECT_RANGE"), Targets(e), e.Amount),
-            UpgradeStat.ArmyCap => string.Format(Tr("EFFECT_ARMY_CAP"), Targets(e), e.Amount),
-            UpgradeStat.MineYield => string.Format(Tr("EFFECT_MINE_YIELD"), e.Amount),
-            UpgradeStat.Upkeep => string.Format(Tr("EFFECT_UPKEEP"), e.Amount),
-            _ => e.Stat.ToString(),
-        }).ToList();
-        lines.Add(string.Format(Tr("UPGRADE_COST_TIME"), upgrade.Cost, upgrade.ResearchTime));
+            if (a.Damage != b.Damage)
+                lines.Add(string.Format(Tr("UPGRADE_DAMAGE"), a.Damage, b.Damage));
+            if (!Mathf.IsEqualApprox(a.Range, b.Range))
+                lines.Add(string.Format(Tr("UPGRADE_RANGE"), a.Range, b.Range));
+        }
+        if (to.YieldBonus != from.YieldBonus)
+            lines.Add(string.Format(Tr("UPGRADE_YIELD"), from.YieldBonus, to.YieldBonus));
+        lines.Add(string.Format(Tr("UPGRADE_COST_TIME"), from.UpgradeCost, from.UpgradeTime));
         return string.Join("\n", lines);
     }
 
-    private string Describe(ResearchError error, UpgradeType upgrade) => error switch
+    private string Describe(UpgradeError error) => Tr(error switch
     {
-        ResearchError.MissingRequirement when _match.Sim.Rules.FindUpgrade(upgrade.Requires!) is { } required =>
-            string.Format(Tr("ERR_RESEARCH_REQUIRES"), Names.Of(required)),
-        _ => Describe(error),
-    };
-
-    private string Describe(ResearchError error) => Tr(error switch
-    {
-        ResearchError.NotEnoughGold => "ERR_NOT_ENOUGH_GOLD",
-        ResearchError.ResearchInProgress => "ERR_RESEARCH_BUSY",
-        ResearchError.AlreadyResearched => "ERR_RESEARCH_DONE",
-        ResearchError.NoCapital => "ERR_RESEARCH_NO_CAPITAL",
-        _ => "ERR_RESEARCH_UNKNOWN",
+        UpgradeError.NotEnoughGold => "ERR_NOT_ENOUGH_GOLD",
+        UpgradeError.InProgress => "ERR_UPGRADE_BUSY",
+        UpgradeError.MaxTier => "ERR_UPGRADE_MAX",
+        UpgradeError.NotComplete => "ERR_NOT_COMPLETE",
+        _ => "ERR_NOT_OWNER",
     });
+
+    /// <summary>U: upgrade the selected building, the same as its panel button.</summary>
+    private void UpgradeSelected()
+    {
+        if (_match.Selection.BuildingId is { } id && _match.Sim.GetBuilding(id) is { } building
+            && building.FactionId == _match.LocalFactionId && building.Type.MaxTier > 1)
+            _match.Issue(new UpgradeCommand(_match.LocalFactionId, id));
+    }
 
     private void RebuildRecruitButtons(Building building)
     {
@@ -517,7 +492,7 @@ public partial class Hud : CanvasLayer
     {
         var parts = new List<string>();
         if (type.IsMine)
-            parts.Add(instance?.Deposit is { } d ? DescribeDeposit(d) : Tr("INFO_MINE"));
+            parts.Add(instance?.Deposit is { } d ? DescribeDeposit(d, type.YieldBonus) : Tr("INFO_MINE"));
         if (type.Income > 0)
             parts.Add(string.Format(Tr("INFO_INCOME"), type.Income));
         if (type.ArmyCap > 0)
@@ -525,7 +500,7 @@ public partial class Hud : CanvasLayer
         if (type.Recruits.Count > 0)
             parts.Add(Tr("INFO_TRAINS"));
         if (type.Attack is { } attack)
-            parts.Add(string.Format(Tr("INFO_SHOOTS"), attack.Range));
+            parts.Add(string.Format(Tr("INFO_SHOOTS"), attack.Range, attack.Damage));
         else if (type.SightRange > 0f && !type.IsCapital)
             parts.Add(string.Format(Tr("INFO_SIGHT"), type.SightRange));
         if (type.IsCapital)
@@ -533,11 +508,11 @@ public partial class Hud : CanvasLayer
         return string.Join("  ·  ", parts);
     }
 
-    private string DescribeDeposit(Lordsio.Sim.World.GoldDeposit d)
+    private string DescribeDeposit(Lordsio.Sim.World.GoldDeposit d, int levelBonus)
     {
         if (d.IsExhausted)
             return string.Format(Tr("INFO_DEPOSIT_EXHAUSTED"), Mathf.CeilToInt(d.RegenTicksLeft / (float)Simulation.TicksPerSecond));
-        string mining = string.Format(Tr("INFO_MINING"), d.Yield);
+        string mining = string.Format(Tr("INFO_MINING"), d.Yield + levelBonus);
         return d.IsEndless ? mining : mining + "  ·  " + string.Format(Tr("INFO_DEPOSIT_RESERVE"), d.Reserve, d.Capacity);
     }
 

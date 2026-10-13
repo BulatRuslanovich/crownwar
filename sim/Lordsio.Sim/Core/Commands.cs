@@ -27,8 +27,8 @@ public sealed record AttackCommand(int FactionId, IReadOnlyList<int> UnitIds, in
 /// <summary>Pay for a unit now and queue it for training at an owned castle or barracks.</summary>
 public sealed record RecruitCommand(int FactionId, int BuildingId, string UnitTypeId) : Command(FactionId);
 
-/// <summary>Pay for an upgrade and start researching it at the faction's capital (one research at a time).</summary>
-public sealed record ResearchCommand(int FactionId, string UpgradeId) : Command(FactionId);
+/// <summary>Pay for the next level of one of the faction's buildings (an archer tower or a mine) and start upgrading it.</summary>
+public sealed record UpgradeCommand(int FactionId, int BuildingId) : Command(FactionId);
 
 /// <summary>Pay for a building and start constructing it with its top-left corner at <paramref name="Anchor"/>.</summary>
 public sealed record BuildCommand(int FactionId, string BuildingTypeId, Cell Anchor) : Command(FactionId);

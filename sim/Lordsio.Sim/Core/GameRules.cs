@@ -10,12 +10,11 @@ public sealed record StartingUnits(string UnitTypeId, int Count);
 public sealed class GameRules
 {
     private readonly Dictionary<string, BuildingType> _buildingTypes;
-    private readonly List<UpgradeType> _upgrades = new();
 
     public GameRules(int startingGold, float buildRadius, IReadOnlyList<StartingUnits> startingUnits,
         UnitCatalog units, IEnumerable<BuildingType> buildingTypes,
         float depositReserveSeconds = 0f, float depositRegenSeconds = 0f, int upkeepAllowance = 0,
-        IEnumerable<UpgradeType>? upgrades = null, int goldCap = 0)
+        int goldCap = 0)
     {
         if (startingGold < 0)
             throw new ArgumentOutOfRangeException(nameof(startingGold));
@@ -54,6 +53,16 @@ public sealed class GameRules
                 throw new ArgumentException($"Building type '{type.Id}': size and health must be positive, cost and build time non-negative.");
             if (type.RangedArmor is < 0f or > 1f)
                 throw new ArgumentException($"Building type '{type.Id}': ranged armor must be in [0, 1].");
+            for (var level = type.NextTier; level != null; level = level.NextTier)
+            {
+                if (level.Id != type.Id || level.MaxHealth <= 0 || level.Size != type.Size)
+                    throw new ArgumentException($"Building type '{type.Id}': every level keeps the id and size and has health.");
+            }
+            for (var level = type; level.NextTier != null; level = level.NextTier)
+            {
+                if (level.UpgradeCost < 0 || level.UpgradeTime < 0f)
+                    throw new ArgumentException($"Building type '{type.Id}': upgrade cost and time cannot be negative.");
+            }
             if (type.IsMine && type.Size != Lordsio.Sim.World.GoldDeposit.Size)
                 throw new ArgumentException($"Mine type '{type.Id}' must match the deposit size {Lordsio.Sim.World.GoldDeposit.Size}.");
             if (!_buildingTypes.TryAdd(type.Id, type))
@@ -62,24 +71,6 @@ public sealed class GameRules
         Capital = _buildingTypes.Values.SingleOrDefault(t => t.IsCapital)
                   ?? throw new ArgumentException("Exactly one building type must be the capital.");
 
-        foreach (var upgrade in upgrades ?? Array.Empty<UpgradeType>())
-        {
-            if (upgrade.Cost < 0 || upgrade.ResearchTime < 0f)
-                throw new ArgumentException($"Upgrade '{upgrade.Id}': cost and research time cannot be negative.");
-            if (_upgrades.Exists(u => u.Id == upgrade.Id))
-                throw new ArgumentException($"Duplicate upgrade id '{upgrade.Id}'.");
-            if (upgrade.Requires != null && !_upgrades.Exists(u => u.Id == upgrade.Requires))
-                throw new ArgumentException($"Upgrade '{upgrade.Id}' requires '{upgrade.Requires}', which must be listed before it.");
-            foreach (var effect in upgrade.Effects)
-            {
-                foreach (string target in effect.Targets)
-                {
-                    if (!units.Contains(target) && !_buildingTypes.ContainsKey(target))
-                        throw new ArgumentException($"Upgrade '{upgrade.Id}' targets unknown type '{target}'.");
-                }
-            }
-            _upgrades.Add(upgrade);
-        }
     }
 
     public int StartingGold { get; }
@@ -110,11 +101,6 @@ public sealed class GameRules
     public BuildingType Capital { get; }
 
     public IEnumerable<BuildingType> BuildingTypes => _buildingTypes.Values;
-
-    /// <summary>Upgrades in the order of the rules file (requirements come first).</summary>
-    public IReadOnlyList<UpgradeType> Upgrades => _upgrades;
-
-    public UpgradeType? FindUpgrade(string id) => _upgrades.Find(u => u.Id == id);
 
     public bool HasBuildingType(string id) => _buildingTypes.ContainsKey(id);
 
@@ -167,7 +153,7 @@ public sealed class GameRules
                     a.GetProperty("projectileSpeed").GetSingle());
             }
 
-            buildings.Add(new BuildingType(
+            var type = new BuildingType(
                 Id: RequiredString(b, "id"),
                 Name: RequiredString(b, "name"),
                 Size: b.GetProperty("size").GetInt32(),
@@ -184,7 +170,8 @@ public sealed class GameRules
                 IsMine: OptionalBool(b, "mine"),
                 Attack: attack,
                 SightRange: OptionalSingle(b, "sight"),
-                MaxCount: OptionalInt(b, "maxCount")));
+                MaxCount: OptionalInt(b, "maxCount"));
+            buildings.Add(b.TryGetProperty("tiers", out var tiers) ? WithTiers(type, tiers.EnumerateArray().ToList()) : type);
         }
 
         var startingUnits = root.GetProperty("startingUnits").EnumerateArray()
@@ -200,33 +187,45 @@ public sealed class GameRules
             OptionalSingle(root, "depositReserveSeconds"),
             OptionalSingle(root, "depositRegenSeconds"),
             OptionalInt(root, "upkeepAllowance"),
-            ParseUpgrades(root),
             OptionalInt(root, "goldCap"));
     }
 
-    private static List<UpgradeType> ParseUpgrades(JsonElement root)
+    /// <summary>
+    /// Chains a building's upgrade levels. Each entry of "tiers" is the next level: what it costs and how long it
+    /// takes to reach ("cost", "time"), and the stats that change ("health", "damage", "range", "yieldBonus");
+    /// the rest carries over from the level below.
+    /// </summary>
+    private static BuildingType WithTiers(BuildingType baseType, List<JsonElement> tiers)
     {
-        var upgrades = new List<UpgradeType>();
-        if (!root.TryGetProperty("upgrades", out var list))
-            return upgrades;
-        foreach (var u in list.EnumerateArray())
+        var levels = new List<BuildingType> { baseType };
+        foreach (var t in tiers)
         {
-            var effects = u.GetProperty("effects").EnumerateArray().Select(e => new UpgradeEffect(
-                Enum.TryParse<UpgradeStat>(RequiredString(e, "stat"), ignoreCase: true, out var stat)
-                    ? stat
-                    : throw new FormatException($"Unknown upgrade stat in {e}."),
-                e.GetProperty("amount").GetSingle(),
-                e.TryGetProperty("targets", out var t) ? t.EnumerateArray().Select(x => x.GetString() ?? "").ToArray() : Array.Empty<string>()))
-                .ToArray();
-            upgrades.Add(new UpgradeType(
-                RequiredString(u, "id"),
-                RequiredString(u, "name"),
-                u.GetProperty("cost").GetInt32(),
-                u.GetProperty("researchTime").GetSingle(),
-                effects,
-                u.TryGetProperty("requires", out var r) ? r.GetString() : null));
+            var below = levels[^1];
+            levels.Add(below with
+            {
+                Tier = below.Tier + 1,
+                MaxHealth = t.TryGetProperty("health", out var health) ? health.GetInt32() : below.MaxHealth,
+                Attack = below.Attack is { } attack
+                    ? attack with
+                    {
+                        Damage = t.TryGetProperty("damage", out var damage) ? damage.GetInt32() : attack.Damage,
+                        Range = t.TryGetProperty("range", out var range) ? range.GetSingle() : attack.Range,
+                    }
+                    : null,
+                YieldBonus = t.TryGetProperty("yieldBonus", out var bonus) ? bonus.GetInt32() : below.YieldBonus,
+            });
         }
-        return upgrades;
+        // Link from the top down, so each level points at the finished level above it.
+        for (int i = levels.Count - 2; i >= 0; i--)
+        {
+            levels[i] = levels[i] with
+            {
+                NextTier = levels[i + 1],
+                UpgradeCost = tiers[i].GetProperty("cost").GetInt32(),
+                UpgradeTime = tiers[i].GetProperty("time").GetSingle(),
+            };
+        }
+        return levels[0];
     }
 
     private static float OptionalSingle(JsonElement element, string name) =>

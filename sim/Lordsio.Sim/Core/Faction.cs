@@ -9,7 +9,6 @@ public sealed class Faction
         Id = id;
         Team = team;
         Treasury = new Treasury(rules.StartingGold, rules.GoldCap);
-        Technology = new Technology(rules);
     }
 
     public int Id { get; }
@@ -18,8 +17,6 @@ public sealed class Faction
     public int Team { get; }
     public Treasury Treasury { get; }
 
-    /// <summary>Researched upgrades and the unit and building stats they give this faction.</summary>
-    public Technology Technology { get; }
 
     /// <summary>Gold per second from the capital and working mines; recomputed every tick.</summary>
     public int IncomePerSecond { get; internal set; }

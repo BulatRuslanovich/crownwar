@@ -31,6 +31,8 @@ public sealed partial class Simulation
             hash.Add(building.ConstructionTicksLeft);
             hash.Add(building.Queue.Count);
             hash.Add(building.Target?.Id ?? 0);
+            hash.Add(building.Type.Tier);
+            hash.Add(building.UpgradeTicksLeft);
         }
         foreach (var projectile in _projectiles)
         {
@@ -47,8 +49,6 @@ public sealed partial class Simulation
         {
             hash.Add(faction.Treasury.Gold);
             hash.Add(faction.Treasury.Remainder);
-            hash.Add(faction.Technology.Researched.Count);
-            hash.Add(faction.Technology.ResearchTicksLeft);
             hash.Add(faction.IsEliminated ? 1 : 0);
         }
         return hash.Value;

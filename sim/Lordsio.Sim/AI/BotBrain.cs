@@ -98,7 +98,7 @@ public sealed class BotBrain
 
         int reserve = PlanConstruction(me, capital, army, threatened: threats.Count > 0);
         if (threats.Count == 0)
-            reserve += PlanResearch(me, reserve, armyValue);
+            reserve += PlanUpgrades(me, reserve, armyValue);
         Recruit(me, capital, reserve, urgent: threats.Count > 0);
         CommandArmy(capital, army, armyValue, threats);
     }
@@ -184,23 +184,31 @@ public sealed class BotBrain
 
     /// <summary>Keeps the training queues busy with what gold allows beyond the reserve.</summary>
     /// <summary>
-    /// Starts the next upgrade (in the rules' order) when there is gold to spare after construction, and
-    /// saves up for it once the army is half way to attack strength. Returns the gold committed or set aside,
-    /// so recruiting does not spend it.
+    /// Upgrades one working mine at a time (the lowest level first) when there is gold to spare after construction,
+    /// and saves up for it once the army is half way to attack strength. Towers are left at their first level:
+    /// bots that also raise them turtle up and four-bot matches stop ending. Returns the gold committed or set
+    /// aside, so recruiting does not spend it.
     /// </summary>
-    private int PlanResearch(Faction me, int reserve, int armyValue)
+    private int PlanUpgrades(Faction me, int reserve, int armyValue)
     {
-        var tech = me.Technology;
-        if (tech.Current != null || tech.Researched.Count >= _profile.MaxResearch
-            || _sim.Tick < _profile.ResearchAfter * Simulation.TicksPerSecond)
+        var own = OwnBuildings().ToList();
+        int levelsBought = own.Sum(b => b.Type.Tier - 1);
+        if (own.Any(b => b.IsUpgrading) || levelsBought >= _profile.MaxUpgrades
+            || _sim.Tick < _profile.UpgradeAfter * Simulation.TicksPerSecond)
             return 0;
-        var next = _sim.Rules.Upgrades.FirstOrDefault(u => _sim.CanResearch(FactionId, u.Id) is ResearchError.None or ResearchError.NotEnoughGold);
+        var next = own
+            .Where(b => _sim.CanUpgrade(FactionId, b.Id) is UpgradeError.None or UpgradeError.NotEnoughGold)
+            .Where(b => b.Type.IsMine && b.Deposit is { IsExhausted: false })
+            .OrderBy(b => b.Type.Tier)
+            .ThenBy(b => b.Id)
+            .FirstOrDefault();
         if (next == null)
             return 0;
-        if (me.Treasury.Gold - reserve < next.Cost)
-            return armyValue >= _profile.AttackArmyValue / 2 ? next.Cost : 0;
-        Issue(new ResearchCommand(FactionId, next.Id));
-        return next.Cost;
+        int cost = next.Type.UpgradeCost;
+        if (me.Treasury.Gold - reserve < cost)
+            return armyValue >= _profile.AttackArmyValue / 2 ? cost : 0;
+        Issue(new UpgradeCommand(FactionId, next.Id));
+        return cost;
     }
 
     private void Recruit(Faction me, Building capital, int reserve, bool urgent)
