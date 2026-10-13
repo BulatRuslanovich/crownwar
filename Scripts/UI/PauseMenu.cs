@@ -14,6 +14,7 @@ public partial class PauseMenu : CanvasLayer
     private BuildPlacement _placement = null!;
     private Control _menu = null!;
     private SettingsPanel _settings = null!;
+    private HowToPlay _help = null!;
 
     public void Initialize(MatchController match, BuildPlacement placement)
     {
@@ -21,6 +22,13 @@ public partial class PauseMenu : CanvasLayer
         _placement = placement;
         _menu = GetNode<Control>("Dim/Center");
         _settings = GetNode<SettingsPanel>("Settings");
+        _help = GetNode<HowToPlay>("HowToPlay");
+        GetNode<Button>("Dim/Center/Panel/Rows/Help").Pressed += () =>
+        {
+            _menu.Visible = false;
+            _help.Visible = true;
+        };
+        _help.Closed += () => _menu.Visible = true;
         GetNode<Button>("Dim/Center/Panel/Rows/Resume").Pressed += () => _match.SetPaused(false);
         var restart = GetNode<Button>("Dim/Center/Panel/Rows/Restart");
         restart.Pressed += () => _match.RequestRestart();
@@ -40,8 +48,8 @@ public partial class PauseMenu : CanvasLayer
     {
         if (@event is not InputEventKey { PhysicalKeycode: Key.Escape, Pressed: true, Echo: false })
             return;
-        if (_settings.Visible)
-            return; // the settings panel closes itself
+        if (_settings.Visible || _help.Visible)
+            return; // those panels close themselves
         if (!_match.IsPaused && _placement.IsActive)
             return; // Esc cancels building placement first
         _match.SetPaused(!_match.IsPaused);

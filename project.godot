@@ -10,10 +10,15 @@ config_version=5
 
 [application]
 
-config/name="lordsio"
+config/name="Lordsio"
 run/main_scene="res://Scenes/Main/Main.tscn"
 config/features=PackedStringArray("4.7", "C#", "Mobile")
-config/icon="res://icon.svg"
+boot_splash/bg_color=Color(0.08, 0.065, 0.05, 1)
+boot_splash/fullsize=false
+boot_splash/use_filter=false
+boot_splash/image="res://Assets/UI/splash.png"
+config/icon="res://Assets/UI/icon.png"
+config/windows_native_icon="res://Assets/UI/icon.ico"
 
 [autoload]
 

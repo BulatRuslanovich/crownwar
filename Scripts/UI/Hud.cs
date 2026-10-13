@@ -76,9 +76,25 @@ public partial class Hud : CanvasLayer
         _buildingPanel.Visible = false;
         _message.Visible = false;
         CreateBuildButtons(GetNode<HBoxContainer>("BuildBar/Rows/Buttons"));
+        UpdateResourceBar(); // filled from the start, even if the match opens paused
     }
 
     public override void _Process(double delta)
+    {
+        UpdateResourceBar();
+        if (_match.Sim.GetFaction(_match.LocalFactionId) is { } faction)
+        {
+            foreach (var (button, type) in _buildButtons)
+            {
+                button.Text = BuildButtonText(type); // follows a language change
+                button.Modulate = faction.Treasury.CanAfford(type.Cost) ? Colors.White : ProblemColor;
+                button.ButtonPressed = _placement.ActiveType == type;
+            }
+        }
+        UpdateRest(delta);
+    }
+
+    private void UpdateResourceBar()
     {
         if (_match.Sim.GetFaction(_match.LocalFactionId) is { } faction)
         {
@@ -90,14 +106,11 @@ public partial class Hud : CanvasLayer
                 faction.UpkeepPerMinute / 60f, faction.ArmyUpkeepPerMinute, _match.Sim.Rules.UpkeepAllowance);
             _army.Text = string.Format(Tr("HUD_ARMY"), faction.Population, faction.ArmyCap);
             _army.Modulate = faction.Population >= faction.ArmyCap ? ProblemColor : Colors.White;
-            foreach (var (button, type) in _buildButtons)
-            {
-                button.Text = BuildButtonText(type); // follows a language change
-                button.Modulate = faction.Treasury.CanAfford(type.Cost) ? Colors.White : ProblemColor;
-                button.ButtonPressed = _placement.ActiveType == type;
-            }
         }
+    }
 
+    private void UpdateRest(double delta)
+    {
         _buildHint.Text = _placement.ActiveType is { } placing
             ? string.Format(Tr("BUILD_PLACING"), Names.Of(placing), DescribePlacement(_placement.CurrentError))
             : Tr("BUILD_HINT");

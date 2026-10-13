@@ -68,6 +68,9 @@ public static class ArtGenerator
         var units = Units();
         units.Save(System.IO.Path.Combine(assets, "Sprites", "units.png"), System.IO.Path.Combine(assets, "Sprites", "units_team.png"));
 
+        System.IO.Directory.CreateDirectory(System.IO.Path.Combine(assets, "UI"));
+        AppIcon(Castle(), System.IO.Path.Combine(assets, "UI"));
+
         foreach (var (name, canvas) in new (string, PixelCanvas)[]
                  {
                      ("castle", Castle()), ("barracks", Barracks()), ("tower", Tower()), ("mine", Mine()),
@@ -83,6 +86,90 @@ public static class ArtGenerator
         SavePreview(terrain, System.IO.Path.Combine(previewDir, "terrain.png"));
         SavePreview(units, System.IO.Path.Combine(previewDir, "units.png"));
         SavePreview(gold, System.IO.Path.Combine(previewDir, "gold.png"));
+    }
+
+    /// <summary>
+    /// The application icon (a blue-bannered castle on a framed dark plate): icon.png (256 px) for the window
+    /// and project, icon.ico (16–256 px) for the Windows executable, and splash.png for the boot screen.
+    /// </summary>
+    private static void AppIcon(PixelCanvas castle, string uiDir)
+    {
+        const int size = 80;
+        var plate = new Color("2b2219");
+        var plateLight = new Color("3a2e22");
+        var gold = new Color("c9a050");
+        var goldDark = new Color("7a5a2a");
+        var team = new Color("3c6fd8");
+        var icon = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                // Rounded square plate with a two-tone gold frame.
+                int dx = Math.Max(Math.Max(10 - x, x - (size - 11)), 0), dy = Math.Max(Math.Max(10 - y, y - (size - 11)), 0);
+                float corner = MathF.Sqrt(dx * dx + dy * dy);
+                if (corner > 8f || x < 2 || y < 2 || x > size - 3 || y > size - 3)
+                    continue;
+                bool edge = corner > 6f || x < 4 || y < 4 || x > size - 5 || y > size - 5;
+                bool inner = !edge && (corner > 5f || x < 5 || y < 5 || x > size - 6 || y > size - 6);
+                icon.SetPixel(x, y, edge ? gold : inner ? goldDark : y < size / 2 ? plateLight : plate);
+            }
+        }
+        int ox = (size - castle.Width) / 2, oy = size - castle.Height - 8;
+        for (int y = 0; y < castle.Height; y++)
+        {
+            for (int x = 0; x < castle.Width; x++)
+            {
+                var m = castle.Mask.GetPixel(x, y);
+                var c = m.A > 0 ? new Color(team.R * m.R, team.G * m.G, team.B * m.B) : castle.Base.GetPixel(x, y);
+                if (c.A > 0)
+                    icon.SetPixel(ox + x, oy + y, c);
+            }
+        }
+
+        Image Scaled(int pixels)
+        {
+            // Whole-pixel enlargement, centred on a transparent square of the requested size.
+            var image = (Image)icon.Duplicate();
+            int factor = Math.Max(1, pixels / size);
+            if (pixels >= size)
+                image.Resize(size * factor, size * factor, Image.Interpolation.Nearest);
+            else
+                image.Resize(pixels, pixels, Image.Interpolation.Cubic);
+            if (image.GetWidth() == pixels)
+                return image;
+            var square = Image.CreateEmpty(pixels, pixels, false, Image.Format.Rgba8);
+            int offset = (pixels - image.GetWidth()) / 2;
+            square.BlitRect(image, new Rect2I(0, 0, image.GetWidth(), image.GetHeight()), new Vector2I(offset, offset));
+            return square;
+        }
+
+        Scaled(256).SavePng(System.IO.Path.Combine(uiDir, "icon.png"));
+        Scaled(400).SavePng(System.IO.Path.Combine(uiDir, "splash.png"));
+
+        // .ico with PNG-compressed entries (supported since Windows Vista).
+        int[] sizes = { 16, 32, 48, 256 };
+        var images = Array.ConvertAll(sizes, s => Scaled(s).SavePngToBuffer());
+        using var file = System.IO.File.Create(System.IO.Path.Combine(uiDir, "icon.ico"));
+        using var w = new System.IO.BinaryWriter(file);
+        w.Write((ushort)0);
+        w.Write((ushort)1);
+        w.Write((ushort)sizes.Length);
+        int dataOffset = 6 + 16 * sizes.Length;
+        for (int i = 0; i < sizes.Length; i++)
+        {
+            w.Write((byte)(sizes[i] >= 256 ? 0 : sizes[i]));
+            w.Write((byte)(sizes[i] >= 256 ? 0 : sizes[i]));
+            w.Write((byte)0);
+            w.Write((byte)0);
+            w.Write((ushort)1);
+            w.Write((ushort)32);
+            w.Write(images[i].Length);
+            w.Write(dataOffset);
+            dataOffset += images[i].Length;
+        }
+        foreach (var data in images)
+            w.Write(data);
     }
 
     /// <summary>4× enlarged image with the team mask tinted blue, for reviewing the art.</summary>

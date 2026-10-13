@@ -76,8 +76,8 @@ custom_minimum_size = Vector2(340, 0)
 layout_mode = 2
 
 [node name="Title" type="Label" parent="BuildingPanel/Rows"]
+theme_type_variation = &"HeaderSmall"
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
 text = "Castle"
 
 [node name="Info" type="Label" parent="BuildingPanel/Rows"]

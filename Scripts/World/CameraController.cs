@@ -25,6 +25,18 @@ public partial class CameraController : Camera2D
 
     public float ZoomLevel => ZoomLevels[_zoomIndex];
 
+    /// <summary>Off for the menu backdrop: no keys, mouse or screen edges move the camera.</summary>
+    public bool UserControl { get; set; } = true;
+
+    /// <summary>Moves the view towards a point at a gentle, frame-rate independent pace.</summary>
+    public void GlideTowards(Vector2 worldPosition, float tilesPerSecond, double delta)
+    {
+        var step = worldPosition - Position;
+        float max = tilesPerSecond * SimConvert.TileSize * (float)delta;
+        Position += step.LimitLength(max);
+        ClampToBounds();
+    }
+
     public override void _Ready()
     {
         Zoom = Vector2.One * ZoomLevel;
@@ -59,6 +71,11 @@ public partial class CameraController : Camera2D
 
     public override void _Process(double delta)
     {
+        if (!UserControl)
+        {
+            ClampToBounds();
+            return;
+        }
         // Ctrl+key combinations are hotkeys (Ctrl+A selects all), not camera movement.
         Vector2 dir = Godot.Input.IsKeyPressed(Key.Ctrl)
             ? Vector2.Zero
@@ -84,6 +101,8 @@ public partial class CameraController : Camera2D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (!UserControl)
+            return;
         switch (@event)
         {
             case InputEventMouseButton { ButtonIndex: MouseButton.Middle } middle:

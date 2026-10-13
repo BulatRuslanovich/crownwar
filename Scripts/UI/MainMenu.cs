@@ -17,6 +17,7 @@ public partial class MainMenu : Control
     private LineEdit _seed = null!;
     private Control _menuPanel = null!;
     private SettingsPanel _settings = null!;
+    private HowToPlay _help = null!;
 
     /// <summary>Raised with the chosen setup when the player presses Start.</summary>
     public event Action<MatchConfig>? StartRequested;
@@ -26,6 +27,13 @@ public partial class MainMenu : Control
 
     /// <summary>Raised when the player quits the game.</summary>
     public event Action? QuitRequested;
+
+    /// <summary>Opens the "How to play" panel (also used by a dev flag for screenshots).</summary>
+    public void ShowHelp()
+    {
+        _menuPanel.Visible = false;
+        _help.Visible = true;
+    }
 
     /// <summary>Pre-fills the form, e.g. with the setup of the match just left.</summary>
     public void Initialize(MatchConfig config) => _initial = config;
@@ -37,6 +45,8 @@ public partial class MainMenu : Control
         _difficulty = GetNode<OptionButton>("Center/Panel/Rows/Grid/Difficulty");
         _seed = GetNode<LineEdit>("Center/Panel/Rows/Grid/Seed");
         _settings = GetNode<SettingsPanel>("Settings");
+        _help = GetNode<HowToPlay>("HowToPlay");
+        GetNode<Label>("Version").Text = "v" + Net.GameVersion.Number;
 
         _difficulty.AddItem("DIFFICULTY_EASY");
         _difficulty.AddItem("DIFFICULTY_NORMAL");
@@ -48,6 +58,12 @@ public partial class MainMenu : Control
 
         GetNode<Button>("Center/Panel/Rows/Start").Pressed += Start;
         GetNode<Button>("Center/Panel/Rows/Network").Pressed += () => NetworkRequested?.Invoke();
+        GetNode<Button>("Center/Panel/Rows/Help").Pressed += () =>
+        {
+            _menuPanel.Visible = false;
+            _help.Visible = true;
+        };
+        _help.Closed += () => _menuPanel.Visible = true;
         GetNode<Button>("Center/Panel/Rows/Settings").Pressed += () =>
         {
             _menuPanel.Visible = false;

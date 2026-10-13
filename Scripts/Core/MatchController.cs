@@ -86,6 +86,17 @@ public partial class MatchController : Node2D
     /// <summary>Raised when the player leaves to the main menu.</summary>
     public event Action? MenuRequested;
 
+    /// <summary>The menu backdrop: bots play, nobody watches the interface (see <see cref="MatchConfig.Showcase"/>).</summary>
+    public bool IsShowcase => Config.Showcase;
+
+    /// <summary>Showcase only: the match is over and a new one may take its place.</summary>
+    public event Action? ShowcaseFinished;
+
+    private Vector2 _showcaseFocus;
+    private double _showcaseRetarget;
+    private double _showcaseOverFor;
+    private System.Numerics.Vector2? _lastFight;
+
     public Simulation Sim { get; private set; } = null!;
 
     /// <summary>What the local team sees; enemies outside it are not drawn, heard or clickable.</summary>
@@ -167,6 +178,8 @@ public partial class MatchController : Node2D
         _pauseMenu.Initialize(this, placement);
         if (Net != null)
             Net.DesyncDetected += _ => ShowNetworkProblem("NET_DESYNC");
+        if (IsShowcase)
+            BecomeShowcase();
 
         _alerts.Alerted += position =>
         {
@@ -176,8 +189,61 @@ public partial class MatchController : Node2D
         };
     }
 
+    /// <summary>Strips the match down to the world itself: no interface, sounds, fog or player control.</summary>
+    private void BecomeShowcase()
+    {
+        Fog.RevealAll();
+        Camera.UserControl = false;
+        Camera.SetZoomIndex(2);
+        // Exactly the map (no margin beyond its edges), starting from the middle.
+        var worldSize = new Vector2(Sim.Map.Width, Sim.Map.Height) * SimConvert.TileSize;
+        Camera.SetBounds(new Rect2(Vector2.Zero, worldSize));
+        Camera.CenterOn(worldSize / 2);
+        _showcaseFocus = worldSize / 2;
+        _showcaseRetarget = 6.0;
+        foreach (string path in new[] { "Hud", "EndScreen", "PauseMenu", "DebugHud", "SelectionController", "BuildPlacement", "Sounds" })
+        {
+            var node = GetNode(path);
+            node.ProcessMode = ProcessModeEnum.Disabled;
+            if (node is CanvasLayer layer)
+                layer.Visible = false;
+            else if (node is CanvasItem item)
+                item.Visible = false;
+        }
+    }
+
+    /// <summary>
+    /// The backdrop camera drifts between points of interest: the latest fight, else a random castle.
+    /// When the match ends, a new one is asked for after a short look at the outcome.
+    /// </summary>
+    private void UpdateShowcase(double delta)
+    {
+        _showcaseRetarget -= delta;
+        if (_showcaseRetarget <= 0)
+        {
+            _showcaseRetarget = 9.0;
+            if (_lastFight is { } fight)
+                _showcaseFocus = SimConvert.ToWorld(fight);
+            else if (Sim.Buildings.Where(b => b.Type.IsCapital).ToList() is { Count: > 0 } castles)
+                _showcaseFocus = SimConvert.ToWorld(castles[(int)(GD.Randi() % castles.Count)].Position);
+            _lastFight = null;
+        }
+        Camera.GlideTowards(_showcaseFocus, 3f, delta);
+
+        if (!Sim.IsOver)
+            return;
+        _showcaseOverFor += delta;
+        if (_showcaseOverFor > 6.0)
+        {
+            _showcaseOverFor = double.NegativeInfinity; // ask once
+            ShowcaseFinished?.Invoke();
+        }
+    }
+
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (IsShowcase)
+            return;
         // Space jumps the camera to the latest attack on the player.
         if (@event is InputEventKey { PhysicalKeycode: Key.Space, Pressed: true, Echo: false }
             && _alerts.LastPosition is { } position)
@@ -229,6 +295,21 @@ public partial class MatchController : Node2D
 
         UpdateFog();
         _battleHeat *= MathF.Pow(0.5f, (float)delta / BattleHeatHalfLife);
+
+        if (IsShowcase)
+        {
+            // Only the world reacts; no interface, statistics or sounds behind the menu.
+            foreach (var e in Sim.TakeEvents())
+            {
+                if (e is AttackLanded hit)
+                    _lastFight = hit.Position;
+                _unitsView.OnSimEvent(e);
+                _groundEffects.OnSimEvent(e);
+                _airEffects.OnSimEvent(e);
+            }
+            UpdateShowcase(delta);
+            return;
+        }
 
         foreach (var e in Sim.TakeEvents())
         {

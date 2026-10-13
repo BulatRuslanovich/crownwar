@@ -32,10 +32,8 @@ layout_mode = 2
 theme_override_constants/separation = 14
 
 [node name="Title" type="Label" parent="Dim/Center/Panel/Rows"]
+theme_type_variation = &"HeaderLarge"
 layout_mode = 2
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 10
-theme_override_font_sizes/font_size = 56
 text = "END_VICTORY"
 horizontal_alignment = 1
 

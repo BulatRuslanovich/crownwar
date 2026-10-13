@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://Scripts/UI/PauseMenu.cs" id="1_pause"]
 [ext_resource type="PackedScene" path="res://Scenes/UI/SettingsPanel.tscn" id="2_settings"]
+[ext_resource type="PackedScene" path="res://Scenes/UI/HowToPlay.tscn" id="3_help"]
 
 [node name="PauseMenu" type="CanvasLayer"]
 process_mode = 3
@@ -33,8 +34,8 @@ layout_mode = 2
 theme_override_constants/separation = 10
 
 [node name="Title" type="Label" parent="Dim/Center/Panel/Rows"]
+theme_type_variation = &"HeaderMedium"
 layout_mode = 2
-theme_override_font_sizes/font_size = 32
 text = "PAUSE_TITLE"
 horizontal_alignment = 1
 
@@ -46,6 +47,10 @@ text = "PAUSE_RESUME"
 layout_mode = 2
 text = "UI_RESTART"
 
+[node name="Help" type="Button" parent="Dim/Center/Panel/Rows"]
+layout_mode = 2
+text = "MENU_HELP"
+
 [node name="Settings" type="Button" parent="Dim/Center/Panel/Rows"]
 layout_mode = 2
 text = "MENU_SETTINGS"
@@ -55,3 +60,6 @@ layout_mode = 2
 text = "UI_MAIN_MENU"
 
 [node name="Settings" parent="." instance=ExtResource("2_settings")]
+
+[node name="HowToPlay" parent="." instance=ExtResource("3_help")]
+visible = false

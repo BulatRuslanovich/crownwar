@@ -1,5 +1,7 @@
 [gd_resource type="Theme" format=3]
 
+[ext_resource type="FontFile" path="res://Assets/Fonts/PressStart2P-Regular.ttf" id="1_pixel"]
+
 [sub_resource type="StyleBoxFlat" id="panel"]
 content_margin_left = 12.0
 content_margin_top = 8.0
@@ -129,3 +131,31 @@ PopupMenu/styles/panel = SubResource("panel")
 ProgressBar/styles/background = SubResource("bar_back")
 ProgressBar/styles/fill = SubResource("bar_fill")
 TooltipPanel/styles/panel = SubResource("tooltip")
+HeaderLarge/base_type = &"Label"
+HeaderLarge/colors/font_color = Color(1, 0.86, 0.4, 1)
+HeaderLarge/colors/font_outline_color = Color(0.2, 0.12, 0.04, 1)
+HeaderLarge/colors/font_shadow_color = Color(0, 0, 0, 0.55)
+HeaderLarge/constants/outline_size = 8
+HeaderLarge/constants/shadow_offset_x = 4
+HeaderLarge/constants/shadow_offset_y = 4
+HeaderLarge/font_sizes/font_size = 48
+HeaderLarge/fonts/font = ExtResource("1_pixel")
+HeaderMedium/base_type = &"Label"
+HeaderMedium/colors/font_color = Color(1, 0.86, 0.4, 1)
+HeaderMedium/colors/font_outline_color = Color(0.2, 0.12, 0.04, 1)
+HeaderMedium/colors/font_shadow_color = Color(0, 0, 0, 0.5)
+HeaderMedium/constants/outline_size = 6
+HeaderMedium/constants/shadow_offset_x = 3
+HeaderMedium/constants/shadow_offset_y = 3
+HeaderMedium/font_sizes/font_size = 24
+HeaderMedium/fonts/font = ExtResource("1_pixel")
+HeaderSmall/base_type = &"Label"
+HeaderSmall/colors/font_color = Color(1, 0.86, 0.4, 1)
+HeaderSmall/colors/font_shadow_color = Color(0, 0, 0, 0.5)
+HeaderSmall/constants/shadow_offset_x = 2
+HeaderSmall/constants/shadow_offset_y = 2
+HeaderSmall/font_sizes/font_size = 16
+HeaderSmall/fonts/font = ExtResource("1_pixel")
+PixelButton/base_type = &"Button"
+PixelButton/font_sizes/font_size = 16
+PixelButton/fonts/font = ExtResource("1_pixel")

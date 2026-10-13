@@ -15,10 +15,20 @@ public sealed record SlotConfig(SlotKind Kind, string Name, BotDifficulty Diffic
 
 /// <summary>
 /// How a match is set up: slot i becomes faction i. <paramref name="LocalFactionId"/> is the slot this
-/// machine controls. A null seed means a new random layout each match.
+/// machine controls. A null seed means a new random layout each match. A <paramref name="Showcase"/> match
+/// is the living backdrop of the menus: bots only, no interface, no fog, a drifting camera.
 /// </summary>
-public sealed record MatchConfig(IReadOnlyList<SlotConfig> Slots, int? Seed, int LocalFactionId = 0)
+public sealed record MatchConfig(IReadOnlyList<SlotConfig> Slots, int? Seed, int LocalFactionId = 0, bool Showcase = false)
 {
+    /// <summary>Four bots fighting it out behind the main menu.</summary>
+    public static MatchConfig ShowcaseMatch(int seed) => new(new[]
+    {
+        new SlotConfig(SlotKind.Bot, "", BotDifficulty.Hard, 0),
+        new SlotConfig(SlotKind.Bot, "", BotDifficulty.Normal, 1),
+        new SlotConfig(SlotKind.Bot, "", BotDifficulty.Hard, 2),
+        new SlotConfig(SlotKind.Bot, "", BotDifficulty.Normal, 3),
+    }, seed, Showcase: true);
+
     public static readonly MatchConfig Default = Single(3, BotDifficulty.Normal, null);
 
     /// <summary>Single player: you against <paramref name="botCount"/> bots, everyone for themselves.</summary>

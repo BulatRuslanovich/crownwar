@@ -22,6 +22,10 @@ public partial class Main : Node
     [Export] public PackedScene LobbyScene { get; set; } = null!;
 
     private Node? _screen;
+    /// <summary>Menus are drawn on their own layer, above the backdrop match and its camera.</summary>
+    private CanvasLayer _ui = null!;
+    /// <summary>A bot match playing behind the menus.</summary>
+    private MatchController? _backdrop;
     private MatchConfig _lastConfig = MatchConfig.Default;
     private NetSession? _session;
     private Audio.MusicPlayer _music = null!;
@@ -39,6 +43,8 @@ public partial class Main : Node
 
     public override void _Ready()
     {
+        _ui = new CanvasLayer { Name = "Ui", Layer = 10 };
+        AddChild(_ui);
         // Developer options only in debug builds; a released game ignores its command line.
         var args = OS.IsDebugBuild() ? OS.GetCmdlineUserArgs() : System.Array.Empty<string>();
         if (DevTools.Arg(args, "--export-art") is { } previewDirectory)
@@ -64,6 +70,8 @@ public partial class Main : Node
             StartDevNetwork(args);
         else
             ShowMenu();
+        if (System.Array.IndexOf(args, "--show-help") >= 0 && _screen is MainMenu shown)
+            Callable.From(shown.ShowHelp).CallDeferred();
 
         if (System.Array.IndexOf(args, "--smoke-flow") >= 0)
             _ = RunSmokeFlow();
@@ -88,6 +96,7 @@ public partial class Main : Node
     {
         EndSession();
         GetTree().Paused = false;
+        EnsureBackdrop();
         var menu = MenuScene.Instantiate<MainMenu>();
         menu.Initialize(_lastConfig);
         menu.StartRequested += config => StartMatch(config);
@@ -108,6 +117,7 @@ public partial class Main : Node
     private MatchController CreateMatch(MatchConfig config, NetMatchDriver? net)
     {
         GetTree().Paused = false;
+        FreeBackdrop();
         var match = MatchScene.Instantiate<MatchController>();
         match.Config = config;
         match.Net = net;
@@ -143,6 +153,7 @@ public partial class Main : Node
     private void ShowNetMenu(string? problemKey)
     {
         GetTree().Paused = false;
+        EnsureBackdrop();
         var menu = NetMenuScene.Instantiate<NetMenu>();
         menu.Initialize(Session(), problemKey);
         menu.BackRequested += ShowMenu;
@@ -236,11 +247,41 @@ public partial class Main : Node
     {
         if (_screen != null)
         {
-            RemoveChild(_screen);
+            _screen.GetParent().RemoveChild(_screen);
             _screen.QueueFree();
         }
         _screen = screen;
-        AddChild(screen);
+        if (screen is Control)
+            _ui.AddChild(screen);
+        else
+            AddChild(screen);
+    }
+
+    /// <summary>Starts the living backdrop behind the menus, unless one is already playing.</summary>
+    private void EnsureBackdrop()
+    {
+        if (_backdrop != null)
+            return;
+        _backdrop = MatchScene.Instantiate<MatchController>();
+        _backdrop.Name = "Backdrop";
+        _backdrop.Config = MatchConfig.ShowcaseMatch((int)(GD.Randi() & int.MaxValue));
+        _backdrop.ShowcaseFinished += () => Callable.From(() =>
+        {
+            FreeBackdrop();
+            if (_screen is not MatchController)
+                EnsureBackdrop();
+        }).CallDeferred();
+        AddChild(_backdrop);
+        MoveChild(_backdrop, 0); // behind everything else
+    }
+
+    private void FreeBackdrop()
+    {
+        if (_backdrop == null)
+            return;
+        RemoveChild(_backdrop);
+        _backdrop.QueueFree();
+        _backdrop = null;
     }
 
     /// <summary>
