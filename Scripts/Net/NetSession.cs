@@ -29,6 +29,12 @@ public partial class NetSession : Node
     private double _connectingFor;
     private readonly HashSet<int> _greeted = new();
     private readonly Dictionary<int, int> _factionOfPeer = new();
+    /// <summary>Host, during the match: each human faction's rejoin key and player name.</summary>
+    private readonly Dictionary<int, (string Token, string Name)> _players = new();
+    /// <summary>Host, during the match: human factions whose player is gone (a bot plays them) and may come back.</summary>
+    private readonly HashSet<int> _departed = new();
+    /// <summary>Client: lockstep messages that arrived before the match (and its driver) was set up.</summary>
+    private readonly List<NetMessage> _early = new();
 
     public bool IsHost { get; private set; }
     public bool InMatch { get; private set; }
@@ -46,6 +52,23 @@ public partial class NetSession : Node
     public event Action<int, NetMessage>? MessageReceived;
     /// <summary>Host only: a player left mid-match; the argument is their faction.</summary>
     public event Action<int>? PlayerLeftMatch;
+    /// <summary>Host only: a player who had left is back (peer id, faction) and must be sent the match so far.</summary>
+    public event Action<int, int>? PlayerRejoining;
+
+    /// <summary>Host: the seed and factions the match started with, for players who rejoin.</summary>
+    public StartMessage? StartedWith { get; private set; }
+
+    /// <summary>Host: a faction's rejoin key.</summary>
+    public string TokenOf(int faction) => _players.TryGetValue(faction, out var p) ? p.Token : "";
+
+    /// <summary>Delivers lockstep messages that arrived before anyone listened (the match was still being built).</summary>
+    public void FlushEarlyMessages()
+    {
+        var early = _early.ToList();
+        _early.Clear();
+        foreach (var message in early)
+            MessageReceived?.Invoke(1, message);
+    }
 
     public Error Host(string playerName)
     {
@@ -66,7 +89,10 @@ public partial class NetSession : Node
 
         _discovery = new LanDiscovery();
         AddChild(_discovery);
-        _discovery.Announce(GamePort, () => (_localName, Slots.Count(s => s.Kind == NetSlotKind.Human), Slots.Count(s => s.Kind == NetSlotKind.Empty)));
+        // Announced in the lobby (free slots) and during the match (places of players who dropped out).
+        _discovery.Announce(GamePort, () => InMatch
+            ? (_localName, _players.Count - _departed.Count, _departed.Count, true)
+            : (_localName, Slots.Count(s => s.Kind == NetSlotKind.Human), Slots.Count(s => s.Kind == NetSlotKind.Empty), false));
         LobbyUpdated?.Invoke();
         return Error.Ok;
     }
@@ -101,6 +127,10 @@ public partial class NetSession : Node
         _discovery = null;
         _greeted.Clear();
         _factionOfPeer.Clear();
+        _players.Clear();
+        _departed.Clear();
+        _early.Clear();
+        StartedWith = null;
         _helloSent = false;
         InMatch = false;
     }
@@ -153,17 +183,19 @@ public partial class NetSession : Node
         var factions = Slots.Where(s => s.Kind != NetSlotKind.Empty).ToList();
         int seed = (int)(GD.Randi() & int.MaxValue);
         InMatch = true;
-        _discovery?.Stop();
         for (int faction = 0; faction < factions.Count; faction++)
         {
             var slot = factions[faction];
             if (slot.Kind != NetSlotKind.Human)
                 continue;
             _factionOfPeer[slot.PeerId] = faction;
+            string token = GD.Randi().ToString("x8") + GD.Randi().ToString("x8");
+            _players[faction] = (token, slot.Name);
             if (slot.PeerId != 1)
-                Send(slot.PeerId, new StartMessage(seed, factions, faction));
+                Send(slot.PeerId, new StartMessage(seed, factions, faction, token));
         }
-        MatchStarting?.Invoke(new StartMessage(seed, factions, _factionOfPeer[1]));
+        StartedWith = new StartMessage(seed, factions, _factionOfPeer[1], TokenOf(_factionOfPeer[1]));
+        MatchStarting?.Invoke(StartedWith);
     }
 
     // ---------------------------------------------------------------- messaging
@@ -229,6 +261,13 @@ public partial class NetSession : Node
             case HelloMessage hello:
                 if (hello.Version != GameVersion.Current)
                     Reject(from, "NET_REJECT_VERSION");
+                else if (InMatch && ReturningFaction(hello) is { } back)
+                {
+                    _greeted.Add(from);
+                    _factionOfPeer[from] = back;
+                    _departed.Remove(back);
+                    PlayerRejoining?.Invoke(from, back);
+                }
                 else if (InMatch)
                     Reject(from, "NET_REJECT_STARTED");
                 else if (Slots.FindIndex(s => s.Kind == NetSlotKind.Empty) is var free and >= 0)
@@ -243,7 +282,7 @@ public partial class NetSession : Node
             case SetTeamMessage team when !InMatch && Slots.FindIndex(s => s.PeerId == from) is var own and >= 0:
                 SetTeam(own, team.Team);
                 break;
-            case InputMessage or ChecksumMessage when InMatch && _greeted.Contains(from):
+            case InputMessage or ChecksumMessage or CaughtUpMessage when InMatch && _greeted.Contains(from):
                 MessageReceived?.Invoke(from, message);
                 break;
         }
@@ -262,10 +301,14 @@ public partial class NetSession : Node
                 break;
             case StartMessage start:
                 InMatch = true;
+                RejoinStore.Save(start.RejoinToken); // survives a crash, so the player can come back
                 MatchStarting?.Invoke(start);
                 break;
             case FrameMessage or DesyncMessage:
-                MessageReceived?.Invoke(1, message);
+                if (MessageReceived == null)
+                    _early.Add(message); // the match is still being built; its driver will ask for them
+                else
+                    MessageReceived.Invoke(1, message);
                 break;
         }
     }
@@ -284,7 +327,7 @@ public partial class NetSession : Node
         if (!IsHost && id == 1 && !_helloSent)
         {
             _helloSent = true;
-            Send(1, new HelloMessage(GameVersion.Current, _localName));
+            Send(1, new HelloMessage(GameVersion.Current, _localName, RejoinStore.Load()));
         }
     }
 
@@ -301,8 +344,11 @@ public partial class NetSession : Node
         _greeted.Remove(peer);
         if (InMatch)
         {
-            if (_factionOfPeer.TryGetValue(peer, out int faction))
+            if (_factionOfPeer.Remove(peer, out int faction))
+            {
+                _departed.Add(faction);
                 PlayerLeftMatch?.Invoke(faction);
+            }
             return;
         }
         int slot = Slots.FindIndex(s => s.PeerId == peer);
@@ -311,6 +357,19 @@ public partial class NetSession : Node
             Slots[slot] = new NetSlot(NetSlotKind.Empty, "", (byte)BotDifficulty.Normal, Slots[slot].Team, 0);
             BroadcastLobby();
         }
+    }
+
+    /// <summary>
+    /// The faction a connecting player may take back: the one whose rejoin key they bring, or else the
+    /// only departed player with their name (if the key file was lost).
+    /// </summary>
+    private int? ReturningFaction(HelloMessage hello)
+    {
+        foreach (int faction in _departed)
+            if (hello.RejoinToken.Length > 0 && _players[faction].Token == hello.RejoinToken)
+                return faction;
+        var byName = _departed.Where(f => _players[f].Name == Trim(hello.Name)).ToList();
+        return byName.Count == 1 ? byName[0] : null;
     }
 
     private void BroadcastLobby()

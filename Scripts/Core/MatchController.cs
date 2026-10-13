@@ -47,6 +47,24 @@ public partial class MatchController : Node2D
     public bool WaitingForPlayers { get; private set; }
 
     /// <summary>
+    /// Frames buffered this far ahead mean the match is being replayed (this player rejoined after a drop):
+    /// ticks run as fast as the frame budget allows, with nothing drawn or heard on the way.
+    /// </summary>
+    private const int ReplayThreshold = 40;
+    private const double ReplayBudgetMilliseconds = 25;
+
+    /// <summary>Replaying the match after rejoining it.</summary>
+    public bool CatchingUp { get; private set; }
+
+    /// <summary>How far the replay has come, 0..1.</summary>
+    public float CatchUpProgress => Net is { LatestFrameTick: > 0 } net ? Math.Min(1f, (float)Sim.Tick / net.LatestFrameTick) : 0f;
+
+    private bool _replayedThisFrame;
+
+    /// <summary>Factions a returning player takes back from their bot, by the tick it happens.</summary>
+    private readonly Dictionary<int, int> _returnAt = new();
+
+    /// <summary>
     /// Frames buffered further ahead than the input delay mean we fell behind the others: run ticks without
     /// waiting for real time. (Up to the input delay is normal: our own inputs are sent that far ahead.)
     /// </summary>
@@ -296,6 +314,14 @@ public partial class MatchController : Node2D
         UpdateFog();
         _battleHeat *= MathF.Pow(0.5f, (float)delta / BattleHeatHalfLife);
 
+        if (_replayedThisFrame)
+        {
+            // Replaying the match after a rejoin: count it, but no effects, sounds or messages for the past.
+            foreach (var e in Sim.TakeEvents())
+                Stats.OnSimEvent(e);
+            return;
+        }
+
         if (IsShowcase)
         {
             // Only the world reacts; no interface, statistics or sounds behind the menu.
@@ -391,33 +417,73 @@ public partial class MatchController : Node2D
     {
         var net = Net!;
         net.Pump();
+        _replayedThisFrame = false;
         if (Sim.IsOver || net.IsDesynced)
             return;
+
+        if (net.LatestFrameTick - Sim.Tick > ReplayThreshold)
+        {
+            CatchingUp = true;
+            _replayedThisFrame = true;
+            WaitingForPlayers = false;
+            _accumulator = 0;
+            long start = Stopwatch.GetTimestamp();
+            while (net.HasFrame(Sim.Tick + 1) && Stopwatch.GetElapsedTime(start).TotalMilliseconds < ReplayBudgetMilliseconds)
+                ApplyFrame(net, net.TakeFrame(Sim.Tick + 1), replaying: true);
+            return;
+        }
+        CatchingUp = false;
+        // A returning player who has caught up asks for their faction back (once).
+        if (net.IsRejoin && Sim.Tick > 0 && net.LatestFrameTick - Sim.Tick <= 2)
+            net.ReportCaughtUp(Sim.Tick);
 
         _accumulator += delta;
         int steps = 0;
         while (steps < MaxStepsPerFrame && net.HasFrame(Sim.Tick + 1)
                && (_accumulator >= Simulation.TickDuration || net.HasFrame(Sim.Tick + 1 + LockstepCatchUpThreshold)))
         {
-            var frame = net.TakeFrame(Sim.Tick + 1);
-            foreach (var command in frame.Commands)
-                Sim.Issue(command);
-            foreach (int faction in frame.Takeovers)
-            {
-                if (_bots.All(b => b.FactionId != faction))
-                {
-                    AddBot(faction, BotDifficulty.Normal);
-                    _hud.ShowNotice(string.Format(Tr("NET_PLAYER_LEFT"), Names.Faction(faction)));
-                }
-            }
-            StepOnce();
-            net.AfterStep(Sim.Tick, Sim);
+            ApplyFrame(net, net.TakeFrame(Sim.Tick + 1), replaying: false);
             _accumulator = Math.Max(0, _accumulator - Simulation.TickDuration);
             steps++;
         }
         // While waiting for others, do not bank time to burst through later.
         _accumulator = Math.Min(_accumulator, Simulation.TickDuration * 4);
         WaitingForPlayers = !net.HasFrame(Sim.Tick + 1) && _accumulator >= Simulation.TickDuration * 4;
+    }
+
+    /// <summary>
+    /// What every machine does with a frame: returning players take their faction back from the bot, the
+    /// commands go in, dropped players are handed to bots, then one tick runs.
+    /// </summary>
+    private void ApplyFrame(NetMatchDriver net, FrameMessage frame, bool replaying)
+    {
+        foreach (var ret in frame.Returns)
+            _returnAt[ret.Faction] = ret.FromTick;
+        foreach (var (faction, _) in _returnAt.Where(r => r.Value == frame.Tick).ToList())
+        {
+            // Only the stand-in that plays the faction on every machine; a bot that sends its commands through
+            // the network (dev autoplay) is a player, not part of the simulation.
+            _bots.RemoveAll(b => b.FactionId == faction && b.CommandSink == null);
+            _returnAt.Remove(faction);
+            if (net.LogChecksums)
+                GD.Print($"[net] faction {faction} back under player control at tick {frame.Tick}");
+            if (!replaying)
+                _hud.ShowNotice(faction == LocalFactionId
+                    ? Tr("NET_YOU_RETURNED")
+                    : string.Format(Tr("NET_PLAYER_RETURNED"), Names.Faction(faction)));
+        }
+        foreach (var command in frame.Commands)
+            Sim.Issue(command);
+        foreach (int faction in frame.Takeovers)
+        {
+            if (_bots.Any(b => b.FactionId == faction && b.CommandSink == null))
+                continue;
+            AddBot(faction, BotDifficulty.Normal);
+            if (!replaying)
+                _hud.ShowNotice(string.Format(Tr("NET_PLAYER_LEFT"), Names.Faction(faction)));
+        }
+        StepOnce();
+        net.AfterStep(Sim.Tick, Sim, sendInput: !replaying);
     }
 
     private void StepOnce()

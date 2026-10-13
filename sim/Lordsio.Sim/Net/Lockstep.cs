@@ -19,6 +19,9 @@ public sealed class LockstepHost
     private readonly SortedSet<int> _humans;
     private readonly Dictionary<int, Dictionary<int, IReadOnlyList<Command>>> _inputs = new();
     private readonly List<int> _pendingTakeovers = new();
+    private readonly List<FactionReturn> _pendingReturns = new();
+    /// <summary>Returning factions: their input is needed only from this tick on (the bot plays until then).</summary>
+    private readonly Dictionary<int, int> _returnAt = new();
     private int _nextFrameTick = 1;
 
     public LockstepHost(IEnumerable<int> humanFactions)
@@ -39,6 +42,8 @@ public sealed class LockstepHost
     {
         if (!_humans.Contains(faction) || input.Tick < _nextFrameTick || input.Tick > _nextFrameTick + MaxTicksAhead)
             return;
+        if (_returnAt.TryGetValue(faction, out int from) && input.Tick < from)
+            return; // still the bot's turn
         if (!_inputs.TryGetValue(input.Tick, out var byFaction))
             _inputs[input.Tick] = byFaction = new Dictionary<int, IReadOnlyList<Command>>();
         byFaction.TryAdd(faction, input.Commands.Select(c => c with { FactionId = faction }).ToList());
@@ -51,6 +56,20 @@ public sealed class LockstepHost
             _pendingTakeovers.Add(faction);
     }
 
+    /// <summary>
+    /// A player who dropped out is back and has caught up: they take the faction back from the bot at
+    /// <paramref name="fromTick"/> (announced in the next frame). Their input is awaited from then on.
+    /// </summary>
+    public void RestoreFaction(int faction, int fromTick)
+    {
+        if (_humans.Contains(faction))
+            return;
+        fromTick = Math.Max(fromTick, _nextFrameTick + 1);
+        _humans.Add(faction);
+        _returnAt[faction] = fromTick;
+        _pendingReturns.Add(new FactionReturn(faction, fromTick));
+    }
+
     /// <summary>Frames that are complete, in tick order. Ticks before the first possible input are always ready.</summary>
     public List<FrameMessage> CollectReadyFrames()
     {
@@ -59,7 +78,8 @@ public sealed class LockstepHost
         {
             int tick = _nextFrameTick;
             _inputs.TryGetValue(tick, out var byFaction);
-            bool ready = tick <= InputDelay || _humans.All(f => byFaction != null && byFaction.ContainsKey(f));
+            bool ready = tick <= InputDelay || _humans.All(f =>
+                (_returnAt.TryGetValue(f, out int from) && tick < from) || (byFaction != null && byFaction.ContainsKey(f)));
             if (!ready)
                 break;
 
@@ -70,8 +90,11 @@ public sealed class LockstepHost
                 foreach (int faction in byFaction.Keys.Order())
                     commands.AddRange(byFaction[faction]);
             }
-            frames.Add(new FrameMessage(tick, commands, _pendingTakeovers.ToList()));
+            frames.Add(new FrameMessage(tick, commands, _pendingTakeovers.ToList(), _pendingReturns.ToList()));
             _pendingTakeovers.Clear();
+            _pendingReturns.Clear();
+            foreach (int done in _returnAt.Where(r => r.Value <= tick).Select(r => r.Key).ToList())
+                _returnAt.Remove(done);
             _inputs.Remove(tick);
             _nextFrameTick++;
             if (frames.Count >= MaxTicksAhead)
@@ -92,7 +115,14 @@ public sealed class LockstepPeer
 
     public void QueueLocal(Command command) => _local.Add(command);
 
-    public void ReceiveFrame(FrameMessage frame) => _frames.TryAdd(frame.Tick, frame);
+    public void ReceiveFrame(FrameMessage frame)
+    {
+        _frames.TryAdd(frame.Tick, frame);
+        LatestFrameTick = Math.Max(LatestFrameTick, frame.Tick);
+    }
+
+    /// <summary>The newest frame received: how far the match has gone at the host.</summary>
+    public int LatestFrameTick { get; private set; }
 
     public bool HasFrame(int tick) => _frames.ContainsKey(tick);
 
@@ -118,6 +148,10 @@ public sealed class LockstepPeer
 /// <summary>Host-side comparison of state checksums reported by peers.</summary>
 public sealed class ChecksumTracker
 {
+    /// <summary>
+    /// The host's own values, kept for the whole match (one a second): a player who rejoins replays the
+    /// match from the start, and those reports are checked against them too.
+    /// </summary>
     private readonly Dictionary<int, ulong> _reference = new();
     private readonly Dictionary<int, List<ulong>> _pending = new();
 
@@ -125,9 +159,7 @@ public sealed class ChecksumTracker
     public bool RecordOwn(int tick, ulong value)
     {
         _reference[tick] = value;
-        bool mismatch = _pending.Remove(tick, out var reports) && reports.Any(r => r != value);
-        Prune(tick);
-        return mismatch;
+        return _pending.Remove(tick, out var reports) && reports.Any(r => r != value);
     }
 
     /// <summary>Records a peer's checksum; returns true if it disagrees with the host's.</summary>
@@ -139,12 +171,5 @@ public sealed class ChecksumTracker
             _pending[tick] = list = new List<ulong>();
         list.Add(value);
         return false;
-    }
-
-    private void Prune(int tick)
-    {
-        // Peers lag the host by at most a few seconds; older reference values are not needed.
-        foreach (int old in _reference.Keys.Where(t => t < tick - 2000).ToList())
-            _reference.Remove(old);
     }
 }

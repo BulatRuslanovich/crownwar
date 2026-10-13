@@ -7,7 +7,8 @@ using Godot;
 namespace Lordsio.Net;
 
 /// <summary>A game announced on the local network. <paramref name="Id"/> tells games apart when one arrives over several adapters.</summary>
-public sealed record LanGame(string Id, string Address, int Port, string HostName, string Version, int Players, int FreeSlots)
+/// <paramref name="InMatch"/>: the match is running; <paramref name="FreeSlots"/> then counts players who dropped out and may rejoin.
+public sealed record LanGame(string Id, string Address, int Port, string HostName, string Version, int Players, int FreeSlots, bool InMatch)
 {
     public double LastSeen { get; set; }
 }
@@ -26,7 +27,7 @@ public partial class LanDiscovery : Node
 
     private readonly Dictionary<string, LanGame> _games = new();
     private PacketPeerUdp? _socket;
-    private Func<(string HostName, int Players, int FreeSlots)>? _announcement;
+    private Func<(string HostName, int Players, int FreeSlots, bool InMatch)>? _announcement;
     private int _gamePort;
     private string _gameId = "";
     private double _sinceAnnounce;
@@ -45,7 +46,7 @@ public partial class LanDiscovery : Node
     }
 
     /// <summary>Starts announcing a hosted game; <paramref name="describe"/> is asked for fresh details each time.</summary>
-    public void Announce(int gamePort, Func<(string HostName, int Players, int FreeSlots)> describe)
+    public void Announce(int gamePort, Func<(string HostName, int Players, int FreeSlots, bool InMatch)> describe)
     {
         Stop();
         _socket = new PacketPeerUdp();
@@ -78,10 +79,10 @@ public partial class LanDiscovery : Node
             if (_sinceAnnounce >= AnnounceInterval)
             {
                 _sinceAnnounce = 0;
-                var (hostName, players, free) = _announcement();
+                var (hostName, players, free, inMatch) = _announcement();
                 string text = string.Join('|', Magic, GameVersion.Current, Sanitize(hostName),
                     players.ToString(CultureInfo.InvariantCulture), free.ToString(CultureInfo.InvariantCulture),
-                    _gamePort.ToString(CultureInfo.InvariantCulture), _gameId);
+                    _gamePort.ToString(CultureInfo.InvariantCulture), _gameId, inMatch ? "1" : "0");
                 byte[] packet = Encoding.UTF8.GetBytes(text);
                 foreach (string target in BroadcastTargets())
                 {
@@ -115,13 +116,13 @@ public partial class LanDiscovery : Node
     private static LanGame? TryParse(string text, string address)
     {
         var parts = text.Split('|');
-        if (parts.Length != 7 || parts[0] != Magic)
+        if (parts.Length != 8 || parts[0] != Magic)
             return null;
         if (!int.TryParse(parts[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out int players)
             || !int.TryParse(parts[4], NumberStyles.Integer, CultureInfo.InvariantCulture, out int free)
             || !int.TryParse(parts[5], NumberStyles.Integer, CultureInfo.InvariantCulture, out int port))
             return null;
-        return new LanGame(parts[6], address, port, parts[2], parts[1], players, free);
+        return new LanGame(parts[6], address, port, parts[2], parts[1], players, free, parts[7] == "1");
     }
 
     /// <summary>

@@ -156,3 +156,8 @@ SCORE_ARMY,Army,Армия
 SCORE_BUILDINGS,Buildings,Здания
 SCORE_ALIVE,Standing,В игре
 SCORE_FALLEN,Fallen,Повержен
+NET_REJOINING,Returning to the match… {0:0}%,Возвращение в матч… {0:0}%
+NET_YOU_RETURNED,You are back in command of your faction,Вы снова командуете своей фракцией
+NET_PLAYER_RETURNED,{0} is back in the game,{0} вернулся в игру
+NET_GAME_REJOIN,match in progress: you can rejoin,"идёт матч, можно вернуться"
+NET_GAME_RUNNING,match in progress,идёт матч

@@ -146,7 +146,9 @@ public partial class Hud : CanvasLayer
         UpdateBuildingPanel();
 
         // Lockstep stall: keep the notice up for as long as we wait.
-        if (_match.WaitingForPlayers)
+        if (_match.CatchingUp)
+            ShowMessage(string.Format(Tr("NET_REJOINING"), _match.CatchUpProgress * 100f));
+        else if (_match.WaitingForPlayers)
             ShowMessage(Tr("NET_WAITING"));
 
         if (_messageTimeLeft > 0f)

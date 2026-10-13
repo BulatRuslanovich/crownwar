@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.Net;
@@ -21,6 +22,12 @@ public sealed class NetMatchDriver
     private readonly LockstepPeer _peer = new();
     private readonly LockstepHost? _host;
     private readonly ChecksumTracker? _checksums;
+    /// <summary>Host: every frame of the match, for players who rejoin.</summary>
+    private readonly List<FrameMessage> _history = new();
+    private bool _caughtUpReported;
+
+    /// <summary>Ticks between a returning player's "caught up" and taking the faction back (one second).</summary>
+    private const int ReturnDelay = Simulation.TicksPerSecond;
 
     public NetMatchDriver(NetSession session, StartMessage start)
     {
@@ -33,8 +40,38 @@ public sealed class NetMatchDriver
             _host = new LockstepHost(humans);
             _checksums = new ChecksumTracker();
             session.PlayerLeftMatch += faction => _host.DropFaction(faction);
+            session.PlayerRejoining += SendMatchSoFar;
         }
+        IsRejoin = start.Rejoin;
         session.MessageReceived += OnMessage;
+        session.FlushEarlyMessages();
+    }
+
+    /// <summary>This machine came back into a running match and is replaying it.</summary>
+    public bool IsRejoin { get; }
+
+    /// <summary>The newest frame known: how far the match has gone.</summary>
+    public int LatestFrameTick => _peer.LatestFrameTick;
+
+    /// <summary>Returning player: the replay has reached the others; the host may hand the faction back.</summary>
+    public void ReportCaughtUp(int tick)
+    {
+        if (!IsRejoin || _caughtUpReported)
+            return;
+        _caughtUpReported = true;
+        _session.Send(1, new CaughtUpMessage(tick));
+    }
+
+    /// <summary>Host: a player is back; send them the start of the match and every frame so far.</summary>
+    private void SendMatchSoFar(int peer, int faction)
+    {
+        if (_session.StartedWith is not { } start)
+            return;
+        if (LogChecksums)
+            Godot.GD.Print($"[net] faction {faction} rejoining: sending {_history.Count} frames");
+        _session.Send(peer, start with { YourFaction = faction, RejoinToken = _session.TokenOf(faction), Rejoin = true });
+        foreach (var frame in _history)
+            _session.Send(peer, frame);
     }
 
     /// <summary>Raised once when the machines' simulations diverged; the argument is the tick.</summary>
@@ -56,6 +93,7 @@ public sealed class NetMatchDriver
         {
             _session.Broadcast(frame);
             _peer.ReceiveFrame(frame);
+            _history.Add(frame);
         }
     }
 
@@ -64,10 +102,14 @@ public sealed class NetMatchDriver
     public FrameMessage TakeFrame(int tick) => _peer.TakeFrame(tick);
 
     /// <summary>After simulating <paramref name="tick"/>: send our input for a later tick and, now and then, a checksum.</summary>
-    public void AfterStep(int tick, Simulation sim)
+    public void AfterStep(int tick, Simulation sim, bool sendInput = true)
     {
         var input = _peer.TakeInput(tick);
-        if (_host != null)
+        if (!sendInput)
+        {
+            // Replaying the past: those ticks are long decided, the host would ignore the input anyway.
+        }
+        else if (_host != null)
             _host.SubmitInput(_localFaction, input);
         else
             _session.Send(1, input);
@@ -94,6 +136,11 @@ public sealed class NetMatchDriver
         {
             case InputMessage input when _host != null && _session.FactionOf(from) is { } faction:
                 _host.SubmitInput(faction, input);
+                break;
+            case CaughtUpMessage caught when _host != null && _session.FactionOf(from) is { } back:
+                _host.RestoreFaction(back, _host.NextFrameTick + ReturnDelay);
+                if (LogChecksums)
+                    Godot.GD.Print($"[net] faction {back} caught up at tick {caught.Tick}, returns at {_host.NextFrameTick + ReturnDelay}");
                 break;
             case ChecksumMessage check when _checksums != null:
                 if (_checksums.RecordPeer(check.Tick, check.Value))

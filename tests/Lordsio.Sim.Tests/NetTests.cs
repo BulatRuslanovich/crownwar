@@ -19,12 +19,16 @@ public class NetCodecTests
             new BuildCommand(3, "tower", new Cell(40, 21)),
         };
         yield return new HelloMessage("1.0+abc", "Игрок");
+        yield return new HelloMessage("1.0+abc", "Игрок", "a1b2c3");
         yield return new RejectMessage("NET_REJECT_VERSION");
         yield return new LobbyMessage(slots);
         yield return new SetTeamMessage(2);
         yield return new StartMessage(12345, slots, 1);
+        yield return new StartMessage(12345, slots, 1, "a1b2c3", Rejoin: true);
         yield return new InputMessage(77, commands);
-        yield return new FrameMessage(78, commands, new[] { 2 });
+        yield return new FrameMessage(78, commands, new[] { 2 }, Array.Empty<FactionReturn>());
+        yield return new FrameMessage(79, Array.Empty<Command>(), Array.Empty<int>(), new[] { new FactionReturn(1, 120) });
+        yield return new CaughtUpMessage(500);
         yield return new ChecksumMessage(80, 0xDEADBEEFCAFEUL);
         yield return new DesyncMessage(81);
     }
@@ -116,6 +120,32 @@ public class LockstepHostTests
     }
 
     [Test]
+    public void ReturningPlayerTakesTheFactionBackAtTheAnnouncedTick()
+    {
+        var host = new LockstepHost(new[] { 0, 1 });
+        host.CollectReadyFrames();
+        int tick = LockstepHost.InputDelay + 1;
+        host.DropFaction(1);
+        host.SubmitInput(0, new InputMessage(tick, Array.Empty<Command>()));
+        host.CollectReadyFrames();
+
+        host.RestoreFaction(1, fromTick: tick + 3);
+        host.SubmitInput(1, new InputMessage(tick + 1, new Command[] { new RecruitCommand(1, 1, "infantry") })); // too early: ignored
+        host.SubmitInput(0, new InputMessage(tick + 1, Array.Empty<Command>()));
+        host.SubmitInput(0, new InputMessage(tick + 2, Array.Empty<Command>()));
+        var frames = host.CollectReadyFrames();
+
+        Assert.That(frames.Select(f => f.Tick), Is.EqualTo(new[] { tick + 1, tick + 2 }), "the bot's ticks do not wait for the player");
+        Assert.That(frames[0].Returns, Is.EqualTo(new[] { new FactionReturn(1, tick + 3) }), "announced in the next frame");
+        Assert.That(frames[0].Commands, Is.Empty);
+
+        host.SubmitInput(0, new InputMessage(tick + 3, Array.Empty<Command>()));
+        Assert.That(host.CollectReadyFrames(), Is.Empty, "from the return tick on, the player is awaited again");
+        host.SubmitInput(1, new InputMessage(tick + 3, new Command[] { new RecruitCommand(1, 1, "infantry") }));
+        Assert.That(host.CollectReadyFrames().Single().Commands.Single().FactionId, Is.EqualTo(1));
+    }
+
+    [Test]
     public void LateAndDuplicateInputsAreIgnored()
     {
         var host = new LockstepHost(new[] { 0 });
@@ -152,6 +182,99 @@ public class LockstepEndToEndTests
         // Factions 2 and 3 are bots on every machine.
         var bots = new List<BotBrain> { new(sim, 2, BotDifficulty.Normal, 23), new(sim, 3, BotDifficulty.Normal, 24) };
         return new Player { Faction = faction, Sim = sim, Bots = bots };
+    }
+
+    /// <summary>What every machine does with a frame: commands, bot takeovers and returns, then one tick.</summary>
+    private static void Apply(Player p, FrameMessage frame, Dictionary<int, int> returnAt)
+    {
+        foreach (var ret in frame.Returns)
+            returnAt[ret.Faction] = ret.FromTick;
+        foreach (var (faction, from) in returnAt.Where(r => r.Value == frame.Tick).ToList())
+        {
+            p.Bots.RemoveAll(b => b.FactionId == faction);
+            returnAt.Remove(faction);
+        }
+        foreach (var command in frame.Commands)
+            p.Sim.Issue(command);
+        foreach (int faction in frame.Takeovers)
+            p.Bots.Add(new BotBrain(p.Sim, faction, BotDifficulty.Normal, 100 + faction));
+        p.Sim.Step();
+        foreach (var bot in p.Bots)
+            bot.Update();
+        p.Checksums[p.Sim.Tick] = p.Sim.ComputeChecksum();
+    }
+
+    [Test]
+    public void DroppedPlayerRejoinsByReplayingTheMatchAndTakesBackControl()
+    {
+        var rng = new Random(9);
+        var host = new LockstepHost(new[] { 0, 1 });
+        var history = new List<FrameMessage>();
+        var a = CreatePlayer(0);
+        var b = CreatePlayer(1);
+        var returnsA = new Dictionary<int, int>();
+        var returnsB = new Dictionary<int, int>();
+        bool caughtUpReported = false;
+        int returnTick = 0;
+
+        for (int now = 0; now < 120 * Simulation.TicksPerSecond; now++)
+        {
+            foreach (var frame in host.CollectReadyFrames())
+            {
+                history.Add(frame);
+                a.Peer.ReceiveFrame(frame);
+                if (b.Connected)
+                    b.Peer.ReceiveFrame(frame);
+                if (frame.Returns.Count > 0)
+                    returnTick = frame.Returns[0].FromTick;
+            }
+
+            if (now == 30 * Simulation.TicksPerSecond)
+            {
+                b.Connected = false; // crash
+                host.DropFaction(1);
+            }
+            if (now == 60 * Simulation.TicksPerSecond)
+            {
+                // The game is started again and rejoins: a fresh simulation that gets the whole history.
+                b = CreatePlayer(1);
+                returnsB.Clear();
+                foreach (var frame in history)
+                    b.Peer.ReceiveFrame(frame);
+            }
+
+            foreach (var p in new[] { a, b }.Where(p => p.Connected))
+            {
+                if (now % 60 == 10 && p.Sim.Tick > 0)
+                {
+                    var army = p.Sim.Units.Where(u => u.FactionId == p.Faction).Select(u => u.Id).ToList();
+                    p.Peer.QueueLocal(new MoveCommand(p.Faction, army, new Vector2(30 + rng.Next(30), 20 + rng.Next(20)), MoveMode.AttackMove));
+                }
+                // A catching-up player runs as many ticks as there are frames; the others one or two.
+                int budget = p == b && p.Peer.LatestFrameTick - p.Sim.Tick > 40 ? int.MaxValue : 2;
+                for (int step = 0; step < budget && p.Peer.HasFrame(p.Sim.Tick + 1); step++)
+                {
+                    Apply(p, p.Peer.TakeFrame(p.Sim.Tick + 1), p == a ? returnsA : returnsB);
+                    host.SubmitInput(p.Faction, p.Peer.TakeInput(p.Sim.Tick));
+                }
+            }
+
+            if (now > 60 * Simulation.TicksPerSecond && !caughtUpReported && b.Peer.LatestFrameTick - b.Sim.Tick <= 2)
+            {
+                caughtUpReported = true;
+                host.RestoreFaction(1, host.NextFrameTick + 20);
+            }
+        }
+
+        Assert.That(caughtUpReported, Is.True, "the rejoining player caught up");
+        Assert.That(returnTick, Is.GreaterThan(60 * Simulation.TicksPerSecond));
+        Assert.That(a.Sim.Tick, Is.GreaterThan(115 * Simulation.TicksPerSecond), "nobody stalled");
+        var shared = a.Checksums.Keys.Intersect(b.Checksums.Keys).ToList();
+        Assert.That(shared.Count, Is.GreaterThan(100 * Simulation.TicksPerSecond), "the replay covers the match from its start");
+        foreach (int tick in shared)
+            Assert.That(b.Checksums[tick], Is.EqualTo(a.Checksums[tick]), $"desync at tick {tick}");
+        Assert.That(a.Bots.Any(bot => bot.FactionId == 1), Is.False, "after the return the faction is the player's again");
+        Assert.That(b.Bots.Any(bot => bot.FactionId == 1), Is.False);
     }
 
     [Test]

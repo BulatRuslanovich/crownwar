@@ -19,8 +19,12 @@ public sealed record NetSlot(NetSlotKind Kind, string Name, byte Difficulty, byt
 
 public abstract record NetMessage;
 
-/// <summary>Client → host on connect. Both sides must run the same build and data.</summary>
-public sealed record HelloMessage(string Version, string Name) : NetMessage;
+/// <summary>
+/// Client → host on connect. Both sides must run the same build and data. <paramref name="RejoinToken"/> is
+/// the key the host gave this player when the match started (empty if none): with it a player who dropped
+/// out can come back into the running match.
+/// </summary>
+public sealed record HelloMessage(string Version, string Name, string RejoinToken = "") : NetMessage;
 
 /// <summary>Host → client: connection refused (a translation key for the reason).</summary>
 public sealed record RejectMessage(string Reason) : NetMessage;
@@ -31,17 +35,30 @@ public sealed record LobbyMessage(IReadOnlyList<NetSlot> Slots) : NetMessage;
 /// <summary>Client → host: move my slot to another team.</summary>
 public sealed record SetTeamMessage(byte Team) : NetMessage;
 
-/// <summary>Host → each client: the match starts; <paramref name="YourFaction"/> is the receiver's slot.</summary>
-public sealed record StartMessage(int Seed, IReadOnlyList<NetSlot> Slots, int YourFaction) : NetMessage;
+/// <summary>
+/// Host → each client: the match starts; <paramref name="YourFaction"/> is the receiver's slot and
+/// <paramref name="RejoinToken"/> its key for coming back after a drop. With <paramref name="Rejoin"/> the match
+/// is already running: every frame so far follows, to be replayed before playing on.
+/// </summary>
+public sealed record StartMessage(int Seed, IReadOnlyList<NetSlot> Slots, int YourFaction, string RejoinToken = "", bool Rejoin = false)
+    : NetMessage;
+
+/// <summary>A faction a returning player takes back from its bot, starting with <paramref name="FromTick"/>.</summary>
+public sealed record FactionReturn(int Faction, int FromTick);
 
 /// <summary>Peer → host: my commands for <paramref name="Tick"/> (sent even when empty).</summary>
 public sealed record InputMessage(int Tick, IReadOnlyList<Command> Commands) : NetMessage;
 
 /// <summary>
 /// Host → all: everything to apply before simulating <paramref name="Tick"/>: the commands of every
-/// player in a fixed order, and factions that a bot takes over from this tick on.
+/// player in a fixed order, factions that a bot takes over from this tick on, and factions whose returning
+/// player takes them back from the bot at a later tick (announced ahead, so the player can send input in time).
 /// </summary>
-public sealed record FrameMessage(int Tick, IReadOnlyList<Command> Commands, IReadOnlyList<int> Takeovers) : NetMessage;
+public sealed record FrameMessage(int Tick, IReadOnlyList<Command> Commands, IReadOnlyList<int> Takeovers, IReadOnlyList<FactionReturn> Returns)
+    : NetMessage;
+
+/// <summary>Returning client → host: the replay reached <paramref name="Tick"/>; the faction can be handed back.</summary>
+public sealed record CaughtUpMessage(int Tick) : NetMessage;
 
 /// <summary>Peer → host: state fingerprint after simulating <paramref name="Tick"/>.</summary>
 public sealed record ChecksumMessage(int Tick, ulong Value) : NetMessage;
@@ -61,7 +78,7 @@ public static class NetCodec
 
     private enum Tag : byte
     {
-        Hello = 1, Reject, Lobby, SetTeam, Start, Input, Frame, Checksum, Desync,
+        Hello = 1, Reject, Lobby, SetTeam, Start, Input, Frame, Checksum, Desync, CaughtUp,
     }
 
     private enum CommandTag : byte
@@ -75,11 +92,14 @@ public static class NetCodec
         using var w = new BinaryWriter(stream, Encoding.UTF8);
         switch (message)
         {
-            case HelloMessage m: w.Write((byte)Tag.Hello); WriteString(w, m.Version); WriteString(w, m.Name); break;
+            case HelloMessage m: w.Write((byte)Tag.Hello); WriteString(w, m.Version); WriteString(w, m.Name); WriteString(w, m.RejoinToken); break;
             case RejectMessage m: w.Write((byte)Tag.Reject); WriteString(w, m.Reason); break;
             case LobbyMessage m: w.Write((byte)Tag.Lobby); WriteSlots(w, m.Slots); break;
             case SetTeamMessage m: w.Write((byte)Tag.SetTeam); w.Write(m.Team); break;
-            case StartMessage m: w.Write((byte)Tag.Start); w.Write(m.Seed); WriteSlots(w, m.Slots); w.Write(m.YourFaction); break;
+            case StartMessage m:
+                w.Write((byte)Tag.Start); w.Write(m.Seed); WriteSlots(w, m.Slots); w.Write(m.YourFaction);
+                WriteString(w, m.RejoinToken); w.Write(m.Rejoin);
+                break;
             case InputMessage m: w.Write((byte)Tag.Input); w.Write(m.Tick); WriteCommands(w, m.Commands); break;
             case FrameMessage m:
                 w.Write((byte)Tag.Frame);
@@ -88,7 +108,14 @@ public static class NetCodec
                 w.Write((ushort)m.Takeovers.Count);
                 foreach (int f in m.Takeovers)
                     w.Write(f);
+                w.Write((ushort)m.Returns.Count);
+                foreach (var ret in m.Returns)
+                {
+                    w.Write(ret.Faction);
+                    w.Write(ret.FromTick);
+                }
                 break;
+            case CaughtUpMessage m: w.Write((byte)Tag.CaughtUp); w.Write(m.Tick); break;
             case ChecksumMessage m: w.Write((byte)Tag.Checksum); w.Write(m.Tick); w.Write(m.Value); break;
             case DesyncMessage m: w.Write((byte)Tag.Desync); w.Write(m.Tick); break;
             default: throw new NotSupportedException($"Cannot encode {message.GetType().Name}.");
@@ -106,13 +133,14 @@ public static class NetCodec
             using var r = new BinaryReader(new MemoryStream(data), Encoding.UTF8);
             NetMessage message = (Tag)r.ReadByte() switch
             {
-                Tag.Hello => new HelloMessage(ReadString(r), ReadString(r)),
+                Tag.Hello => new HelloMessage(ReadString(r), ReadString(r), ReadString(r)),
                 Tag.Reject => new RejectMessage(ReadString(r)),
                 Tag.Lobby => new LobbyMessage(ReadSlots(r)),
                 Tag.SetTeam => new SetTeamMessage(r.ReadByte()),
-                Tag.Start => new StartMessage(r.ReadInt32(), ReadSlots(r), r.ReadInt32()),
+                Tag.Start => new StartMessage(r.ReadInt32(), ReadSlots(r), r.ReadInt32(), ReadString(r), r.ReadBoolean()),
                 Tag.Input => new InputMessage(r.ReadInt32(), ReadCommands(r)),
-                Tag.Frame => new FrameMessage(r.ReadInt32(), ReadCommands(r), ReadInts(r)),
+                Tag.Frame => new FrameMessage(r.ReadInt32(), ReadCommands(r), ReadInts(r), ReadReturns(r)),
+                Tag.CaughtUp => new CaughtUpMessage(r.ReadInt32()),
                 Tag.Checksum => new ChecksumMessage(r.ReadInt32(), r.ReadUInt64()),
                 Tag.Desync => new DesyncMessage(r.ReadInt32()),
                 var tag => throw new FormatException($"Unknown message tag {(byte)tag}."),
@@ -125,6 +153,15 @@ public static class NetCodec
         {
             throw new FormatException("Truncated message.", e);
         }
+    }
+
+    private static List<FactionReturn> ReadReturns(BinaryReader r)
+    {
+        int count = ReadCount(r);
+        var list = new List<FactionReturn>(count);
+        for (int i = 0; i < count; i++)
+            list.Add(new FactionReturn(r.ReadInt32(), r.ReadInt32()));
+        return list;
     }
 
     private static void WriteString(BinaryWriter w, string s)

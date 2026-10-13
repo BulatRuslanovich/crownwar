@@ -97,6 +97,8 @@ public partial class NetMenu : Control
             string text = string.Format(Tr("NET_GAME_ENTRY"), game.HostName, game.Players, game.Players + game.FreeSlots, game.Address);
             if (!sameVersion)
                 text += " — " + Tr("NET_OTHER_VERSION");
+            else if (game.InMatch)
+                text += " — " + Tr(game.FreeSlots > 0 ? "NET_GAME_REJOIN" : "NET_GAME_RUNNING");
             else if (game.FreeSlots == 0)
                 text += " — " + Tr("NET_GAME_FULL");
             button.Text = text;
