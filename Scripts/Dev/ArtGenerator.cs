@@ -102,8 +102,7 @@ public static class ArtGenerator
         (Leaf, new Color("1f4a3a")), (LeafLight, new Color("2c5e48")), (LeafHighlight, new Color("e8f0f2")),
         (LeafDark, new Color("163a2c")), (TreeOutline, new Color("10291f")), (Bark, new Color("4a3424")),
         (ForestShadow, new Color("aebccb")), (BarkDark, new Color("33231a")),
-        (Water, new Color("4a7aa5")), (WaterLight, new Color("9cc2de")), (WaterDark, new Color("3a6488")),
-        (Sand, new Color("c9d6de")), (SandDark, new Color("aab8c2")), (Foam, new Color("ffffff")),
+        (Sand, new Color("c9d6de")), (SandDark, new Color("aab8c2")),
         (Rock, new Color("8a8c90")), (RockLight, new Color("e4eaee")), (RockDark, new Color("55585c")),
         (Dirt, new Color("9c8f80")), (DirtDark, new Color("7f7466")), (DirtLight, new Color("b5aa9c")),
     };
@@ -115,8 +114,7 @@ public static class ArtGenerator
         (Leaf, new Color("4f7a32")), (LeafLight, new Color("6a9440")), (LeafHighlight, new Color("8db35a")),
         (LeafDark, new Color("3a5c24")), (TreeOutline, new Color("2a4219")), (Bark, new Color("7a5430")),
         (ForestShadow, new Color("b8955c")), (SnowShade, new Color("cfae7e")),
-        (Water, new Color("2f8fa8")), (WaterLight, new Color("6cc4d2")), (WaterDark, new Color("247488")),
-        (Sand, new Color("f0dca0")), (SandDark, new Color("d6bd7e")), (Foam, new Color("e8fbff")),
+        (Sand, new Color("f0dca0")), (SandDark, new Color("d6bd7e")),
         (Rock, new Color("a5683f")), (RockLight, new Color("c98a5a")), (RockDark, new Color("7a4a2c")),
         (Snow, new Color("e8c89a")),
         (Dirt, new Color("b08850")), (DirtDark, new Color("94703e")), (DirtLight, new Color("c49c62")),
@@ -269,13 +267,15 @@ public static class ArtGenerator
     /// <summary>
     /// 16×16 tiles, 16 columns. Row 0 grass, 1 forest, 2 water, 3 mountain (4 variants each);
     /// row 4 roads and row 5 shore overlays, both indexed by a 4-bit neighbour mask N=1, E=2, S=4, W=8;
-    /// row 6: bridge running east-west, bridge running north-south; rows 7–10 forest and 11–14 mountain ranges, by
-    /// neighbour mask (column) and by the cell's position modulo 2 in each direction (row), so woods and ranges are
-    /// drawn as one canopy, one massif, whose pattern repeats only every two tiles.
+    /// row 6: bridge running east-west, bridge running north-south; rows 7–10 forest and 11–26 mountain ranges, by
+    /// neighbour mask (column) and by the cell's position modulo 2 (woods) or 4 (ranges) in each direction (row), so
+    /// woods and ranges are drawn as one canopy, one massif, whose pattern repeats only every two or four tiles;
+    /// rows 27–42: this biome's ground reaching into a neighbouring cell of another biome, by the 8-bit mask of the
+    /// neighbours of this biome (row = mask / 16, column = mask % 16).
     /// </summary>
     private static PixelCanvas Terrain()
     {
-        var c = new PixelCanvas(ArtLayout.Tile * 16, ArtLayout.Tile * 15);
+        var c = new PixelCanvas(ArtLayout.Tile * 16, ArtLayout.Tile * (ArtLayout.BiomeBlendRow + 16));
         for (int v = 0; v < ArtLayout.TerrainVariants; v++)
         {
             Cell(c, v, 0); GrassTile(c, v);
@@ -290,13 +290,23 @@ public static class ArtGenerator
         }
         Cell(c, 0, 6); WaterTile(c, 1); BridgeTile(c, horizontal: true);
         Cell(c, 1, 6); WaterTile(c, 2); BridgeTile(c, horizontal: false);
-        for (int parity = 0; parity < 4; parity++)
+        for (int mask = 0; mask < 16; mask++)
         {
-            for (int mask = 0; mask < 16; mask++)
+            for (int parity = 0; parity < 4; parity++)
             {
-                Cell(c, mask, ArtLayout.ForestRangeRow + parity); ForestRangeTile(c, mask, parity);
-                Cell(c, mask, ArtLayout.MountainRangeRow + parity); MountainRangeTile(c, mask, parity);
+                Cell(c, mask, ArtLayout.ForestRangeRow + parity);
+                ForestRangeTile(c, mask, parity);
             }
+            for (int parity = 0; parity < 16; parity++)
+            {
+                Cell(c, mask, ArtLayout.MountainRangeRow + parity);
+                MountainRangeTile(c, mask, parity);
+            }
+        }
+        for (int mask = 0; mask < 256; mask++)
+        {
+            Cell(c, mask % 16, ArtLayout.BiomeBlendRow + mask / 16);
+            BiomeBlendTile(c, mask);
         }
         return c;
 
@@ -363,13 +373,16 @@ public static class ArtGenerator
     /// </summary>
     private readonly struct Range
     {
-        private readonly int _mask, _px, _py;
+        private readonly int _mask, _px, _py, _period;
 
-        public Range(int mask, int parity)
+        /// <param name="period">Tiles before the pattern repeats in each direction; <paramref name="parity"/> is the
+        /// cell's position within it (x + y × period).</param>
+        public Range(int mask, int parity, int period = 2)
         {
             _mask = mask;
-            _px = parity % 2;
-            _py = parity / 2;
+            _period = period;
+            _px = parity % period;
+            _py = parity / period;
         }
 
         public bool Present(int tx, int ty) => (tx, ty) switch
@@ -399,10 +412,13 @@ public static class ArtGenerator
                     for (int j = 0; j < perTile; j++)
                         for (int i = 0; i < perTile; i++)
                         {
-                            int gx = (((_px + tx) * perTile + i) % 4 + 4) % 4, gy = (((_py + ty) * perTile + j) % 4 + 4) % 4;
+                            int span = _period * perTile;
+                            int gx = (((_px + tx) * perTile + i) % span + span) % span, gy = (((_py + ty) * perTile + j) % span + span) % span;
                             int h = Hash(gx, gy, 61 + spacing);
-                            float x = tx * 16 + spacing / 2 + spacing * i + h % 3 - 1 + (shifted ? 4 : -2);
-                            float y = ty * 16 + spacing / 2 + spacing * j + h / 10 % 3 - 1;
+                            // Big peaks wander more than small crowns.
+                            int jitter = perTile == 1 ? 3 : 1;
+                            float x = tx * 16 + spacing / 2 + spacing * i + h % (2 * jitter + 1) - jitter + (shifted ? 4 : -2);
+                            float y = ty * 16 + spacing / 2 + spacing * j + h / 10 % (2 * jitter - 1 + 2) - jitter;
                             yield return (x, y, h);
                         }
                 }
@@ -485,42 +501,67 @@ public static class ArtGenerator
     }
 
     /// <summary>
-    /// A mountain range: one big peak a tile, every other row shifted half a peak so the summits stagger into jagged
-    /// ridges, drawn from the back row to the front: a lit western face, a shaded eastern one, a crisp dark rim, a
-    /// snowcap on the tall ones, all on a rocky base. Near an open edge the peaks are lower and narrower — foothills —
-    /// so the range does not end in a cut.
+    /// A mountain range drawn from the back row to the front, one lattice point a tile with every other row shifted, so
+    /// summits stagger into jagged ridges; each point is its own: a tall snowcapped peak, a low one, a twin summit, or
+    /// none at all — a rocky saddle strewn with boulders — and scree spills from the foot of the peaks. Faces are lit
+    /// from the west, rims dark; near an open edge the peaks are lower and narrower — foothills — so the range does
+    /// not end in a cut. The pattern repeats only every four tiles.
     /// </summary>
     private static void MountainRangeTile(PixelCanvas c, int mask, int parity)
     {
-        var range = new Range(mask, parity);
-        GrassTile(c, 40 + parity);
-        // Rocky ground under the range, ending raggedly a pixel or two short of open sides.
+        var range = new Range(mask, parity, period: 4);
+        GrassTile(c, 40 + parity % 4);
+        // Rocky ground under the range. Towards open sides it ends raggedly three to six pixels short, and where two open
+        // sides meet the corner is rounded off, so the massif has no square silhouette.
         for (int y = 0; y < 16; y++)
             for (int x = 0; x < 16; x++)
             {
-                int ragged = 1 + Hash(x, y, 77 + parity) % 2;
-                bool open = (mask & 1) == 0 && y < ragged || (mask & 4) == 0 && y > 15 - ragged
-                            || (mask & 8) == 0 && x < ragged || (mask & 2) == 0 && x > 15 - ragged;
+                int Reach(int along, int salt) => 3 + (Hash(along / 2, salt, 71) % 3 + Hash((along + 1) / 2, salt, 71) % 3) / 2;
+                bool open = (mask & 1) == 0 && y < Reach(x, 1) || (mask & 4) == 0 && y > 15 - Reach(x, 4)
+                            || (mask & 8) == 0 && x < Reach(y, 8) || (mask & 2) == 0 && x > 15 - Reach(y, 2);
+                foreach (var (bits, cx, cy) in new[] { (1 | 8, 0, 0), (1 | 2, 15, 0), (4 | 8, 0, 15), (4 | 2, 15, 15) })
+                    if ((mask & bits) == 0 && (x - cx) * (x - cx) + (y - cy) * (y - cy) < 64)
+                        open = true;
                 if (!open)
                     Plot(c, x, y, Hash(x, y, 91) < 60 ? Rock : RockDark);
             }
 
         var peaks = new System.Collections.Generic.List<(float X, float Apex, float Base, float Half, int Hash)>();
+        var saddles = new System.Collections.Generic.List<(float X, float Y, int Hash)>();
         foreach (var (x, y, h) in range.Points(16))
         {
             var room = range.Room(x, y);
-            float half = Mathf.Min(9.5f - h % 3, Mathf.Min(room.Left, room.Right) + 1f);
-            float apex = Mathf.Max(y - 11f - h % 4, y - room.Up + 1f);
+            if (h % 7 == 0)
+            {
+                saddles.Add((x, y, h)); // no peak here: a saddle with boulders
+                continue;
+            }
+            float tall = 6f + h / 3 % 6 * 1.6f;
+            float half = Mathf.Min(5.5f + h / 11 % 5, Mathf.Min(room.Left, room.Right) + 1f);
+            float apex = Mathf.Max(y - tall, y - room.Up + 1f);
             float baseY = Mathf.Min(y + 7f, y + room.Down);
-            if (half >= 3f && baseY - apex >= 5f)
-                peaks.Add((x, apex, baseY, half, h));
+            if (half < 3f || baseY - apex < 5f)
+                continue;
+            if (h % 3 == 0)
+            {
+                // A twin summit: a smaller peak shouldering the main one, a little behind it.
+                float side = h % 2 == 0 ? 1f : -1f;
+                float twinHalf = half * 0.7f;
+                float twinX = Mathf.Clamp(x + side * half * 0.55f, x - room.Left + twinHalf, x + room.Right - twinHalf);
+                peaks.Add((twinX, apex + (baseY - apex) * 0.3f, baseY - 1f, twinHalf, h + 1));
+            }
+            peaks.Add((x, apex, baseY, half, h));
         }
         peaks.Sort((a, b) => a.Base.CompareTo(b.Base));
+
+        foreach (var s in saddles)
+            for (int k = 0; k < 5; k++)
+                Boulder(c, (int)(s.X - 5 + Hash(s.Hash, k, 3) % 11), (int)(s.Y - 3 + Hash(k, s.Hash, 4) % 8));
 
         foreach (var p in peaks)
         {
             float height = p.Base - p.Apex;
-            float snowLine = height >= 14f ? p.Apex + height * 0.28f : float.MinValue;
+            float snowLine = height >= 13f ? p.Apex + height * 0.3f : float.MinValue;
             for (int y = (int)p.Apex; y <= (int)p.Base; y++)
             {
                 float w = p.Half * (y - p.Apex) / height;
@@ -539,7 +580,60 @@ public static class ArtGenerator
                     Plot(c, x, y, color);
                 }
             }
+            // Scree spilling from the foot of the peak.
+            for (int k = 0; k < 3; k++)
+            {
+                int sx = (int)(p.X - p.Half + Hash(p.Hash, k, 5) % (int)(2 * p.Half + 1));
+                int sy = (int)p.Base - Hash(k, p.Hash, 6) % 3;
+                Boulder(c, sx, sy);
+            }
         }
+    }
+
+    /// <summary>A two-pixel boulder: a lit top over a dark underside.</summary>
+    private static void Boulder(PixelCanvas c, int x, int y)
+    {
+        Plot(c, x, y, RockLight);
+        Plot(c, x + 1, y, Rock);
+        Plot(c, x, y + 1, RockDark);
+        Plot(c, x + 1, y + 1, Outline);
+    }
+
+    /// <summary>The eight neighbours of a cell as (dx, dy), in the bit order of the blend masks: N, NE, E, SE, S, SW, W, NW.</summary>
+    public static readonly (int Dx, int Dy)[] BlendNeighbours =
+        { (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1) };
+
+    /// <summary>
+    /// This biome's ground over the part of a cell of another biome where this one prevails. Every cell around (the
+    /// eight neighbours in <paramref name="mask"/> are of this biome, the cell itself and the rest are not) pulls on
+    /// each pixel with a weight that falls off smoothly with the distance from its centre; the pixel takes this biome
+    /// where its share is the larger. The same rule on both sides of a border (each cell draws the other's overlay)
+    /// gives one smooth curve: the tile grid's steps are cut across diagonally and corners rounded off.
+    /// </summary>
+    private static void BiomeBlendTile(PixelCanvas c, int mask)
+    {
+        GrassTile(c, 60 + mask % 7);
+        const float reach = 21f; // px: a little over a tile, so only the eight neighbours matter
+        static float Weight(float d) => d >= reach ? 0f : (1f - d / reach) * (1f - d / reach);
+        for (int y = 0; y < 16; y++)
+            for (int x = 0; x < 16; x++)
+            {
+                float px = x + 0.5f, py = y + 0.5f;
+                float own = Weight(Mathf.Sqrt((px - 8f) * (px - 8f) + (py - 8f) * (py - 8f))), other = 0f;
+                for (int i = 0; i < 8; i++)
+                {
+                    var (dx, dy) = BlendNeighbours[i];
+                    float w = Weight(Mathf.Sqrt((px - 8f - dx * 16) * (px - 8f - dx * 16) + (py - 8f - dy * 16) * (py - 8f - dy * 16)));
+                    if ((mask & (1 << i)) != 0)
+                        other += w;
+                    else
+                        own += w;
+                }
+                // A gentle wobble, so long borders are not ruled straight.
+                float wobble = (Hash(x / 3, y / 3, 13) % 5 - 2) * 0.012f;
+                if (other / (own + other) <= 0.5f + wobble)
+                    c.Base.SetPixel(c.Origin.X + x, c.Origin.Y + y, Colors.Transparent);
+            }
     }
 
     private static void WaterTile(PixelCanvas c, int v)
@@ -1150,6 +1244,10 @@ public static class ArtLayout
     public const int GrassRow = 0, ForestRow = 1, WaterRow = 2, MountainRow = 3, RoadRow = 4, ShoreRow = 5, BridgeRow = 6;
     /// <summary>First of four rows each (one per cell position modulo 2 in x and y) of forest and mountain range tiles, by neighbour mask.</summary>
     public const int ForestRangeRow = 7, MountainRangeRow = 11;
+    /// <summary>Tiles before the woods' and the ranges' patterns repeat (the rows per position).</summary>
+    public const int ForestPeriod = 2, MountainPeriod = 4;
+    /// <summary>First of 16 rows of a biome's ground blending into a neighbouring cell of another biome (8-bit neighbour mask).</summary>
+    public const int BiomeBlendRow = 27;
 
     public const int UnitCellWidth = 16;
     public const int UnitCellHeight = 20;

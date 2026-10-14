@@ -54,8 +54,9 @@ public static class MapGenerator
         {
             for (int x = 0; x < Width; x++)
             {
-                float t = temperature.Fractal(x * 0.014f, y * 0.014f, 2);
-                float h = humidity.Fractal(x * 0.018f, y * 0.018f, 2);
+                // Four octaves: the large climate zones, with borders that wind instead of running in long steps.
+                float t = temperature.Fractal(x * 0.014f, y * 0.014f, 4);
+                float h = humidity.Fractal(x * 0.018f, y * 0.018f, 4);
                 var biome = t < 0.42f ? Biome.Winter : t > 0.57f && h < 0.55f ? Biome.Desert : Biome.Meadow;
                 biomes[y * Width + x] = biome;
 
@@ -70,6 +71,42 @@ public static class MapGenerator
                 tiles[y * Width + x] = land;
             }
         }
+
+        // Woods or ranges of two biomes never touch: a narrow clearing (or a pass) runs between them, which the
+        // smooth blend of the ground then covers, instead of pines and oaks, grey and red rocks meeting on a straight line.
+        var cleared = new List<int>();
+        for (int y = 0; y < Height; y++)
+            for (int x = 0; x < Width; x++)
+            {
+                var t = tiles[y * Width + x];
+                if (t is not (Terrain.Forest or Terrain.Mountain))
+                    continue;
+                bool foreign = false;
+                for (int dy = -1; dy <= 1 && !foreign; dy++)
+                    for (int dx = -1; dx <= 1 && !foreign; dx++)
+                    {
+                        int nx = x + dx, ny = y + dy;
+                        foreign = nx >= 0 && ny >= 0 && nx < Width && ny < Height && tiles[ny * Width + nx] == t
+                                  && biomes[ny * Width + nx] != biomes[y * Width + x];
+                    }
+                if (foreign)
+                    cleared.Add(y * Width + x);
+            }
+        foreach (int i in cleared)
+            tiles[i] = Terrain.Grass;
+
+        // Water that only touches diagonally (a river stepping across the grid) is joined up, so rivers run as one
+        // channel instead of a chain of ponds.
+        for (int y = 0; y < Height - 1; y++)
+            for (int x = 0; x < Width - 1; x++)
+            {
+                bool a = tiles[y * Width + x] == Terrain.Water, b = tiles[y * Width + x + 1] == Terrain.Water;
+                bool c = tiles[(y + 1) * Width + x] == Terrain.Water, d = tiles[(y + 1) * Width + x + 1] == Terrain.Water;
+                if (a && d && !b && !c)
+                    tiles[y * Width + x + 1] = Terrain.Water;
+                else if (b && c && !a && !d)
+                    tiles[y * Width + x] = Terrain.Water;
+            }
 
         // 2. Castles: a good spot in each corner region, then cleared.
         var starts = new List<Cell>();

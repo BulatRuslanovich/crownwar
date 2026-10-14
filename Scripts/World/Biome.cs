@@ -18,12 +18,10 @@ public static class Biomes
     public static Color MinimapColor(Biome biome, Terrain terrain) => (biome, terrain) switch
     {
         (Biome.Winter, Terrain.Forest) => new Color("2c5e48"),
-        (Biome.Winter, Terrain.Water) => new Color("4a7aa5"),
         (Biome.Winter, Terrain.Mountain) => new Color("b9c0c6"),
         (Biome.Winter, Terrain.Road) => new Color("9c8f80"),
         (Biome.Winter, _) => new Color("dfe7ec"),
         (Biome.Desert, Terrain.Forest) => new Color("5a8236"),
-        (Biome.Desert, Terrain.Water) => new Color("2f8fa8"),
         (Biome.Desert, Terrain.Mountain) => new Color("a5683f"),
         (Biome.Desert, Terrain.Road) => new Color("b08850"),
         (Biome.Desert, _) => new Color("d9b77a"),
