@@ -84,8 +84,12 @@ public sealed record MatchEnded(int WinningTeam) : SimEvent(-1);
 /// A hit was applied (melee blow or arrow impact). Purely informational, for sounds and effects:
 /// the damage is already done. <see cref="SimEvent.FactionId"/> is the attacker's faction.
 /// </summary>
-public sealed record AttackLanded(int FactionId, int AttackerId, int TargetId, int TargetFactionId, Vector2 Position, bool Ranged)
-    : SimEvent(FactionId);
+/// <param name="Splash">One of the units caught by a catapult's stone (the stone's own event is <see cref="SplashLanded"/>).</param>
+public sealed record AttackLanded(int FactionId, int AttackerId, int TargetId, int TargetFactionId, Vector2 Position, bool Ranged,
+    bool Splash = false) : SimEvent(FactionId);
 
-/// <summary>An archer or tower loosed an arrow from <paramref name="Position"/>.</summary>
-public sealed record ProjectileFired(int FactionId, Vector2 Position) : SimEvent(FactionId);
+/// <summary>A catapult's stone came down at <paramref name="Position"/>, hurting enemies within <paramref name="Radius"/> tiles.</summary>
+public sealed record SplashLanded(int FactionId, int SourceId, Vector2 Position, float Radius) : SimEvent(FactionId);
+
+/// <summary>An archer or tower loosed an arrow (or a catapult a stone, <paramref name="Splash"/>) from <paramref name="Position"/>.</summary>
+public sealed record ProjectileFired(int FactionId, Vector2 Position, bool Splash = false) : SimEvent(FactionId);

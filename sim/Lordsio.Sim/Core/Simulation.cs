@@ -144,7 +144,7 @@ public sealed partial class Simulation
             _combat.UpdateTower(building, _units, Tick);
         foreach (var unit in _units)
             unit.Move(TickDuration);
-        _combat.AdvanceProjectiles(TickDuration);
+        _combat.AdvanceProjectiles(TickDuration, _units);
 
         UnitCollisions.Resolve(_units);
         foreach (var unit in _units)

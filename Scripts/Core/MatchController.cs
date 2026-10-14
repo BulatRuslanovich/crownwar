@@ -388,6 +388,7 @@ public partial class MatchController : Node2D
     private bool CanSee(SimEvent e) => e switch
     {
         AttackLanded hit => Fog.IsVisible(hit.Position),
+        SplashLanded splash => Fog.IsVisible(splash.Position),
         ProjectileFired shot => Fog.IsVisible(shot.Position),
         UnitDied died => IsFriendly(died.FactionId) || Fog.IsVisible(died.Position),
         BuildingDestroyed destroyed => IsFriendly(destroyed.FactionId) || Fog.IsVisible(destroyed.Position),

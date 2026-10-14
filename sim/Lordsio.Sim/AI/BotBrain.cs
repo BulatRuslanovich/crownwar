@@ -158,7 +158,7 @@ public sealed class BotBrain
         }
 
         // 3. Towers next to own mines.
-        var towerType = _sim.Rules.BuildingTypes.FirstOrDefault(t => t.Attack != null && t.IsBuildable);
+        var towerType = _sim.Rules.BuildingTypes.FirstOrDefault(t => t.Attack is { IsSplash: false } && t.IsBuildable);
         if (_profile.BuildsTowers && towerType != null && !threatened
             && (towerType.MaxCount == 0 || _sim.CountBuildings(FactionId, towerType.Id) < towerType.MaxCount))
         {

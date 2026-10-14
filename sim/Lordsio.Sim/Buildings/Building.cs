@@ -5,8 +5,14 @@ using Lordsio.Sim.World;
 
 namespace Lordsio.Sim.Buildings;
 
-/// <summary>Ranged attack of a defensive building (archer tower).</summary>
-public sealed record BuildingAttack(int Damage, float Range, float Cooldown, float ProjectileSpeed);
+/// <summary>
+/// Ranged attack of a defensive building. An archer tower hits its target; a catapult (<paramref name="SplashRadius"/>
+/// above zero) hits every enemy unit within that many tiles of where its stone lands.
+/// </summary>
+public sealed record BuildingAttack(int Damage, float Range, float Cooldown, float ProjectileSpeed, float SplashRadius = 0f)
+{
+    public bool IsSplash => SplashRadius > 0f;
+}
 
 /// <summary>
 /// Static stats of a building kind. Size is the side of its square footprint in tiles.

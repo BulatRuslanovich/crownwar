@@ -22,6 +22,7 @@ public partial class EffectsView : Node2D
         Rubble,
         Sparkle,
         Ping,
+        Impact,
     }
 
     private record struct Effect(Kind Kind, Vector2 Position, float Age, float Duration, float Size, int Seed, Color Color);
@@ -49,7 +50,10 @@ public partial class EffectsView : Node2D
     {
         switch (e)
         {
-            case AttackLanded hit when !Ground:
+            case SplashLanded splash when !Ground:
+                Add(Kind.Impact, SimConvert.ToWorld(splash.Position), 0.5f, splash.Radius * SimConvert.TileSize, DustColor);
+                break;
+            case AttackLanded hit when !Ground && !hit.Splash: // a stone's victims share its one impact cloud
                 bool building = _match.Sim.GetBuilding(hit.TargetId) != null;
                 var at = SimConvert.ToWorld(hit.Position) + new Vector2(0, building ? -8 : -6);
                 Add(building || hit.Ranged ? Kind.Dust : Kind.Spark, at, building ? 0.35f : 0.18f, building ? 6f : 3f, DustColor);
@@ -117,6 +121,18 @@ public partial class EffectsView : Node2D
                         var p = e.Position + dir * e.Size * t * (0.5f + rng.NextSingle()) + new Vector2(0, -4f * t);
                         var color = (s % 3 == 0 && e.Kind == Kind.Puff ? e.Color : DustColor) with { A = 0.8f * (1f - t) };
                         DrawRect(new Rect2(p, Vector2.One * 2), color);
+                    }
+                    break;
+                case Kind.Impact:
+                    // A flattened ring of dust spreading over the splash area, with specks thrown out.
+                    DrawSetTransform(e.Position, 0f, new Vector2(1f, 0.5f));
+                    DrawArc(Vector2.Zero, e.Size * (0.3f + 0.7f * t), 0f, Mathf.Tau, 24, DustColor with { A = 0.7f * (1f - t) }, 2f);
+                    DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+                    for (int s = 0; s < 10; s++)
+                    {
+                        var dir = Vector2.Right.Rotated(rng.NextSingle() * Mathf.Tau);
+                        var p = e.Position + new Vector2(dir.X, dir.Y * 0.5f) * e.Size * t * (0.4f + rng.NextSingle()) + new Vector2(0, -8f * t);
+                        DrawRect(new Rect2(p, Vector2.One * 2), DustColor with { A = 0.8f * (1f - t) });
                     }
                     break;
                 case Kind.Collapse:

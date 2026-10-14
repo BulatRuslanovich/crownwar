@@ -75,6 +75,7 @@ public static class ArtGenerator
                  {
                      ("castle", Castle()), ("barracks", Barracks()), ("tower", Tower()), ("tower_t2", Tower(2)), ("tower_t3", Tower(3)), ("watchtower", Watchtower()),
                      ("mine", Mine()), ("mine_t2", Mine(2)), ("mine_t3", Mine(3)),
+                     ("catapult", Catapult()), ("catapult_t2", Catapult(2)), ("catapult_t3", Catapult(3)),
                  })
         {
             canvas.Save(System.IO.Path.Combine(assets, "Sprites", name + ".png"),
@@ -708,6 +709,51 @@ public static class ArtGenerator
         c.Rect(19, 60, 10, 1, StoneDark);
         Banner(c, 7, 59, 5, 8);
         Banner(c, 36, 59, 5, 8);
+        c.Outline(Outline);
+        return c;
+    }
+
+    /// <summary>
+    /// 32×40, bottom-centre origin; footprint 2×2 tiles. A stone platform with a timber frame, a throwing arm loaded
+    /// with a stone, a counterweight and a banner in faction colours. Level 2: merlons and iron fittings;
+    /// level 3: gilded trim and banners at the sides.
+    /// </summary>
+    private static PixelCanvas Catapult(int tier = 1)
+    {
+        var c = new PixelCanvas(32, 40);
+        Flag(c, 3, 12);
+        // Frame: two uprights, a crossbar and the axle the arm swings on.
+        var timber = tier >= 3 ? WoodLight : Wood;
+        c.Rect(9, 15, 2, 12, timber);
+        c.Rect(21, 15, 2, 12, timber);
+        c.Rect(8, 14, 16, 2, WoodDark);
+        if (tier >= 2)
+        {
+            c.Rect(9, 19, 2, 1, SteelDark);
+            c.Rect(21, 19, 2, 1, SteelDark);
+        }
+        // Throwing arm, raised, with the counterweight low at one end and a stone in the cup at the other.
+        c.Line(7, 24, 26, 7, WoodDark);
+        c.Line(8, 24, 27, 7, timber);
+        c.Rect(3, 21, 6, 5, tier >= 2 ? SteelDark : StoneDark);
+        c.Rect(24, 4, 5, 3, WoodDark);
+        c.Disc(26, 3, 1.6f, RockLight);
+        c.Disc(16, 16, 1.5f, tier >= 3 ? GoldDark : SteelDark);
+        if (tier >= 3)
+            c.Px(27, 7, Gold);
+        // Platform.
+        if (tier >= 2)
+            Crenellations(c, 2, 24, 28, Stone);
+        Bricks(c, 2, 27, 28, 11, Stone);
+        c.Rect(2, 37, 28, 2, StoneDark);
+        if (tier >= 3)
+            c.Rect(2, 27, 28, 1, Gold);
+        Banner(c, 13, 29, 6, 6);
+        if (tier >= 3)
+        {
+            Banner(c, 4, 29, 4, 6);
+            Banner(c, 24, 29, 4, 6);
+        }
         c.Outline(Outline);
         return c;
     }

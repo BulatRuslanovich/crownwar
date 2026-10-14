@@ -27,6 +27,7 @@ public partial class Hud : CanvasLayer
         ["barracks"] = Key.B,
         ["tower"] = Key.T,
         ["watchtower"] = Key.V,
+        ["catapult"] = Key.C,
     };
 
     private readonly List<(Button Button, string UnitTypeId)> _recruitButtons = new();
@@ -432,6 +433,8 @@ public partial class Hud : CanvasLayer
                 lines.Add(string.Format(Tr("UPGRADE_DAMAGE"), a.Damage, b.Damage));
             if (!Mathf.IsEqualApprox(a.Range, b.Range))
                 lines.Add(string.Format(Tr("UPGRADE_RANGE"), a.Range, b.Range));
+            if (!Mathf.IsEqualApprox(a.SplashRadius, b.SplashRadius))
+                lines.Add(string.Format(Tr("UPGRADE_SPLASH"), a.SplashRadius, b.SplashRadius));
         }
         if (to.YieldBonus != from.YieldBonus)
             lines.Add(string.Format(Tr("UPGRADE_YIELD"), from.YieldBonus, to.YieldBonus));
@@ -499,7 +502,9 @@ public partial class Hud : CanvasLayer
             parts.Add(string.Format(Tr("INFO_ARMY_CAP"), type.ArmyCap));
         if (type.Recruits.Count > 0)
             parts.Add(Tr("INFO_TRAINS"));
-        if (type.Attack is { } attack)
+        if (type.Attack is { IsSplash: true } splash)
+            parts.Add(string.Format(Tr("INFO_SPLASH"), splash.Range, splash.Damage, splash.SplashRadius));
+        else if (type.Attack is { } attack)
             parts.Add(string.Format(Tr("INFO_SHOOTS"), attack.Range, attack.Damage));
         else if (type.SightRange > 0f && !type.IsCapital)
             parts.Add(string.Format(Tr("INFO_SIGHT"), type.SightRange));

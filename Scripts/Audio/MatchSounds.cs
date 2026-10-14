@@ -57,6 +57,11 @@ public partial class MatchSounds : Node
         int player = _match.LocalFactionId;
         switch (e)
         {
+            case SplashLanded splash:
+                PlayAt(Sound.BuildingHit, splash.Position, 0f);
+                break;
+            case AttackLanded { Splash: true }:
+                break; // the stone's own thud covers everyone it hit
             case AttackLanded hit:
                 bool building = _match.Sim.GetBuilding(hit.TargetId) != null;
                 PlayAt(building ? Sound.BuildingHit : hit.Ranged ? Sound.ArrowHit : Sound.SwordHit, hit.Position, -4f);

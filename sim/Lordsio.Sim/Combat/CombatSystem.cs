@@ -127,10 +127,10 @@ internal sealed class CombatSystem
             return;
 
         tower.AttackCooldownTicks = CooldownTicks(attack.Cooldown);
-        Fire(tower.Id, tower.FactionId, attack.Damage, attack.ProjectileSpeed, tower.Position, target);
+        Fire(tower.Id, tower.FactionId, attack.Damage, attack.ProjectileSpeed, tower.Position, target, attack.SplashRadius);
     }
 
-    public void AdvanceProjectiles(float dt)
+    public void AdvanceProjectiles(float dt, IReadOnlyList<Unit> units)
     {
         for (int i = _projectiles.Count - 1; i >= 0; i--)
         {
@@ -145,13 +145,35 @@ internal sealed class CombatSystem
             float step = p.Speed * dt;
             if (p.Target.SurfaceDistance(p.Position) <= step)
             {
-                ApplyDamage(p.Target, p.Damage, ranged: true, p.FactionId);
-                _emit(new AttackLanded(p.FactionId, p.SourceId, p.Target.Id, p.Target.FactionId, p.Position, Ranged: true));
+                if (p.SplashRadius > 0f)
+                    Splash(p, units);
+                else
+                {
+                    ApplyDamage(p.Target, p.Damage, ranged: true, p.FactionId);
+                    _emit(new AttackLanded(p.FactionId, p.SourceId, p.Target.Id, p.Target.FactionId, p.Position, Ranged: true));
+                }
                 _projectiles.RemoveAt(i);
                 continue;
             }
             Vector2 toTarget = p.Target.Position - p.Position;
             p.Position += Vector2.Normalize(toTarget) * step;
+        }
+    }
+
+    /// <summary>
+    /// A stone lands on its target: every living enemy unit whose body is within the splash radius of the target
+    /// takes the full damage (reduced by ranged armour, like any missile). Friends and buildings are spared.
+    /// </summary>
+    private void Splash(Projectile p, IReadOnlyList<Unit> units)
+    {
+        var impact = p.Target.Position;
+        _emit(new SplashLanded(p.FactionId, p.SourceId, impact, p.SplashRadius));
+        foreach (var unit in units)
+        {
+            if (!unit.IsAlive || !_areEnemies(p.FactionId, unit.FactionId) || unit.SurfaceDistance(impact) > p.SplashRadius)
+                continue;
+            ApplyDamage(unit, p.Damage, ranged: true, p.FactionId);
+            _emit(new AttackLanded(p.FactionId, p.SourceId, unit.Id, unit.FactionId, unit.Position, Ranged: true, Splash: true));
         }
     }
 
@@ -229,10 +251,10 @@ internal sealed class CombatSystem
         }
     }
 
-    private void Fire(int sourceId, int factionId, int damage, float speed, Vector2 from, Entity target)
+    private void Fire(int sourceId, int factionId, int damage, float speed, Vector2 from, Entity target, float splashRadius = 0f)
     {
-        _projectiles.Add(new Projectile(sourceId, factionId, damage, speed, from, target));
-        _emit(new ProjectileFired(factionId, from));
+        _projectiles.Add(new Projectile(sourceId, factionId, damage, speed, from, target, splashRadius));
+        _emit(new ProjectileFired(factionId, from, Splash: splashRadius > 0f));
     }
 
     private static int CooldownTicks(float seconds) => Math.Max(1, (int)MathF.Round(seconds * Simulation.TicksPerSecond));

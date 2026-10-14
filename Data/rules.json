@@ -19,7 +19,7 @@
     },
     {
       "id": "heavy", "name": "Heavy", "speed": 2.6, "radius": 0.36, "cost": 110, "buildTime": 7,
-      "health": 240, "damage": 22, "attackRange": 0.3, "attackCooldown": 1.6, "sightRange": 6, "rangedArmor": 0.6,
+      "health": 200, "damage": 20, "attackRange": 0.3, "attackCooldown": 1.6, "sightRange": 6, "rangedArmor": 0.45,
       "upkeep": 24
     }
   ],
@@ -43,10 +43,18 @@
     },
     {
       "id": "tower", "name": "Archer Tower", "size": 2, "cost": 250, "buildTime": 30, "health": 2000, "rangedArmor": 0.8, "maxCount": 20,
-      "attack": { "damage": 20, "range": 7, "cooldown": 1.0, "projectileSpeed": 15 },
+      "attack": { "damage": 20, "range": 7.5, "cooldown": 1.0, "projectileSpeed": 15 },
       "tiers": [
         { "cost": 250, "time": 25, "health": 2800, "damage": 28 },
-        { "cost": 400, "time": 35, "health": 3800, "damage": 36, "range": 8 }
+        { "cost": 400, "time": 35, "health": 3800, "damage": 36, "range": 8.5 }
+      ]
+    },
+    {
+      "id": "catapult", "name": "Catapult", "size": 2, "cost": 300, "buildTime": 30, "health": 1800, "rangedArmor": 0.8,
+      "attack": { "damage": 12, "range": 5, "cooldown": 2.5, "projectileSpeed": 8, "splash": 1.5 },
+      "tiers": [
+        { "cost": 250, "time": 25, "health": 2500, "damage": 15, "splash": 1.75 },
+        { "cost": 400, "time": 35, "health": 3400, "damage": 18, "splash": 2.0, "range": 5.5 }
       ]
     },
     {

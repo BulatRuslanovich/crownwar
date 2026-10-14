@@ -150,7 +150,8 @@ public sealed class GameRules
                     a.GetProperty("damage").GetInt32(),
                     a.GetProperty("range").GetSingle(),
                     a.GetProperty("cooldown").GetSingle(),
-                    a.GetProperty("projectileSpeed").GetSingle());
+                    a.GetProperty("projectileSpeed").GetSingle(),
+                    OptionalSingle(a, "splash"));
             }
 
             var type = new BuildingType(
@@ -192,7 +193,7 @@ public sealed class GameRules
 
     /// <summary>
     /// Chains a building's upgrade levels. Each entry of "tiers" is the next level: what it costs and how long it
-    /// takes to reach ("cost", "time"), and the stats that change ("health", "damage", "range", "yieldBonus");
+    /// takes to reach ("cost", "time"), and the stats that change ("health", "damage", "range", "splash", "yieldBonus");
     /// the rest carries over from the level below.
     /// </summary>
     private static BuildingType WithTiers(BuildingType baseType, List<JsonElement> tiers)
@@ -210,6 +211,7 @@ public sealed class GameRules
                     {
                         Damage = t.TryGetProperty("damage", out var damage) ? damage.GetInt32() : attack.Damage,
                         Range = t.TryGetProperty("range", out var range) ? range.GetSingle() : attack.Range,
+                        SplashRadius = t.TryGetProperty("splash", out var splash) ? splash.GetSingle() : attack.SplashRadius,
                     }
                     : null,
                 YieldBonus = t.TryGetProperty("yieldBonus", out var bonus) ? bonus.GetInt32() : below.YieldBonus,
