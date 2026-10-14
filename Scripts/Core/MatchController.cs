@@ -388,6 +388,7 @@ public partial class MatchController : Node2D
             ProcessLocal(delta);
 
         UpdateFog();
+        Stats.Update(Sim);
         _night.Color = _night.Color.Lerp(Sim.IsNight ? NightTint : Colors.White, 1f - MathF.Exp(-DuskSpeed * (float)delta));
         NightAmount = Mathf.Clamp((1f - _night.Color.R) / (1f - NightTint.R), 0f, 1f);
         LightBoost = new Color(1f / _night.Color.R, 1f / _night.Color.G, 1f / _night.Color.B);

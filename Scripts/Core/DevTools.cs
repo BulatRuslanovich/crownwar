@@ -25,6 +25,7 @@ namespace Lordsio.Core;
 ///   --pause                  open the pause menu right away
 ///   --debug-hud              show the developer overlay (F3 toggles it in game)
 ///   --demo-end=victory|defeat show the end screen (view only, the match goes on)
+///   --demo-end-delay=&lt;s&gt;     show it only after s seconds of game time
 ///   --demo-autoplay          a Hard bot plays the player's faction (to watch a match unfold)
 ///   --demo-time-scale=&lt;x&gt;    run the game x times faster (timers, including --screenshot-delay, scale too)
 ///   --demo-select=&lt;type&gt;     right before the screenshot, select the player's first building of that type (e.g. mine)
@@ -83,7 +84,18 @@ public static class DevTools
         if (args.Contains("--pause"))
             match.SetPaused(true);
         if (Arg(args, "--demo-end") is { } end)
-            match.PreviewEndScreen(victory: end == "victory");
+        {
+            // After a while of play (game time), so the end screen has a match to show.
+            double delay = Arg(args, "--demo-end-delay") is { } d ? double.Parse(d, CultureInfo.InvariantCulture) : 0;
+            if (delay <= 0)
+                match.PreviewEndScreen(victory: end == "victory");
+            else
+                match.GetTree().CreateTimer(delay).Timeout += () =>
+                {
+                    if (Godot.GodotObject.IsInstanceValid(match))
+                        match.PreviewEndScreen(victory: end == "victory");
+                };
+        }
         if (args.Contains("--debug-hud"))
             match.GetNode<Godot.CanvasLayer>("DebugHud").Visible = true;
     }

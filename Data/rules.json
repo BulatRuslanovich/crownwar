@@ -3,7 +3,7 @@
   "goldCap": 5000,
   "lootPercent": 30,
   "demolishRefundPercent": 30,
-  "dayNight": { "day": 240, "night": 240, "sightFactor": 0.5 },
+  "dayNight": { "day": 240, "night": 140, "sightFactor": 0.8 },
   "buildRadius": 5,
   "depositReserveSeconds": 240,
   "depositRegenSeconds": 90,

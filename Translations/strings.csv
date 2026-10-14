@@ -24,7 +24,6 @@ PAUSE_TITLE,Paused,Пауза
 PAUSE_RESUME,Resume,Продолжить
 END_VICTORY,Victory!,Победа!
 END_DEFEAT,Defeat,Поражение
-END_STATS,Match time: {0}:{1:00}\nTroops trained: {2}    lost: {3}    enemies killed: {4}\nBuildings built: {5}    lost: {6}    destroyed: {7},Время матча: {0}:{1:00}\nНанято войск: {2}    потеряно: {3}    убито врагов: {4}\nПостроено зданий: {5}    потеряно: {6}    разрушено: {7}
 END_KEEP_WATCHING,Keep watching,Смотреть дальше
 HUD_GOLD,Gold {0},Золото {0}
 HUD_GOLD_CAPPED,Gold {0}/{1},Золото {0}/{1}
@@ -213,3 +212,22 @@ INFO_ARROW_ARMOR,Arrows: −{0:0}% damage,Стрелы: −{0:0}% урона
 INFO_BONUS_AGAINST,×{0:0.#} damage against: {1},Урон ×{0:0.#} против: {1}
 MSG_BUILDER_SENT,A soldier goes to build: {0},Боец идёт строить: {0}
 MSG_BUILD_PLAN_CANCELLED,Building called off: {0} (+{1} gold back),Стройка отменена: {0} (возвращено {1} золота)
+END_DURATION,Match time {0}:{1:00},Матч длился {0}:{1:00}
+END_WINNER,Won: {0},Победа: {0}
+STATS_ARMY,Army strength,Сила армии
+STATS_INCOME,Income,Доход
+STATS_BUILDINGS,Buildings,Здания
+STATS_TRAINED,Trained,Обучено
+STATS_KILLED,Killed,Убито
+STATS_LOST,Lost,Потеряно
+STATS_BUILT,Built,Построено
+STATS_RAZED,Razed,Разрушено
+STATS_GOLD,Gold,Золото
+AWARD_WARLORD,Warlord,Полководец
+AWARD_WARLORD_HINT,enemies killed: {0},убито врагов: {0}
+AWARD_BUILDER,Builder,Зодчий
+AWARD_BUILDER_HINT,buildings: {0},построено: {0}
+AWARD_TREASURER,Treasurer,Казначей
+AWARD_TREASURER_HINT,gold: {0},золота: {0}
+AWARD_DESTROYER,Destroyer,Разрушитель
+AWARD_DESTROYER_HINT,buildings razed: {0},разрушено зданий: {0}
