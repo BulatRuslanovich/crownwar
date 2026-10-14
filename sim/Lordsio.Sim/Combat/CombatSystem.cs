@@ -53,6 +53,11 @@ internal sealed class CombatSystem
         unit.IsAttacking = false;
         if (unit.Order == UnitOrder.Move)
             return;
+        if (unit.Type.Heal is { } heal)
+        {
+            UpdateHealer(unit, heal, units, tick);
+            return;
+        }
 
         if (unit.Target is { } current && !IsStillValidTarget(unit, current))
             unit.Target = null;
@@ -92,6 +97,12 @@ internal sealed class CombatSystem
         }
 
         // Nothing to fight.
+        WhenIdle(unit);
+    }
+
+    /// <summary>With nothing to fight (or mend): an attack-move marches on, a guard goes back to its post.</summary>
+    private void WhenIdle(Unit unit)
+    {
         if (unit.Order == UnitOrder.AttackMove && unit.State == UnitState.Idle && unit.Destination is { } destination)
         {
             if (Vector2.Distance(unit.Position, destination) <= ArrivalSlack)
@@ -111,6 +122,64 @@ internal sealed class CombatSystem
         {
             ReturnToPost(unit); // the intruder is dead or gone
         }
+    }
+
+    /// <summary>
+    /// A monk: walks to the nearest wounded friend in sight (its own troops, allies, and those at peace with it) and
+    /// mends it once in reach, again and again until it is whole; then looks for the next. It never fights.
+    /// </summary>
+    private void UpdateHealer(Unit unit, HealAbility heal, IReadOnlyList<Unit> units, int tick)
+    {
+        if (unit.Target is { } current && !IsWoundedFriend(unit, current, unit.Type.SightRange * LoseTargetFactor))
+            unit.Target = null;
+        if (unit.Order == UnitOrder.None && unit.Target != null
+            && Vector2.Distance(unit.Position, unit.GuardPoint) > LeashRange)
+        {
+            ReturnToPost(unit);
+            return;
+        }
+        if (unit.Target == null && (tick + unit.Id) % ScanIntervalTicks == 0)
+            unit.Target = FindWoundedFriend(unit, units);
+        if (unit.Target is not Unit patient)
+        {
+            WhenIdle(unit);
+            return;
+        }
+        if (patient.SurfaceDistance(unit.Position) - unit.Type.Radius > heal.Range)
+        {
+            Chase(unit, patient);
+            return;
+        }
+        unit.ClearPath();
+        unit.IsAttacking = true; // standing over the patient (the view shows the blessing)
+        if (unit.AttackCooldownTicks > 0)
+            return;
+        unit.AttackCooldownTicks = CooldownTicks(heal.Cooldown);
+        int mended = Math.Min(heal.Amount, patient.MaxHealth - patient.Health);
+        patient.Health += mended;
+        _emit(new UnitHealed(unit.FactionId, unit.Id, patient.Id, mended, patient.Position));
+    }
+
+    private bool IsWoundedFriend(Unit healer, Entity other, float range) =>
+        other is Unit friend && friend.IsAlive && friend.Id != healer.Id && friend.Health < friend.MaxHealth
+        && !_areEnemies(healer.FactionId, friend.FactionId) && friend.SurfaceDistance(healer.Position) <= range;
+
+    private Unit? FindWoundedFriend(Unit healer, IReadOnlyList<Unit> units)
+    {
+        Unit? best = null;
+        float bestDistance = float.MaxValue;
+        foreach (var other in units)
+        {
+            if (!IsWoundedFriend(healer, other, healer.Type.SightRange))
+                continue;
+            float distance = other.SurfaceDistance(healer.Position);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = other;
+            }
+        }
+        return best;
     }
 
     /// <summary>A finished tower shoots the nearest enemy unit in range.</summary>
@@ -158,7 +227,7 @@ internal sealed class CombatSystem
                     Splash(p, units);
                 else
                 {
-                    ApplyDamage(p.Target, p.Damage, ranged: true, p.FactionId);
+                    ApplyDamage(p.Target, p.Damage, ranged: true, p.FactionId, p.ArmorPiercing);
                     _emit(new AttackLanded(p.FactionId, p.SourceId, p.Target.Id, p.Target.FactionId, p.Position, Ranged: true));
                 }
                 _projectiles.RemoveAt(i);
@@ -186,11 +255,13 @@ internal sealed class CombatSystem
         }
     }
 
-    public static void ApplyDamage(Entity target, int damage, bool ranged, int attackerFactionId)
+    /// <param name="armorPiercing">Share of the target's ranged armour the missile ignores.</param>
+    public static void ApplyDamage(Entity target, int damage, bool ranged, int attackerFactionId, float armorPiercing = 0f)
     {
         if (!target.IsAlive)
             return;
-        int dealt = ranged ? Math.Max(1, (int)MathF.Round(damage * (1f - target.RangedArmor))) : damage;
+        float armor = target.RangedArmor * (1f - armorPiercing);
+        int dealt = ranged ? Math.Max(1, (int)MathF.Round(damage * (1f - armor))) : damage;
         target.Health -= dealt;
         if (!target.IsAlive)
             target.KilledByFactionId = attackerFactionId;
@@ -249,21 +320,25 @@ internal sealed class CombatSystem
     private void Attack(Unit attacker, Entity target)
     {
         attacker.AttackCooldownTicks = CooldownTicks(attacker.Type.AttackCooldown);
+        int damage = attacker.Type.DamageAgainst(target);
         if (attacker.Type.IsRanged)
         {
-            Fire(attacker.Id, attacker.FactionId, attacker.Type.Damage, attacker.Type.ProjectileSpeed, attacker.Position, target);
+            Fire(attacker.Id, attacker.FactionId, damage, attacker.Type.ProjectileSpeed, attacker.Position, target,
+                armorPiercing: attacker.Type.ArmorPiercing, isStone: attacker.Type.IsSiege);
         }
         else
         {
-            ApplyDamage(target, attacker.Type.DamageAgainst(target), ranged: false, attacker.FactionId);
+            ApplyDamage(target, damage, ranged: false, attacker.FactionId);
             _emit(new AttackLanded(attacker.FactionId, attacker.Id, target.Id, target.FactionId, target.Position, Ranged: false));
         }
     }
 
-    private void Fire(int sourceId, int factionId, int damage, float speed, Vector2 from, Entity target, float splashRadius = 0f)
+    private void Fire(int sourceId, int factionId, int damage, float speed, Vector2 from, Entity target, float splashRadius = 0f,
+        float armorPiercing = 0f, bool isStone = false)
     {
-        _projectiles.Add(new Projectile(sourceId, factionId, damage, speed, from, target, splashRadius));
-        _emit(new ProjectileFired(factionId, from, Splash: splashRadius > 0f));
+        var projectile = new Projectile(sourceId, factionId, damage, speed, from, target, splashRadius, armorPiercing, isStone);
+        _projectiles.Add(projectile);
+        _emit(new ProjectileFired(factionId, from, Splash: projectile.IsStone));
     }
 
     private static int CooldownTicks(float seconds) => Math.Max(1, (int)MathF.Round(seconds * Simulation.TicksPerSecond));

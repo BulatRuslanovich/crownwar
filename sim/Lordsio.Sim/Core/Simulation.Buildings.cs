@@ -73,12 +73,24 @@ public sealed partial class Simulation
             return RecruitError.NotComplete;
         if (!building.Type.Recruits.Contains(unitTypeId))
             return RecruitError.CannotRecruitType;
+        if (!IsUnlocked(factionId, Rules.Units.Get(unitTypeId)))
+            return RecruitError.Locked;
         if (PopulationOf(factionId) >= faction.ArmyCap)
             return RecruitError.ArmyCapReached;
         if (!faction.Treasury.CanAfford(Rules.Units.Get(unitTypeId).Cost))
             return RecruitError.NotEnoughGold;
         return RecruitError.None;
     }
+
+    /// <summary>
+    /// How many steps of units the faction has opened: one per finished barracks (any building that unlocks units)
+    /// still standing. Lose them and the steps close again.
+    /// </summary>
+    public int UnlockLevel(int factionId) =>
+        _buildings.Count(b => b.FactionId == factionId && b.IsAlive && b.IsComplete && b.Type.UnlocksUnits);
+
+    /// <summary>Whether the faction may train this kind now.</summary>
+    public bool IsUnlocked(int factionId, UnitType type) => type.BarracksRequired <= UnlockLevel(factionId);
 
     public GoldDeposit? DepositAt(Cell cell) => _deposits.Find(d => d.Contains(cell));
 
@@ -303,8 +315,14 @@ public sealed partial class Simulation
         _events.Add(new BuildingUpgradeStarted(upgrade.FactionId, building.Id));
     }
 
+    /// <summary>How many recruits a building trains at once: one, and one more per finished barracks of its owner.</summary>
+    public int TrainingSlots(Building building) => 1 + UnlockLevel(building.FactionId);
+
+    private readonly List<UnitType> _finished = new();
+
     private void AdvanceConstructionAndTraining()
     {
+        var slots = new Dictionary<int, int>();
         foreach (var building in _buildings)
         {
             if (!building.IsComplete)
@@ -315,11 +333,18 @@ public sealed partial class Simulation
             }
             if (building.AdvanceUpgrade())
                 _events.Add(new BuildingUpgraded(building.FactionId, building.Id, building.Type.Tier));
-            if (building.AdvanceProduction() is not { } type)
+            if (building.Queue.Count == 0)
                 continue;
-            var unit = SpawnUnit(type.Id, building.FactionId, FreeSpotNear(building, type.Radius));
-            SendToRally(unit, building);
-            _events.Add(new UnitRecruited(building.FactionId, building.Id, unit.Id));
+            if (!slots.TryGetValue(building.FactionId, out int count))
+                slots[building.FactionId] = count = TrainingSlots(building);
+            _finished.Clear();
+            building.AdvanceProduction(count, _finished);
+            foreach (var type in _finished)
+            {
+                var unit = SpawnUnit(type.Id, building.FactionId, FreeSpotNear(building, type.Radius));
+                SendToRally(unit, building);
+                _events.Add(new UnitRecruited(building.FactionId, building.Id, unit.Id));
+            }
         }
     }
 

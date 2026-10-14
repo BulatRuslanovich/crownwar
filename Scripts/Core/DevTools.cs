@@ -21,7 +21,7 @@ namespace Lordsio.Core;
 ///   --demo-recruit=&lt;n&gt;       select the player's castle and order n recruits there
 ///   --demo-move=&lt;x&gt;,&lt;y&gt;      select all player units and order them to advance to tile (x, y)
 ///   --demo-camera=&lt;x&gt;,&lt;y&gt;    center the camera on tile (x, y)
-///   --demo-army=&lt;n&gt;          stress test: n player units and n enemy units clash on screen
+///   --demo-army=&lt;n&gt;          stress test: n player units and n enemy units (every kind) clash on screen
 ///   --pause                  open the pause menu right away
 ///   --debug-hud              show the developer overlay (F3 toggles it in game)
 ///   --demo-end=victory|defeat show the end screen (view only, the match goes on)
@@ -157,14 +157,15 @@ public static class DevTools
     {
         var sim = match.Sim;
         var center = SimConvert.ToSim(match.Camera.Position); // where the camera is going, even before it has moved
-        var types = new[] { "infantry", "infantry", "archer", "heavy" };
+        // A mixed army: twice as many spearmen as anything else, and one of every other kind in turn.
+        var types = sim.Rules.Units.All.SelectMany(t => t.Id == "infantry" ? new[] { t.Id, t.Id } : new[] { t.Id }).ToArray();
         var west = sim.Map.FindNearestInComponent(Cell.FromPosition(center + new SimVector2(-8f, 0f)), TileGrid.AnyComponent, 12)!.Value.Center;
         var east = sim.Map.FindNearestInComponent(Cell.FromPosition(center + new SimVector2(8f, 0f)), TileGrid.AnyComponent, 12)!.Value.Center;
         var a = Sim.Units.Formation.ComputeSlots(sim.Map, west, perSide, 0.36f)
-            .Select((p, i) => sim.SpawnUnit(types[i % 4], match.LocalFactionId, p).Id).ToList();
+            .Select((p, i) => sim.SpawnUnit(types[i % types.Length], match.LocalFactionId, p).Id).ToList();
         int enemy = sim.Factions.First(f => f.Id != match.LocalFactionId).Id;
         var b = Sim.Units.Formation.ComputeSlots(sim.Map, east, perSide, 0.36f)
-            .Select((p, i) => sim.SpawnUnit(types[i % 4], enemy, p).Id).ToList();
+            .Select((p, i) => sim.SpawnUnit(types[i % types.Length], enemy, p).Id).ToList();
         sim.Issue(new MoveCommand(match.LocalFactionId, a, east, MoveMode.AttackMove));
         sim.Issue(new MoveCommand(enemy, b, west, MoveMode.AttackMove));
     }

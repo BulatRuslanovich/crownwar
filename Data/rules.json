@@ -13,28 +13,48 @@
     {
       "id": "infantry", "name": "Infantry", "speed": 3.5, "radius": 0.3, "cost": 50, "buildTime": 4,
       "health": 100, "damage": 12, "attackRange": 0.25, "attackCooldown": 1.0, "sightRange": 6,
-      "upkeep": 12
+      "upkeep": 12, "bonusAgainst": { "cavalry": 2.0 }
     },
     {
       "id": "archer", "name": "Archer", "speed": 3.4, "radius": 0.3, "cost": 60, "buildTime": 5,
       "health": 60, "damage": 9, "attackRange": 5, "attackCooldown": 1.4, "sightRange": 7, "projectileSpeed": 12,
-      "upkeep": 15
+      "upkeep": 15, "barracksRequired": 1
     },
     {
       "id": "heavy", "name": "Heavy", "speed": 2.6, "radius": 0.36, "cost": 150, "buildTime": 7,
       "health": 200, "damage": 10, "attackRange": 0.3, "attackCooldown": 1.6, "sightRange": 6, "rangedArmor": 0.45,
-      "upkeep": 24
+      "upkeep": 24, "barracksRequired": 5
     },
     {
       "id": "ram", "name": "Ram", "speed": 2.2, "radius": 0.4, "cost": 250, "buildTime": 12,
       "health": 150, "damage": 40, "attackRange": 0.3, "attackCooldown": 2.5, "sightRange": 5, "rangedArmor": 0.85,
-      "upkeep": 30, "siege": true, "buildingMultiplier": 3
+      "upkeep": 30, "siege": true, "buildingMultiplier": 3, "barracksRequired": 6
+    },
+    {
+      "id": "cavalry", "name": "Cavalry", "speed": 5.5, "radius": 0.38, "cost": 120, "buildTime": 7,
+      "health": 140, "damage": 14, "attackRange": 0.3, "attackCooldown": 1.2, "sightRange": 8, "rangedArmor": 0.2,
+      "upkeep": 22, "barracksRequired": 2
+    },
+    {
+      "id": "crossbowman", "name": "Crossbowman", "speed": 3.0, "radius": 0.3, "cost": 90, "buildTime": 6,
+      "health": 70, "damage": 22, "attackRange": 6, "attackCooldown": 2.6, "sightRange": 7, "projectileSpeed": 16,
+      "armorPiercing": 0.6, "upkeep": 18, "barracksRequired": 3
+    },
+    {
+      "id": "monk", "name": "Monk", "speed": 3.2, "radius": 0.3, "cost": 100, "buildTime": 8,
+      "health": 60, "damage": 0, "attackRange": 0.3, "attackCooldown": 1.5, "sightRange": 7,
+      "heal": { "amount": 8, "range": 2.5, "cooldown": 1.5 }, "upkeep": 15, "barracksRequired": 4
+    },
+    {
+      "id": "trebuchet", "name": "Trebuchet", "speed": 1.4, "radius": 0.45, "cost": 350, "buildTime": 18,
+      "health": 220, "damage": 60, "attackRange": 10, "attackCooldown": 6, "sightRange": 10, "projectileSpeed": 9,
+      "rangedArmor": 0.6, "armorPiercing": 1.0, "upkeep": 35, "siege": true, "buildingMultiplier": 3, "barracksRequired": 7
     }
   ],
   "buildings": [
     {
       "id": "castle", "name": "Castle", "size": 3, "cost": 0, "buildTime": 0, "health": 8000, "rangedArmor": 0.8,
-      "income": 3, "armyCap": 10, "recruits": ["infantry", "archer", "heavy", "ram"], "capital": true, "sight": 10,
+      "income": 3, "armyCap": 10, "recruits": ["infantry", "archer", "cavalry", "crossbowman", "monk", "heavy", "ram", "trebuchet"], "capital": true, "sight": 10,
       "attack": { "damage": 16, "range": 7, "cooldown": 1.0, "projectileSpeed": 14 }
     },
     {
@@ -47,7 +67,7 @@
     },
     {
       "id": "barracks", "name": "Barracks", "size": 2, "cost": 150, "buildTime": 20, "health": 700, "rangedArmor": 0.7, "maxCount": 10,
-      "armyCap": 10, "recruits": ["infantry", "archer"]
+      "armyCap": 10, "unlocksUnits": true
     },
     {
       "id": "tower", "name": "Archer Tower", "size": 2, "cost": 250, "buildTime": 30, "health": 2000, "rangedArmor": 0.8, "maxCount": 20,

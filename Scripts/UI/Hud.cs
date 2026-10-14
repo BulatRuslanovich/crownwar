@@ -426,13 +426,14 @@ public partial class Hud : CanvasLayer
         foreach (var (button, typeId) in _recruitButtons)
         {
             var type = _match.Sim.Rules.Units.Get(typeId);
-            button.Text = $"{type.Cost}{Tr("HUD_GOLD_SHORT")}";
             // Buttons stay clickable: the simulation is the judge and explains a refusal with a message.
             var error = _match.Sim.CanRecruit(_match.LocalFactionId, building.Id, typeId);
+            // A kind not opened yet (too few barracks) is not shown at all.
+            button.Visible = error != RecruitError.Locked;
+            button.Text = $"{type.Cost}{Tr("HUD_GOLD_SHORT")}";
             MarkAvailable(button, error == RecruitError.None);
-            string upkeep = Names.Of(type) + "\n" + string.Format(Tr("INFO_UPKEEP"), type.Upkeep) + "\n" + Tr("HUD_RECRUIT_SHIFT")
-                            + (type.IsSiege ? "\n" + string.Format(Tr("INFO_SIEGE"), type.BuildingDamageMultiplier) : "");
-            button.TooltipText = error == RecruitError.None ? upkeep : Describe(error) + "\n" + upkeep;
+            string about = DescribeUnitType(type);
+            button.TooltipText = error == RecruitError.None ? about : Describe(error) + "\n" + about;
         }
 
         UpdateUpgrade(building, own);
@@ -443,9 +444,12 @@ public partial class Hud : CanvasLayer
         _progress.Visible = training;
         if (training)
         {
+            // Several recruits train side by side (a place per barracks); the rest wait.
+            int active = Mathf.Min(_match.Sim.TrainingSlots(building), building.Queue.Count);
             var current = building.Queue[0];
-            _queue.Text = string.Format(Tr("HUD_TRAINING"), Names.Of(current.Type)) +
-                (building.Queue.Count > 1 ? "  " + string.Format(Tr("HUD_QUEUED"), building.Queue.Count - 1) : "");
+            string names = string.Join(", ", building.Queue.Take(active).Select(item => Names.Of(item.Type)));
+            _queue.Text = string.Format(Tr("HUD_TRAINING"), names) +
+                (building.Queue.Count > active ? "  " + string.Format(Tr("HUD_QUEUED"), building.Queue.Count - active) : "");
             _progress.Value = current.Progress * 100f;
         }
     }
@@ -619,7 +623,13 @@ public partial class Hud : CanvasLayer
         if (type.ArmyCap > 0)
             parts.Add(string.Format(Tr("INFO_ARMY_CAP"), type.ArmyCap));
         if (type.Recruits.Count > 0)
+        {
             parts.Add(Tr("INFO_TRAINS"));
+            if (instance != null)
+                parts.Add(string.Format(Tr("INFO_TRAINING_SLOTS"), _match.Sim.TrainingSlots(instance)));
+        }
+        if (type.UnlocksUnits)
+            parts.Add(Tr("INFO_UNLOCKS_UNITS"));
         if (type.Attack is { IsSplash: true } splash)
             parts.Add(string.Format(Tr("INFO_SPLASH"), splash.Range, splash.Damage, splash.SplashRadius));
         else if (type.Attack is { } attack)
@@ -629,6 +639,32 @@ public partial class Hud : CanvasLayer
         if (type.IsCapital)
             parts.Add(Tr("INFO_CAPITAL"));
         return string.Join("  ·  ", parts);
+    }
+
+    /// <summary>A recruit button's tooltip: the unit, its numbers, what is special about it, its upkeep.</summary>
+    private string DescribeUnitType(Sim.Units.UnitType type)
+    {
+        var lines = new List<string> { Names.Of(type) };
+        lines.Add(type.IsHealer
+            ? string.Format(Tr("INFO_UNIT_HEALER_STATS"), type.MaxHealth, type.Speed)
+            : string.Format(Tr("INFO_UNIT_STATS"), type.MaxHealth, type.Damage, type.Speed));
+        if (type.Heal is { } heal)
+            lines.Add(string.Format(Tr("INFO_HEALS"), heal.Amount, heal.Cooldown));
+        if (type.IsRanged)
+            lines.Add(string.Format(Tr("INFO_RANGE"), type.AttackRange));
+        if (type.ArmorPiercing > 0f)
+            lines.Add(string.Format(Tr("INFO_PIERCING"), type.ArmorPiercing * 100f));
+        if (type.RangedArmor > 0f && !type.IsSiege)
+            lines.Add(string.Format(Tr("INFO_ARROW_ARMOR"), type.RangedArmor * 100f));
+        if (type.BonusAgainst != null)
+            foreach (var (against, bonus) in type.BonusAgainst)
+                if (_match.Sim.Rules.Units.Contains(against))
+                    lines.Add(string.Format(Tr("INFO_BONUS_AGAINST"), bonus, Names.Of(_match.Sim.Rules.Units.Get(against))));
+        if (type.IsSiege)
+            lines.Add(string.Format(Tr("INFO_SIEGE"), type.BuildingDamageMultiplier));
+        lines.Add(string.Format(Tr("INFO_UPKEEP"), type.Upkeep));
+        lines.Add(Tr("HUD_RECRUIT_SHIFT"));
+        return string.Join("\n", lines);
     }
 
     private string DescribeDeposit(Lordsio.Sim.World.GoldDeposit d, int levelBonus)
@@ -646,6 +682,7 @@ public partial class Hud : CanvasLayer
         RecruitError.NotComplete => "ERR_NOT_COMPLETE",
         RecruitError.NotOwner => "ERR_NOT_OWNER",
         RecruitError.CannotRecruitType => "ERR_CANNOT_TRAIN",
+        RecruitError.Locked => "ERR_LOCKED_SHORT",
         _ => "ERR_UNKNOWN_BUILDING",
     });
 

@@ -87,7 +87,8 @@ public class BotTests
         var difficulties = new[] { BotDifficulty.Hard, BotDifficulty.Normal, BotDifficulty.Normal, BotDifficulty.Easy };
         var bots = Enumerable.Range(0, 4).Select(i => new BotBrain(sim, i, difficulties[i], seed * 10 + i)).ToList();
 
-        Run(sim, bots, 30 * 60f);
+        // Long matches are part of the game (castles fall to sieges, armies train in the castle): an hour is the bound.
+        Run(sim, bots, 60 * 60f);
 
         string summary = string.Join("; ", sim.Factions.Select(f =>
             $"f{f.Id} {(f.IsEliminated ? "out" : "alive")} gold {f.Treasury.Gold} income {f.IncomePerSecond} " +
@@ -95,7 +96,7 @@ public class BotTests
             $"mode {bots[f.Id].Mode}"));
         TestContext.Out.WriteLine($"tick {sim.Tick} ({sim.Tick / Simulation.TicksPerSecond / 60f:0.0} min): {summary}");
 
-        Assert.That(sim.IsOver, Is.True, $"no winner after 30 minutes: {summary}");
+        Assert.That(sim.IsOver, Is.True, $"no winner after an hour: {summary}");
         Assert.That(sim.WinningTeam, Is.InRange(0, 3));
     }
 }

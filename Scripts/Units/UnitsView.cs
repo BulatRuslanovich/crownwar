@@ -61,6 +61,8 @@ public partial class UnitsView : Node2D
     /// <summary>Strike and hit animations; the damage itself was already dealt by the simulation.</summary>
     public void OnSimEvent(Sim.Core.SimEvent e)
     {
+        if (e is Sim.Core.UnitHealed healed && _views.TryGetValue(healed.HealerId, out var healer))
+            healer.Bless();
         if (e is not Sim.Core.AttackLanded hit)
             return;
         if (!hit.Ranged && _views.TryGetValue(hit.AttackerId, out var attacker))

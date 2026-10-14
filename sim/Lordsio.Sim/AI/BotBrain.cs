@@ -36,6 +36,7 @@ public sealed class BotBrain
     /// <summary>Worth credited to a tower when judging how well a target is defended.</summary>
     private const int TowerDefenceValue = 250;
     private const int SoldiersPerRam = 6;
+    private const int MonkEvery = 8;
     private const int TowersPerMine = 1;
 
     private readonly Simulation _sim;
@@ -49,6 +50,9 @@ public sealed class BotBrain
     private int _launchValue;
     private GoldDeposit? _expansion;
     private int _lastMineTick = int.MinValue / 2;
+    private int _lastBarracksTick = int.MinValue / 2;
+    /// <summary>Beyond what the army limit needs, a new barracks (to open the next kind of unit) at most this often.</summary>
+    private const float BarracksIntervalSeconds = 60f;
     private UnitType? _nextUnit;
 
     public BotBrain(Simulation sim, int factionId, BotDifficulty difficulty, int seed)
@@ -152,15 +156,25 @@ public sealed class BotBrain
         else
             _expansion = null;
 
-        // 2. Barracks when the army limit is the bottleneck.
+        // 2. Barracks when the army limit is the bottleneck, or now and then with gold to spare, to open the next kind of
+        //    unit (each finished barracks opens one).
         var barracksType = _sim.Rules.BuildingTypes.FirstOrDefault(t => t.ArmyCap > 0 && t.IsBuildable && !t.IsMine && t.Attack == null);
         int barracks = OwnBuildings().Count(b => b.Type.Id == barracksType?.Id);
-        if (barracksType != null && barracks < _profile.MaxBarracks && me.Population >= me.ArmyCap - 1)
+        bool capped = me.Population >= me.ArmyCap - 1;
+        bool unlockDue = barracksType is { UnlocksUnits: true } && !threatened
+                         && _sim.Tick - _lastBarracksTick >= BarracksIntervalSeconds * Simulation.TicksPerSecond
+                         && gold - reserve >= barracksType.Cost * 2;
+        if (barracksType != null && barracks < _profile.MaxBarracks && (capped || unlockDue))
         {
             if (gold - reserve >= barracksType.Cost && TryPlaceNear(barracksType, capital.Position, 3, 7))
+            {
                 gold -= barracksType.Cost;
-            else
+                _lastBarracksTick = _sim.Tick;
+            }
+            else if (capped)
+            {
                 reserve += barracksType.Cost;
+            }
         }
 
         // 3. Towers next to own mines.
@@ -227,9 +241,13 @@ public sealed class BotBrain
 
         foreach (var building in producers)
         {
-            if (population >= me.ArmyCap || building.Queue.Count >= 2)
+            // Keep every training place busy, with one more waiting.
+            if (population >= me.ArmyCap || building.Queue.Count >= _sim.TrainingSlots(building) + 1)
                 continue;
-            // Keep the chosen type until it is bought, so expensive units are saved for, not skipped.
+            // Keep the chosen type until it is bought, so expensive units are saved for, not skipped (unless the barracks
+            // that opened it fell meanwhile).
+            if (_nextUnit != null && !_sim.IsUnlocked(FactionId, _nextUnit))
+                _nextUnit = null;
             _nextUnit ??= ChooseUnitType(building);
             if (!building.Type.Recruits.Contains(_nextUnit.Id))
                 continue;
@@ -244,11 +262,17 @@ public sealed class BotBrain
 
     private UnitType ChooseUnitType(Building producer)
     {
-        var options = producer.Type.Recruits.Select(_sim.Rules.Units.Get).ToList();
-        // Rams come once there is an army to escort them: about one per six soldiers.
+        var options = producer.Type.Recruits.Select(_sim.Rules.Units.Get).Where(t => _sim.IsUnlocked(FactionId, t)).ToList();
+        if (options.Count == 0)
+            return producer.Type.Recruits.Select(_sim.Rules.Units.Get).OrderBy(t => t.BarracksRequired).First();
+        // Siege engines come once there is an army to escort them: about one per six soldiers; a monk per eight.
         var army = _sim.Units.Where(u => u.FactionId == FactionId).ToList();
         bool wantRam = army.Count >= SoldiersPerRam && army.Count(u => u.Type.IsSiege) * SoldiersPerRam < army.Count;
-        var weights = options.Select(t => t.IsSiege ? (wantRam ? 0.2f : 0f) : BaseWeight(t)).ToArray();
+        bool wantMonk = army.Count >= MonkEvery && army.Count(u => u.Type.IsHealer) * MonkEvery < army.Count;
+        int siegeKinds = Math.Max(1, options.Count(t => t.IsSiege));
+        var weights = options.Select(t => t.IsSiege ? (wantRam ? 0.2f / siegeKinds : 0f)
+            : t.IsHealer ? (wantMonk ? 0.15f : 0f)
+            : BaseWeight(t)).ToArray();
 
         if (_profile.CountersComposition)
         {
@@ -259,8 +283,9 @@ public sealed class BotBrain
                 float armoredShare = enemies.Count(u => u.Type.RangedArmor > 0f) / (float)enemies.Count;
                 for (int i = 0; i < options.Count; i++)
                 {
-                    if (options[i].IsSiege)
+                    if (options[i].IsSiege || options[i].IsHealer)
                         continue;
+                    if (options[i].ArmorPiercing > 0f) weights[i] *= 1f + 2f * armoredShare; // bolts through plate
                     // Arrow armor answers archers; cheap swarms answer heavies; archers answer plain infantry.
                     if (options[i].RangedArmor > 0f) weights[i] *= 1f + 2f * rangedShare;
                     if (options[i].IsRanged) weights[i] *= 1.5f - armoredShare;

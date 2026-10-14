@@ -82,6 +82,13 @@ public partial class UnitView : Node2D
             _facingLeft = worldDirection.X < 0;
     }
 
+    /// <summary>A monk's blessing: the staff held high for a moment, without stepping forward (visual only).</summary>
+    public void Bless()
+    {
+        _lungeDirection = Vector2.Zero;
+        _lungeTime = LungeDuration * 1.5f;
+    }
+
     /// <summary>Briefly flashes white and staggers away from the blow (visual only).</summary>
     public void Flash(Vector2 fromDirection)
     {
@@ -119,7 +126,7 @@ public partial class UnitView : Node2D
 
         var offset = Vector2.Zero;
         Frame = PickFrame(dt, ref offset);
-        if (_lungeTime > 0f)
+        if (_lungeTime > 0f && _lungeTime <= LungeDuration)
             offset += _lungeDirection * LungeDistance * Mathf.Sin(Mathf.Pi * (1f - _lungeTime / LungeDuration));
         if (_knockTime > 0f)
             offset += _knockDirection * KnockDistance * (_knockTime / KnockDuration);

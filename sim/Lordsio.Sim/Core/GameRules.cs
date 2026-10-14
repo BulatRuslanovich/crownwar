@@ -173,7 +173,15 @@ public sealed class GameRules
                 RangedArmor: OptionalSingle(u, "rangedArmor"),
                 Upkeep: OptionalInt(u, "upkeep"),
                 IsSiege: OptionalBool(u, "siege"),
-                BuildingDamageMultiplier: u.TryGetProperty("buildingMultiplier", out var multiplier) ? multiplier.GetSingle() : 1f));
+                BuildingDamageMultiplier: u.TryGetProperty("buildingMultiplier", out var multiplier) ? multiplier.GetSingle() : 1f,
+                BonusAgainst: u.TryGetProperty("bonusAgainst", out var bonus)
+                    ? bonus.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetSingle())
+                    : null,
+                ArmorPiercing: OptionalSingle(u, "armorPiercing"),
+                Heal: u.TryGetProperty("heal", out var heal)
+                    ? new HealAbility(heal.GetProperty("amount").GetInt32(), heal.GetProperty("range").GetSingle(), heal.GetProperty("cooldown").GetSingle())
+                    : null,
+                BarracksRequired: OptionalInt(u, "barracksRequired")));
         }
 
         var buildings = new List<BuildingType>();
@@ -207,7 +215,8 @@ public sealed class GameRules
                 IsMine: OptionalBool(b, "mine"),
                 Attack: attack,
                 SightRange: OptionalSingle(b, "sight"),
-                MaxCount: OptionalInt(b, "maxCount"));
+                MaxCount: OptionalInt(b, "maxCount"),
+                UnlocksUnits: OptionalBool(b, "unlocksUnits"));
             buildings.Add(b.TryGetProperty("tiers", out var tiers) ? WithTiers(type, tiers.EnumerateArray().ToList()) : type);
         }
 

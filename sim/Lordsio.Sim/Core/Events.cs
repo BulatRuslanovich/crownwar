@@ -18,6 +18,8 @@ public enum RecruitError
     NotOwner,
     NotComplete,
     CannotRecruitType,
+    /// <summary>Not yet unlocked: the owner has too few finished barracks for this kind.</summary>
+    Locked,
     NotEnoughGold,
     ArmyCapReached,
 }
@@ -127,6 +129,9 @@ public sealed record WarDeclared(int FactionId, int OtherFactionId, float Second
 public sealed record WarBegan(int FactionId, int OtherFactionId) : SimEvent(FactionId);
 
 public sealed record DiplomacyRejected(int FactionId, int OtherFactionId, DiplomacyError Reason) : SimEvent(FactionId);
+
+/// <summary>A monk (<paramref name="HealerId"/>) mended <paramref name="Amount"/> health of <paramref name="TargetId"/> at <paramref name="Position"/>.</summary>
+public sealed record UnitHealed(int FactionId, int HealerId, int TargetId, int Amount, Vector2 Position) : SimEvent(FactionId);
 
 /// <summary>The match is over. <paramref name="WinningTeam"/> is the team that won, or -1 if nobody survived.</summary>
 public sealed record MatchEnded(int WinningTeam) : SimEvent(-1);

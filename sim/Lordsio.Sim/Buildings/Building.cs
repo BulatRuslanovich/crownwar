@@ -43,8 +43,12 @@ public sealed record BuildingType(
     BuildingType? NextTier = null,
     int UpgradeCost = 0,
     float UpgradeTime = 0f,
-    int YieldBonus = 0)
+    int YieldBonus = 0,
+    bool UnlocksUnits = false)
 {
+    // UnlocksUnits: each finished building of such a kind (a barracks) opens one more step of the units the owner can
+    // train (see UnitType.BarracksRequired).
+
     /// <summary>Capitals are placed at match start and cannot be built by players.</summary>
     public bool IsBuildable => !IsCapital;
 
@@ -194,15 +198,18 @@ public sealed class Building : Entity
 
     internal void Enqueue(ProductionItem item) => _queue.Add(item);
 
-    /// <summary>Advances production by one tick and returns the unit type that finished, if any.</summary>
-    internal UnitType? AdvanceProduction()
+    /// <summary>
+    /// Advances production by one tick: the first <paramref name="slots"/> recruits in the queue train side by side.
+    /// Those that finish are added to <paramref name="finished"/>, first in line first.
+    /// </summary>
+    internal void AdvanceProduction(int slots, List<UnitType> finished)
     {
-        if (_queue.Count == 0)
-            return null;
-        var current = _queue[0];
-        if (--current.TicksLeft > 0)
-            return null;
-        _queue.RemoveAt(0);
-        return current.Type;
+        int active = Math.Min(slots, _queue.Count);
+        for (int i = 0; i < active; i++)
+            _queue[i].TicksLeft--;
+        for (int i = 0; i < active; i++)
+            if (_queue[i].TicksLeft <= 0)
+                finished.Add(_queue[i].Type);
+        _queue.RemoveAll(item => item.TicksLeft <= 0);
     }
 }

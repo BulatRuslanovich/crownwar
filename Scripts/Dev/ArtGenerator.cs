@@ -1317,7 +1317,8 @@ public static class ArtGenerator
     // ------------------------------------------------------------------ units
 
     /// <summary>
-    /// Cells of 16×20, feet at (8, 19), facing right. Rows: infantry, archer, heavy, ram. Columns (see
+    /// Cells of 16×20, feet at (8, 19), facing right. Rows: infantry, archer, heavy, ram, cavalry, crossbowman, monk,
+    /// trebuchet. Columns (see
     /// <see cref="ArtLayout"/>): idle, breathing, four walking steps, wind-up and strike. units_team.png holds the
     /// faction-colour mask.
     /// </summary>
@@ -1336,7 +1337,11 @@ public static class ArtGenerator
                     case 0: Infantry(c, pose, cell); break;
                     case 1: Archer(c, pose, cell); break;
                     case 2: Heavy(c, pose, cell); break;
-                    default: Ram(c, pose, frame); break;
+                    case 3: Ram(c, pose, frame); break;
+                    case 4: Cavalry(c, pose, cell); break;
+                    case 5: Crossbowman(c, pose, cell); break;
+                    case 6: Monk(c, pose, cell); break;
+                    default: Trebuchet(c, pose, frame); break;
                 }
                 c.Origin = cell;
                 c.Outline(Outline, new Rect2I(cell, new Vector2I(ArtLayout.UnitCellWidth, ArtLayout.UnitCellHeight)));
@@ -1503,6 +1508,200 @@ public static class ArtGenerator
             c.Px(wx + spoke.X, 16 + spoke.Y, WoodLight);
             c.Px(wx + spoke.X / 2, 16 + spoke.Y / 2, WoodLight);
         }
+    }
+
+    private static readonly Color Horse = new("7a5030");
+    private static readonly Color HorseLight = new("93643f");
+    private static readonly Color HorseDark = new("553620");
+    private static readonly Color Mane = new("2e2018");
+    private static readonly Color Robe = new("6b4a2e");
+    private static readonly Color RobeDark = new("4e3420");
+    private static readonly Color Holy = new("fff2a8");
+
+    /// <summary>
+    /// A horseman: a bay horse at a gallop (four strides of its legs, bobbing mid-stride) with a saddle cloth in the
+    /// rider's colours, the rider in a team tunic with a plumed helmet and a lance — couched back to wind up, thrust
+    /// level to strike.
+    /// </summary>
+    private static void Cavalry(PixelCanvas c, Pose pose, Vector2I cell)
+    {
+        int bob = pose.Step is 2 or 4 ? -1 : 0;
+        // Legs: back pair and front pair, reaching and gathering in turn.
+        (int backA, int backB, int frontA, int frontB, int lift) = pose.Step switch
+        {
+            1 => (2, 5, 10, 13, 0),
+            2 => (3, 4, 11, 12, 1),
+            3 => (4, 3, 12, 11, 0),
+            4 => (5, 2, 13, 10, 1),
+            _ => (3, 5, 10, 12, 0),
+        };
+        foreach (var (x, near) in new[] { (backB, false), (frontB, false), (backA, true), (frontA, true) })
+        {
+            int up = !near ? lift : 0;
+            c.Rect(x, 15 + bob - up, 1, 4 - (bob < 0 ? 0 : 0), near ? Horse : HorseDark);
+            c.Px(x, 18 - up, Boots);
+        }
+        c.Origin = cell + new Vector2I(0, bob);
+        // Body, neck and head; mane and tail.
+        c.Rect(2, 11, 11, 4, Horse);
+        c.Rect(2, 11, 11, 1, HorseLight);
+        c.Rect(3, 14, 9, 1, HorseDark);
+        c.Rect(1, 11, 1, 3, Mane);
+        c.Px(0, 13, Mane);
+        c.Rect(11, 8, 2, 4, Horse);
+        c.Rect(12, 7, 3, 2, Horse);
+        c.Px(15, 8, HorseDark);
+        c.Px(13, 7, Outline); // eye
+        c.Rect(11, 7, 1, 3, Mane);
+        // Saddle cloth in the rider's colours.
+        for (int x = 5; x < 10; x++)
+        {
+            c.Team(x, 11, 0.9f);
+            c.Team(x, 12, 0.75f);
+        }
+        c.Team(5, 13, 0.6f);
+        c.Team(9, 13, 0.6f);
+        // Rider.
+        c.TeamRect(6, 6, 3, 5);
+        c.Shaded(6, 3, 3, 3, Skin, Skin, SkinDark);
+        c.Rect(6, 2, 3, 1, Steel);
+        c.Team(6, 1, 1f); c.Team(5, 2, 0.75f); // plume
+        c.Px(8, 4, Outline);
+        if (pose.Windup)
+        {
+            c.Line(2, 5, 9, 8, Leather); // lance couched back
+            c.Px(10, 8, SteelLight);
+        }
+        else if (pose.Strike)
+        {
+            c.Rect(8, 8, 8, 1, Leather); // lance thrust level
+            c.Px(15, 7, SteelLight);
+            c.Px(15, 8, SteelLight);
+        }
+        else
+        {
+            c.Line(9, 9, 14, 1, Leather);
+            c.Px(14, 0, SteelLight);
+            c.Px(15, 0, Steel);
+        }
+        c.Px(9, 8, Skin); // hand
+    }
+
+    /// <summary>
+    /// A crossbowman in a kettle helmet and a tabard of his colours, the crossbow across his chest; winding up he
+    /// shoulders it and aims, loosing he rocks back with the string snapped forward.
+    /// </summary>
+    private static void Crossbowman(PixelCanvas c, Pose pose, Vector2I cell)
+    {
+        Legs(c, pose, cell, 2, new Color("4a3a30"), new Color("33281f"));
+        c.Rect(5, 10, 6, 6, Leather);
+        c.TeamRect(6, 10, 4, 5); // tabard
+        c.Rect(5, 14, 6, 1, Bark);
+        c.Shaded(6, 6, 4, 4, Skin, Skin, SkinDark);
+        c.Rect(5, 5, 6, 2, Steel); // kettle helmet with a broad brim
+        c.Rect(4, 6, 8, 1, SteelDark);
+        c.Px(9, 7, Outline);
+        int y = pose.Windup ? 8 : pose.Strike ? 10 : 11;
+        int x = pose.Strike ? 9 : 10;
+        c.Rect(x - 3, y, 6, 1, Wood); // stock
+        c.Rect(x + 3, y - 2, 1, 5, SteelDark); // the bow, across
+        c.Px(x + 3, y - 2, Steel);
+        if (pose.Windup)
+        {
+            c.Line(x + 3, y - 2, x, y, String);
+            c.Line(x, y, x + 3, y + 2, String);
+            c.Rect(x, y, 4, 1, WoodLight); // the bolt
+            c.Px(x + 4, y, SteelLight);
+        }
+        else
+        {
+            c.Rect(x + 2, y - 2, 1, 5, String);
+        }
+        c.Px(x - 1, y + 1, Skin);
+    }
+
+    /// <summary>
+    /// A monk in a brown habit with a cowl of his colours and a staff; his hem sways as he walks. To mend he raises the
+    /// staff, its head shining.
+    /// </summary>
+    private static void Monk(PixelCanvas c, Pose pose, Vector2I cell)
+    {
+        // Feet peeking out under the habit as he walks.
+        int step = pose.Step;
+        c.Rect(step is 1 or 2 ? 9 : 6, 18, 2, 1, Boots);
+        c.Rect(step is 3 or 4 ? 9 : 6, 18, 2, 1, Boots);
+        c.Origin = cell + new Vector2I(pose.Lean, pose.Bob);
+        // The habit widens to the hem, which swings with the stride.
+        for (int row = 0; row < 9; row++)
+        {
+            int half = 3 + row / 3;
+            int sway = row >= 6 && step is 2 or 4 ? (step == 2 ? 1 : -1) : 0;
+            for (int x = 8 - half + sway; x < 8 + half + sway; x++)
+                c.Px(x, 9 + row, x < 8 + sway ? Robe : RobeDark);
+        }
+        c.Rect(5, 13, 6, 1, String); // rope belt
+        c.Px(6, 14, String);
+        c.Shaded(6, 5, 4, 4, Skin, Skin, SkinDark);
+        c.Px(9, 6, Outline);
+        // Cowl in the faction's colours, falling over the shoulders.
+        c.Team(6, 4, 1f); c.Team(7, 4, 1f); c.Team(8, 4, 0.9f); c.Team(5, 5, 0.85f); c.Team(5, 6, 0.75f); c.Team(5, 7, 0.7f);
+        for (int x = 5; x < 11; x++)
+            c.Team(x, 9, x < 8 ? 0.85f : 0.65f);
+        if (pose.Windup || pose.Strike)
+        {
+            // Staff raised high, its head aglow; the other hand lifted in blessing.
+            c.Rect(11, 0, 1, 12, Wood);
+            c.Px(11, 0, Holy);
+            c.Px(10, 0, pose.Strike ? Holy : Gold);
+            c.Px(12, 0, pose.Strike ? Holy : Gold);
+            c.Px(11, 1, Gold);
+            c.Px(4, 7, Skin);
+            c.Px(4, 6, Skin);
+        }
+        else
+        {
+            c.Rect(12, 3, 1, 16, Wood);
+            c.Px(12, 2, WoodLight);
+            c.Px(11, 11, Skin);
+        }
+    }
+
+    /// <summary>
+    /// A trebuchet on a wheeled bed: an A-frame with the throwing arm and a counterweight box in the owner's colours.
+    /// Rolling, its wheels turn; winding up, the arm is hauled down with the weight raised; loosing, the arm flies over
+    /// and the weight drops.
+    /// </summary>
+    private static void Trebuchet(PixelCanvas c, Pose pose, int frame)
+    {
+        // Bed and wheels.
+        c.Rect(1, 13, 14, 2, Wood);
+        c.Rect(1, 13, 14, 1, WoodLight);
+        var spokes = new[] { new Vector2I(0, -2), new Vector2I(2, 0), new Vector2I(0, 2), new Vector2I(-2, 0) };
+        foreach (int wx in new[] { 3, 12 })
+        {
+            c.Disc(wx, 16, 2.4f, WoodDark);
+            c.Px(wx, 16, Steel);
+            var spoke = spokes[pose.Step == 0 ? (frame == ArtLayout.FrameStrike ? 1 : 0) : pose.Step - 1];
+            c.Px(wx + spoke.X, 16 + spoke.Y, WoodLight);
+        }
+        // A-frame up to the pivot.
+        c.Line(4, 12, 7, 4, WoodDark);
+        c.Line(10, 12, 8, 4, WoodDark);
+        c.Rect(6, 4, 3, 1, Wood);
+        // Arm: the long end with its sling, and the short end with the counterweight.
+        (Vector2I longEnd, Vector2I weight) = pose.Windup ? (new Vector2I(1, 11), new Vector2I(11, 1))
+            : pose.Strike ? (new Vector2I(14, 0), new Vector2I(3, 8))
+            : (new Vector2I(2, 1), new Vector2I(11, 7));
+        c.Line(7, 4, longEnd.X, longEnd.Y, Wood);
+        c.Line(7, 4, (7 + weight.X) / 2, (4 + weight.Y) / 2, Wood);
+        c.Px(longEnd.X, longEnd.Y, Leather);
+        if (pose.Windup)
+            c.Disc(longEnd.X + 1, longEnd.Y, 1.2f, RockLight); // the stone in the sling
+        // Counterweight box in the faction's colours, iron-bound.
+        for (int y = 0; y < 3; y++)
+            for (int x = 0; x < 3; x++)
+                c.Team(weight.X - 1 + x, weight.Y + y, x == 0 ? 1f : 0.72f);
+        c.Rect(weight.X - 1, weight.Y + 3, 3, 1, SteelDark);
     }
 
     /// <summary>Knight in plate with a plumed helm, a kite shield in his colours and a sword.</summary>
@@ -1997,7 +2196,7 @@ public static class ArtLayout
     public const int UnitCellWidth = 16;
     public const int UnitCellHeight = 20;
     public const int UnitFrames = 8;
-    public const int UnitRows = 4;
+    public const int UnitRows = 8;
     public const int FrameIdle = 0, FrameBreath = 1, FrameWalk1 = 2, FrameWalk2 = 3, FrameWalk3 = 4, FrameWalk4 = 5, FrameWindup = 6, FrameStrike = 7;
     /// <summary>Feet position inside a unit cell.</summary>
     public static readonly Vector2I UnitFeet = new(8, 19);
@@ -2007,6 +2206,10 @@ public static class ArtLayout
         "archer" => 1,
         "heavy" => 2,
         "ram" => 3,
+        "cavalry" => 4,
+        "crossbowman" => 5,
+        "monk" => 6,
+        "trebuchet" => 7,
         _ => 0,
     };
 }

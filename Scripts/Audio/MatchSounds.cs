@@ -72,6 +72,9 @@ public partial class MatchSounds : Node
             case ProjectileFired shot:
                 PlayAt(Sound.ArrowShot, shot.Position, -8f);
                 break;
+            case UnitHealed healed when healed.Amount > 0:
+                PlayAt(Sound.UnitReady, healed.Position, -18f); // a soft chime
+                break;
             case UnitDied died:
                 PlayAt(Sound.UnitDeath, died.Position, -6f);
                 break;

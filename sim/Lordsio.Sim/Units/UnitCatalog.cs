@@ -7,8 +7,12 @@ namespace Lordsio.Sim.Units;
 /// <item><see cref="ProjectileSpeed"/> of 0 means a melee attack that lands instantly.</item>
 /// <item><see cref="RangedArmor"/> is the fraction of projectile damage ignored (0..1).</item>
 /// <item><see cref="Upkeep"/> is gold per minute the owner pays while the unit lives.</item>
-/// <item>A <see cref="IsSiege"/> unit (a ram) only ever attacks buildings; against them every blow deals
+/// <item>A <see cref="IsSiege"/> unit (a ram, a trebuchet) only ever attacks buildings; against them every blow deals
 /// <see cref="Damage"/> × <see cref="BuildingDamageMultiplier"/>.</item>
+/// <item><see cref="BonusAgainst"/> multiplies the damage dealt to units of the given types (spearmen against horses).</item>
+/// <item><see cref="ArmorPiercing"/> is the share of the target's ranged armour a missile ignores (crossbow bolts).</item>
+/// <item>A unit with <see cref="Heal"/> (a monk) does not fight: it mends wounded friends near it.</item>
+/// <item><see cref="BarracksRequired"/>: how many finished barracks its owner needs before it can be trained.</item>
 /// </list>
 /// </summary>
 public sealed record UnitType(
@@ -27,14 +31,28 @@ public sealed record UnitType(
     float RangedArmor = 0f,
     int Upkeep = 0,
     bool IsSiege = false,
-    float BuildingDamageMultiplier = 1f)
+    float BuildingDamageMultiplier = 1f,
+    IReadOnlyDictionary<string, float>? BonusAgainst = null,
+    float ArmorPiercing = 0f,
+    HealAbility? Heal = null,
+    int BarracksRequired = 0)
 {
     public bool IsRanged => ProjectileSpeed > 0f;
 
+    public bool IsHealer => Heal != null;
+
     /// <summary>What one blow does to <paramref name="target"/>.</summary>
-    public int DamageAgainst(Core.Entity target) =>
-        target is Buildings.Building ? (int)MathF.Round(Damage * BuildingDamageMultiplier) : Damage;
+    public int DamageAgainst(Core.Entity target) => target switch
+    {
+        Buildings.Building => (int)MathF.Round(Damage * BuildingDamageMultiplier),
+        Unit unit when BonusAgainst != null && BonusAgainst.TryGetValue(unit.Type.Id, out float bonus) => (int)MathF.Round(Damage * bonus),
+        _ => Damage,
+    };
 }
+
+/// <summary>Mending: <paramref name="Amount"/> health to a wounded friend within <paramref name="Range"/> tiles (edge to edge),
+/// once every <paramref name="Cooldown"/> seconds.</summary>
+public sealed record HealAbility(int Amount, float Range, float Cooldown);
 
 public sealed class UnitCatalog
 {
@@ -73,5 +91,10 @@ public sealed class UnitCatalog
         Require(t.AttackRange >= 0f && t.AttackCooldown > 0f, "attack range >= 0 and cooldown > 0");
         Require(t.SightRange >= t.AttackRange, "sight range must cover the attack range");
         Require(t.ProjectileSpeed >= 0f && t.RangedArmor is >= 0f and <= 1f, "projectile speed >= 0 and ranged armor in [0, 1]");
+        Require(t.ArmorPiercing is >= 0f and <= 1f, "armor piercing in [0, 1]");
+        Require(t.BarracksRequired >= 0, "barracks required cannot be negative");
+        Require(t.BonusAgainst == null || t.BonusAgainst.Values.All(b => b > 0f), "damage bonuses must be > 0");
+        Require(t.Heal is not { } heal || heal.Amount > 0 && heal.Range >= 0f && heal.Cooldown > 0f && t.SightRange >= heal.Range,
+            "heal needs an amount > 0, range >= 0 within sight, cooldown > 0");
     }
 }

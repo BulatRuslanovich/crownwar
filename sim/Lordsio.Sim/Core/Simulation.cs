@@ -266,6 +266,8 @@ public sealed partial class Simulation
 
     private void ApplyAttack(AttackCommand attack)
     {
+        // Monks do not fight: an order to attack leaves them mending.
+        attack = attack with { UnitIds = attack.UnitIds.Where(id => GetUnit(id) is not { Type.IsHealer: true }).ToArray() };
         if (GetEntity(attack.TargetId) is not { IsAlive: true } target || !AreEnemies(attack.FactionId, target.FactionId))
             return;
         // A ram cannot fight soldiers: sent at one, it advances with the army and goes for the buildings it meets.

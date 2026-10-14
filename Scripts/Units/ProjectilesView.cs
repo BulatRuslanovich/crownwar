@@ -37,7 +37,7 @@ public partial class ProjectilesView : Node2D
             if (!_match.Fog.IsVisible(p.Position))
                 continue;
             var position = SimConvert.ToWorld(System.Numerics.Vector2.Lerp(p.PreviousPosition, p.Position, alpha));
-            if (p.SplashRadius > 0f)
+            if (p.IsStone)
             {
                 DrawStone(p, position);
                 continue;

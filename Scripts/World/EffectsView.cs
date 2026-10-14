@@ -34,6 +34,8 @@ public partial class EffectsView : Node2D
         Flash,
         /// <summary>A scorched pit left by a stone, fading after a while (ground layer).</summary>
         Crater,
+        /// <summary>Little green crosses rising from a soldier a monk has mended.</summary>
+        Heal,
     }
 
     private record struct Effect(Kind Kind, Vector2 Position, float Age, float Duration, float Size, int Seed, Color Color);
@@ -45,6 +47,7 @@ public partial class EffectsView : Node2D
     private static readonly Color SparkleColor = new("ffe066");
     private static readonly Color PingColor = new("ff5a4a");
     private static readonly Color Blood = new("9c1f1f");
+    private static readonly Color HealColor = new("8dff7a");
     private static readonly Color PlateSpark = new("fff6c8");
     private static readonly Color WoodChip = new("a87a4a");
     private static readonly Color StoneChip = new("9d968e");
@@ -75,6 +78,9 @@ public partial class EffectsView : Node2D
                 Add(Kind.Impact, landed, 0.5f, splash.Radius * SimConvert.TileSize, DustColor);
                 Add(Kind.Flash, landed + new Vector2(0, -3), 0.16f, 9f, FlashColor);
                 Add(Kind.Chunks, landed, 1.1f, 1f, RockChunk);
+                break;
+            case UnitHealed healed when !Ground && healed.Amount > 0:
+                Add(Kind.Heal, SimConvert.ToWorld(healed.Position) + new Vector2(0, -8), 0.9f, 1f, HealColor);
                 break;
             case SplashLanded splash when Ground:
                 Add(Kind.Crater, SimConvert.ToWorld(splash.Position), CraterSeconds, splash.Radius * SimConvert.TileSize * 0.55f, CraterColor);
@@ -190,6 +196,17 @@ public partial class EffectsView : Node2D
                     break;
                 case Kind.Crater:
                     DrawCrater(e, rng);
+                    break;
+                case Kind.Heal:
+                    // Three small crosses drifting up and fading, bright even at night.
+                    var glow = _match.LightBoost;
+                    var cross = new Color(e.Color.R * glow.R, e.Color.G * glow.G, e.Color.B * glow.B, 1f - t);
+                    for (int s = 0; s < 3; s++)
+                    {
+                        var p = (e.Position + new Vector2((rng.NextSingle() - 0.5f) * 10f, -10f * t - s * 3f)).Round();
+                        DrawRect(new Rect2(p + new Vector2(-1, 0), new Vector2(3, 1)), cross);
+                        DrawRect(new Rect2(p + new Vector2(0, -1), new Vector2(1, 3)), cross);
+                    }
                     break;
                 case Kind.Impact:
                     // A flattened ring of dust spreading over the splash area, with specks thrown out.
