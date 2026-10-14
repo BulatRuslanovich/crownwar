@@ -19,6 +19,7 @@ public partial class Hud : CanvasLayer
 
     private static readonly Color ProblemColor = new("ff8a80");
     private static readonly Color DefaultTextColor = new(0.95f, 0.9f, 0.8f);
+    private static readonly Color NightColor = new("9fb4ff");
 
     /// <summary>Physical hotkey per building type id; types without one are still on the bar.</summary>
     private static readonly Dictionary<string, Key> BuildHotkeys = new()
@@ -43,6 +44,11 @@ public partial class Hud : CanvasLayer
     private Label _gold = null!;
     private Label _income = null!;
     private Label _army = null!;
+    private Label _dayNight = null!;
+    private Button _demolishButton = null!;
+    /// <summary>The first press arms the demolish button for a few seconds; a second press pulls the building down.</summary>
+    private (int BuildingId, ulong UntilMs)? _demolishArmed;
+    private const ulong DemolishConfirmMs = 3000;
     private Label _buildHint = null!;
     private Control _buildingPanel = null!;
     private Label _title = null!;
@@ -78,6 +84,12 @@ public partial class Hud : CanvasLayer
         _upgradeButton.FocusMode = Control.FocusModeEnum.None;
         _upgradeButton.Pressed += UpgradeSelected;
         _upgradeProgress = GetNode<ProgressBar>("BuildingPanel/Rows/UpgradeProgress");
+        _demolishButton = new Button { FocusMode = Control.FocusModeEnum.None, SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin };
+        _demolishButton.AddThemeFontSizeOverride("font_size", 14);
+        _demolishButton.Pressed += DemolishSelected;
+        GetNode("BuildingPanel/Rows").AddChild(_demolishButton);
+        _dayNight = new Label { MouseFilter = Control.MouseFilterEnum.Pass };
+        GetNode("ResourceBar/Row").AddChild(_dayNight);
         _message = GetNode<Label>("Message");
         _alert = GetNode<AlertIndicator>("AlertIndicator");
         _alert.Initialize(match);
@@ -140,6 +152,13 @@ public partial class Hud : CanvasLayer
                 faction.UpkeepPerMinute / 60f, faction.ArmyUpkeepPerMinute, _match.Sim.Rules.UpkeepAllowance);
             _army.Text = string.Format(Tr("HUD_ARMY"), faction.Population, faction.ArmyCap);
             _army.Modulate = faction.Population >= faction.ArmyCap ? ProblemColor : Colors.White;
+
+            var sim = _match.Sim;
+            _dayNight.Visible = sim.Rules.NightSeconds > 0f;
+            int left = Mathf.CeilToInt(sim.SecondsToDayNightChange);
+            _dayNight.Text = string.Format(Tr(sim.IsNight ? "HUD_NIGHT" : "HUD_DAY"), left / 60, left % 60);
+            _dayNight.Modulate = sim.IsNight ? NightColor : Colors.White;
+            _dayNight.TooltipText = Tr("HUD_NIGHT_TOOLTIP");
         }
     }
 
@@ -174,6 +193,12 @@ public partial class Hud : CanvasLayer
         if (key.PhysicalKeycode == Key.U)
         {
             UpgradeSelected();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+        if (key.PhysicalKeycode == Key.Delete)
+        {
+            DemolishSelected();
             GetViewport().SetInputAsHandled();
             return;
         }
@@ -221,6 +246,13 @@ public partial class Hud : CanvasLayer
                 break;
             case UpgradeRejected rejected when rejected.FactionId == player:
                 ShowMessage(Describe(rejected.Reason));
+                break;
+            case BuildingDemolished demolished when demolished.FactionId == player:
+                ShowMessage(string.Format(Tr("MSG_DEMOLISHED"),
+                    Names.Of(_match.Sim.Rules.GetBuildingType(demolished.BuildingTypeId)), demolished.Refund));
+                break;
+            case GoldLooted loot when loot.FactionId == player:
+                ShowMessage(string.Format(Tr("MSG_LOOTED"), loot.Amount));
                 break;
             case DepositExhausted exhausted when exhausted.FactionId == player:
                 ShowMessage(string.Format(Tr("MSG_DEPOSIT_EXHAUSTED"), _match.Sim.Rules.DepositRegenSeconds));
@@ -375,11 +407,13 @@ public partial class Hud : CanvasLayer
             // Buttons stay clickable: the simulation is the judge and explains a refusal with a message.
             var error = _match.Sim.CanRecruit(_match.LocalFactionId, building.Id, typeId);
             MarkAvailable(button, error == RecruitError.None);
-            string upkeep = Names.Of(type) + "\n" + string.Format(Tr("INFO_UPKEEP"), type.Upkeep);
+            string upkeep = Names.Of(type) + "\n" + string.Format(Tr("INFO_UPKEEP"), type.Upkeep)
+                            + (type.IsSiege ? "\n" + string.Format(Tr("INFO_SIEGE"), type.BuildingDamageMultiplier) : "");
             button.TooltipText = error == RecruitError.None ? upkeep : Describe(error) + "\n" + upkeep;
         }
 
         UpdateUpgrade(building, own);
+        UpdateDemolish(building, own);
 
         bool training = own && building.Queue.Count > 0;
         _queue.Visible = training;
@@ -450,6 +484,33 @@ public partial class Hud : CanvasLayer
         UpgradeError.NotComplete => "ERR_NOT_COMPLETE",
         _ => "ERR_NOT_OWNER",
     });
+
+    /// <summary>The demolish button: what pulling the building down gives back; a second press within seconds does it.</summary>
+    private void UpdateDemolish(Building building, bool own)
+    {
+        var error = _match.Sim.CanDemolish(_match.LocalFactionId, building.Id, out int refund);
+        _demolishButton.Visible = own && error == DemolishError.None;
+        if (!_demolishButton.Visible)
+            return;
+        bool armed = _demolishArmed is { } a && a.BuildingId == building.Id && Time.GetTicksMsec() < a.UntilMs;
+        _demolishButton.Text = string.Format(Tr(armed ? "HUD_DEMOLISH_CONFIRM" : "HUD_DEMOLISH"), refund);
+        _demolishButton.Modulate = armed ? ProblemColor : Colors.White;
+        _demolishButton.TooltipText = string.Format(Tr("HUD_DEMOLISH_TOOLTIP"), _match.Sim.Rules.DemolishRefundPercent);
+    }
+
+    /// <summary>Delete or the panel button: the first press asks, the second (within three seconds) pulls the building down.</summary>
+    private void DemolishSelected()
+    {
+        if (_match.Selection.BuildingId is not { } id || _match.Sim.CanDemolish(_match.LocalFactionId, id, out _) != DemolishError.None)
+            return;
+        if (_demolishArmed is { } a && a.BuildingId == id && Time.GetTicksMsec() < a.UntilMs)
+        {
+            _demolishArmed = null;
+            _match.Issue(new DemolishCommand(_match.LocalFactionId, id));
+            return;
+        }
+        _demolishArmed = (id, Time.GetTicksMsec() + DemolishConfirmMs);
+    }
 
     /// <summary>U: upgrade the selected building, the same as its panel button.</summary>
     private void UpgradeSelected()

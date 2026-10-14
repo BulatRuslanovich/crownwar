@@ -122,7 +122,7 @@ public sealed partial class Simulation
     private Building AddBuilding(BuildingType type, int factionId, Cell anchor, int constructionTicks)
     {
         var deposit = type.IsMine ? DepositAt(anchor) : null;
-        var building = new Building(_nextEntityId++, type, factionId, anchor, constructionTicks, deposit);
+        var building = new Building(_nextEntityId++, type, factionId, anchor, constructionTicks, deposit) { Invested = type.Cost };
         _buildings.Add(building);
         _entitiesById.Add(building.Id, building);
         if (deposit != null)
@@ -298,6 +298,7 @@ public sealed partial class Simulation
         }
         var building = GetBuilding(upgrade.BuildingId)!;
         GetFaction(upgrade.FactionId)!.Treasury.TrySpend(building.Type.UpgradeCost);
+        building.Invested += building.Type.UpgradeCost;
         building.StartUpgrade((int)MathF.Round(building.Type.UpgradeTime * TicksPerSecond));
         _events.Add(new BuildingUpgradeStarted(upgrade.FactionId, building.Id));
     }
@@ -355,7 +356,50 @@ public sealed partial class Simulation
             RemoveBuilding(building);
             _events.Add(new BuildingDestroyed(building.FactionId, building.Id, building.Type.Id, building.KilledByFactionId,
                 building.Position, building.Type.Size));
+            Loot(building);
         }
+    }
+
+    /// <summary>Whoever brought an enemy building down takes a share of what it cost.</summary>
+    private void Loot(Building building)
+    {
+        int amount = building.Invested * Rules.LootPercent / 100;
+        if (amount <= 0 || !AreEnemies(building.KilledByFactionId, building.FactionId)
+            || GetFaction(building.KilledByFactionId) is not { IsEliminated: false } looter)
+            return;
+        looter.Treasury.Add(amount);
+        _events.Add(new GoldLooted(looter.Id, building.FactionId, amount, building.Position));
+    }
+
+    /// <summary>
+    /// Whether a <see cref="DemolishCommand"/> would currently succeed, and what it would give back: a share of
+    /// what the building cost (with its upgrades) and the full price of recruits still in its queue.
+    /// </summary>
+    public DemolishError CanDemolish(int factionId, int buildingId, out int refund)
+    {
+        refund = 0;
+        if (GetBuilding(buildingId) is not { IsAlive: true } building)
+            return DemolishError.UnknownBuilding;
+        if (building.FactionId != factionId || GetFaction(factionId) is not { IsEliminated: false })
+            return DemolishError.NotOwner;
+        if (building.Type.IsCapital)
+            return DemolishError.Capital;
+        refund = building.Invested * Rules.DemolishRefundPercent / 100 + building.Queue.Sum(item => item.Type.Cost);
+        return DemolishError.None;
+    }
+
+    private void ApplyDemolish(DemolishCommand demolish)
+    {
+        var error = CanDemolish(demolish.FactionId, demolish.BuildingId, out int refund);
+        if (error != DemolishError.None)
+        {
+            _events.Add(new DemolishRejected(demolish.FactionId, demolish.BuildingId, error));
+            return;
+        }
+        var building = GetBuilding(demolish.BuildingId)!;
+        RemoveBuilding(building);
+        GetFaction(demolish.FactionId)!.Treasury.Add(refund);
+        _events.Add(new BuildingDemolished(building.FactionId, building.Id, building.Type.Id, refund, building.Position, building.Type.Size));
     }
 
     private void RemoveBuilding(Building building)

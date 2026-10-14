@@ -7,6 +7,8 @@ namespace Lordsio.Sim.Units;
 /// <item><see cref="ProjectileSpeed"/> of 0 means a melee attack that lands instantly.</item>
 /// <item><see cref="RangedArmor"/> is the fraction of projectile damage ignored (0..1).</item>
 /// <item><see cref="Upkeep"/> is gold per minute the owner pays while the unit lives.</item>
+/// <item>A <see cref="IsSiege"/> unit (a ram) only ever attacks buildings; against them every blow deals
+/// <see cref="Damage"/> × <see cref="BuildingDamageMultiplier"/>.</item>
 /// </list>
 /// </summary>
 public sealed record UnitType(
@@ -23,9 +25,15 @@ public sealed record UnitType(
     float SightRange,
     float ProjectileSpeed = 0f,
     float RangedArmor = 0f,
-    int Upkeep = 0)
+    int Upkeep = 0,
+    bool IsSiege = false,
+    float BuildingDamageMultiplier = 1f)
 {
     public bool IsRanged => ProjectileSpeed > 0f;
+
+    /// <summary>What one blow does to <paramref name="target"/>.</summary>
+    public int DamageAgainst(Core.Entity target) =>
+        target is Buildings.Building ? (int)MathF.Round(Damage * BuildingDamageMultiplier) : Damage;
 }
 
 public sealed class UnitCatalog

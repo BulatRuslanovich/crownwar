@@ -110,6 +110,9 @@ public sealed class Building : Entity
     /// </summary>
     public int Income => !IsComplete ? 0 : Type.IsMine ? Deposit is { IsExhausted: false } d ? d.Yield + Type.YieldBonus : 0 : Type.Income;
 
+    /// <summary>Gold its owner has put into it: the price, plus every upgrade paid for (the base of loot and refunds).</summary>
+    public int Invested { get; internal set; }
+
     /// <summary>Ticks until the upgrade under way completes; 0 when none.</summary>
     public int UpgradeTicksLeft { get; private set; }
     private int _upgradeTicks;

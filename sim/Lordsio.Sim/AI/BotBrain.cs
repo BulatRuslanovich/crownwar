@@ -35,6 +35,7 @@ public sealed class BotBrain
     private const float DefenceRadius = 8f;
     /// <summary>Worth credited to a tower when judging how well a target is defended.</summary>
     private const int TowerDefenceValue = 250;
+    private const int SoldiersPerRam = 6;
     private const int TowersPerMine = 1;
 
     private readonly Simulation _sim;
@@ -239,7 +240,10 @@ public sealed class BotBrain
     private UnitType ChooseUnitType(Building producer)
     {
         var options = producer.Type.Recruits.Select(_sim.Rules.Units.Get).ToList();
-        var weights = options.Select(t => BaseWeight(t)).ToArray();
+        // Rams come once there is an army to escort them: about one per six soldiers.
+        var army = _sim.Units.Where(u => u.FactionId == FactionId).ToList();
+        bool wantRam = army.Count >= SoldiersPerRam && army.Count(u => u.Type.IsSiege) * SoldiersPerRam < army.Count;
+        var weights = options.Select(t => t.IsSiege ? (wantRam ? 0.2f : 0f) : BaseWeight(t)).ToArray();
 
         if (_profile.CountersComposition)
         {
@@ -250,6 +254,8 @@ public sealed class BotBrain
                 float armoredShare = enemies.Count(u => u.Type.RangedArmor > 0f) / (float)enemies.Count;
                 for (int i = 0; i < options.Count; i++)
                 {
+                    if (options[i].IsSiege)
+                        continue;
                     // Arrow armor answers archers; cheap swarms answer heavies; archers answer plain infantry.
                     if (options[i].RangedArmor > 0f) weights[i] *= 1f + 2f * rangedShare;
                     if (options[i].IsRanged) weights[i] *= 1.5f - armoredShare;

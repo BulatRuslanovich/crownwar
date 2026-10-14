@@ -14,7 +14,8 @@ public sealed class GameRules
     public GameRules(int startingGold, float buildRadius, IReadOnlyList<StartingUnits> startingUnits,
         UnitCatalog units, IEnumerable<BuildingType> buildingTypes,
         float depositReserveSeconds = 0f, float depositRegenSeconds = 0f, int upkeepAllowance = 0,
-        int goldCap = 0)
+        int goldCap = 0, int lootPercent = 0, int demolishRefundPercent = 0,
+        float daySeconds = 0f, float nightSeconds = 0f, float nightSightFactor = 1f)
     {
         if (startingGold < 0)
             throw new ArgumentOutOfRangeException(nameof(startingGold));
@@ -26,8 +27,17 @@ public sealed class GameRules
             throw new ArgumentOutOfRangeException(nameof(upkeepAllowance));
         if (goldCap < 0)
             throw new ArgumentOutOfRangeException(nameof(goldCap));
+        if (lootPercent is < 0 or > 100 || demolishRefundPercent is < 0 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(lootPercent), "Loot and refund are percentages.");
+        if (daySeconds < 0f || nightSeconds < 0f || nightSightFactor is <= 0f or > 1f)
+            throw new ArgumentOutOfRangeException(nameof(nightSeconds), "Day and night last a non-negative time; night sight is a factor in (0, 1].");
         StartingGold = startingGold;
         GoldCap = goldCap;
+        LootPercent = lootPercent;
+        DemolishRefundPercent = demolishRefundPercent;
+        DaySeconds = daySeconds;
+        NightSeconds = nightSeconds;
+        NightSightFactor = nightSightFactor;
         DepositReserveSeconds = depositReserveSeconds;
         DepositRegenSeconds = depositRegenSeconds;
         UpkeepAllowance = upkeepAllowance;
@@ -92,6 +102,19 @@ public sealed class GameRules
     /// <summary>A building may only be placed this close (tiles, to its center) to one of the builder's units.</summary>
     public float BuildRadius { get; }
 
+    /// <summary>Share (percent) of what a building cost its owner, with its upgrades, that the faction destroying it takes.</summary>
+    public int LootPercent { get; }
+
+    /// <summary>Share (percent) of what a building cost that its owner gets back for pulling it down.</summary>
+    public int DemolishRefundPercent { get; }
+
+    /// <summary>Seconds of day, then of night, repeating from the start of the match; no night if 0.</summary>
+    public float DaySeconds { get; }
+    public float NightSeconds { get; }
+
+    /// <summary>At night units see this share of their sight range (buildings see as far as by day).</summary>
+    public float NightSightFactor { get; }
+
     /// <summary>Army each faction starts with next to its capital.</summary>
     public IReadOnlyList<StartingUnits> StartingUnits { get; }
 
@@ -137,7 +160,9 @@ public sealed class GameRules
                 SightRange: u.GetProperty("sightRange").GetSingle(),
                 ProjectileSpeed: OptionalSingle(u, "projectileSpeed"),
                 RangedArmor: OptionalSingle(u, "rangedArmor"),
-                Upkeep: OptionalInt(u, "upkeep")));
+                Upkeep: OptionalInt(u, "upkeep"),
+                IsSiege: OptionalBool(u, "siege"),
+                BuildingDamageMultiplier: u.TryGetProperty("buildingMultiplier", out var multiplier) ? multiplier.GetSingle() : 1f));
         }
 
         var buildings = new List<BuildingType>();
@@ -188,7 +213,12 @@ public sealed class GameRules
             OptionalSingle(root, "depositReserveSeconds"),
             OptionalSingle(root, "depositRegenSeconds"),
             OptionalInt(root, "upkeepAllowance"),
-            OptionalInt(root, "goldCap"));
+            OptionalInt(root, "goldCap"),
+            OptionalInt(root, "lootPercent"),
+            OptionalInt(root, "demolishRefundPercent"),
+            root.TryGetProperty("dayNight", out var dayNight) ? OptionalSingle(dayNight, "day") : 0f,
+            root.TryGetProperty("dayNight", out var night) ? OptionalSingle(night, "night") : 0f,
+            root.TryGetProperty("dayNight", out var sight) && sight.TryGetProperty("sightFactor", out var factor) ? factor.GetSingle() : 1f);
     }
 
     /// <summary>

@@ -140,7 +140,7 @@ public partial class UnitView : Node2D
         {
             Texture = GD.Load<Texture2D>(path),
             Hframes = ArtLayout.UnitFrames,
-            Vframes = 3,
+            Vframes = ArtLayout.UnitRows,
             Centered = false,
             Offset = -new Vector2(ArtLayout.UnitFeet.X, ArtLayout.UnitFeet.Y),
             Modulate = modulate,

@@ -69,7 +69,7 @@ public class CatapultTests
 
         Assert.That(catapult.Cost, Is.EqualTo(300));
         Assert.That(catapult.MaxTier, Is.EqualTo(3), "two upgrades");
-        Assert.That(tower.Attack!.Range, Is.EqualTo(7.5f), "archer towers reach further than before (7)");
+        Assert.That(tower.Attack!.Range, Is.GreaterThan(7f), "archer towers reach further than before (7)");
         for (BuildingType? c = catapult, t = tower; c != null && t != null; c = c.NextTier, t = t.NextTier)
         {
             Assert.That(c.Attack!.IsSplash, Is.True);

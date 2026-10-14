@@ -83,7 +83,7 @@ public static class NetCodec
 
     private enum CommandTag : byte
     {
-        Move = 1, Attack, Recruit, Build, Upgrade,
+        Move = 1, Attack, Recruit, Build, Upgrade, Demolish,
     }
 
     public static byte[] Encode(NetMessage message)
@@ -257,6 +257,9 @@ public static class NetCodec
                 case UpgradeCommand c:
                     w.Write((byte)CommandTag.Upgrade); w.Write(c.FactionId); w.Write(c.BuildingId);
                     break;
+                case DemolishCommand c:
+                    w.Write((byte)CommandTag.Demolish); w.Write(c.FactionId); w.Write(c.BuildingId);
+                    break;
                 default:
                     throw new NotSupportedException($"Cannot encode {command.GetType().Name}.");
             }
@@ -276,6 +279,7 @@ public static class NetCodec
                 CommandTag.Recruit => new RecruitCommand(r.ReadInt32(), r.ReadInt32(), ReadString(r)),
                 CommandTag.Build => new BuildCommand(r.ReadInt32(), ReadString(r), new Cell(r.ReadInt32(), r.ReadInt32())),
                 CommandTag.Upgrade => new UpgradeCommand(r.ReadInt32(), r.ReadInt32()),
+                CommandTag.Demolish => new DemolishCommand(r.ReadInt32(), r.ReadInt32()),
                 var tag => throw new FormatException($"Unknown command tag {(byte)tag}."),
             });
         }

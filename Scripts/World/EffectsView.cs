@@ -61,9 +61,16 @@ public partial class EffectsView : Node2D
             case UnitDied died when !Ground:
                 Add(Kind.Puff, SimConvert.ToWorld(died.Position) + new Vector2(0, -5), 0.6f, 6f, FactionColors.Get(died.FactionId));
                 break;
-            case BuildingDestroyed destroyed:
-                float size = destroyed.Size * SimConvert.TileSize / 2f;
-                var center = SimConvert.ToWorld(destroyed.Position);
+            case BuildingDestroyed or BuildingDemolished:
+                // A demolished building comes down the same way, only on its owner's orders.
+                var (simPosition, footprint) = e switch
+                {
+                    BuildingDestroyed d => (d.Position, d.Size),
+                    BuildingDemolished m => (m.Position, m.Size),
+                    _ => default,
+                };
+                float size = footprint * SimConvert.TileSize / 2f;
+                var center = SimConvert.ToWorld(simPosition);
                 if (Ground)
                     Add(Kind.Rubble, center, 30f, size, RubbleColor);
                 else

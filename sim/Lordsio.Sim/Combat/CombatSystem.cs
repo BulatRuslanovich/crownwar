@@ -71,7 +71,9 @@ internal sealed class CombatSystem
         // Re-scan even while hitting a building: an enemy soldier showing up takes priority.
         bool scan = (tick + unit.Id) % ScanIntervalTicks == 0;
         if (scan && unit.Order != UnitOrder.AttackUnit && unit.Target is null or Building)
-            unit.Target = FindEnemyUnit(unit, units) ?? unit.Target ?? FindEnemyBuilding(unit, buildings);
+            unit.Target = unit.Type.IsSiege
+                ? unit.Target ?? FindEnemyBuilding(unit, buildings) // a ram only ever goes for buildings
+                : FindEnemyUnit(unit, units) ?? unit.Target ?? FindEnemyBuilding(unit, buildings);
 
         if (unit.Target is { } target)
         {
@@ -246,7 +248,7 @@ internal sealed class CombatSystem
         }
         else
         {
-            ApplyDamage(target, attacker.Type.Damage, ranged: false, attacker.FactionId);
+            ApplyDamage(target, attacker.Type.DamageAgainst(target), ranged: false, attacker.FactionId);
             _emit(new AttackLanded(attacker.FactionId, attacker.Id, target.Id, target.FactionId, target.Position, Ranged: false));
         }
     }

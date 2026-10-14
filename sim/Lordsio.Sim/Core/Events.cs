@@ -34,6 +34,15 @@ public enum UpgradeError
     NotEnoughGold,
 }
 
+public enum DemolishError
+{
+    None,
+    UnknownBuilding,
+    NotOwner,
+    /// <summary>The castle cannot be pulled down.</summary>
+    Capital,
+}
+
 public enum BuildError
 {
     None,
@@ -66,6 +75,15 @@ public sealed record BuildingUpgradeStarted(int FactionId, int BuildingId) : Sim
 public sealed record BuildingUpgraded(int FactionId, int BuildingId, int Tier) : SimEvent(FactionId);
 
 public sealed record UpgradeRejected(int FactionId, int BuildingId, UpgradeError Reason) : SimEvent(FactionId);
+
+/// <summary>The owner pulled a building down and got <paramref name="Refund"/> gold back (part of its cost, plus queued recruits).</summary>
+public sealed record BuildingDemolished(int FactionId, int BuildingId, string BuildingTypeId, int Refund, Vector2 Position, int Size)
+    : SimEvent(FactionId);
+
+public sealed record DemolishRejected(int FactionId, int BuildingId, DemolishError Reason) : SimEvent(FactionId);
+
+/// <summary><paramref name="FactionId"/> destroyed a building of <paramref name="VictimFactionId"/> and took <paramref name="Amount"/> gold from it.</summary>
+public sealed record GoldLooted(int FactionId, int VictimFactionId, int Amount, Vector2 Position) : SimEvent(FactionId);
 
 /// <summary><see cref="SimEvent.FactionId"/> is the former owner.</summary>
 public sealed record BuildingDestroyed(int FactionId, int BuildingId, string BuildingTypeId, int KillerFactionId, Vector2 Position, int Size)

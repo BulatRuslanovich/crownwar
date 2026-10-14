@@ -147,8 +147,16 @@ public partial class MatchController : Node2D
     /// <summary>Fraction of the way from the previous tick to the next one, for smooth rendering.</summary>
     public float InterpolationAlpha => (float)(_accumulator / Simulation.TickDuration);
 
+    /// <summary>The world dims to this at night (the interface, on its own layers, stays as it is).</summary>
+    private static readonly Color NightTint = new(0.55f, 0.6f, 0.85f);
+    /// <summary>How quickly dusk and dawn shade the world (per second).</summary>
+    private const float DuskSpeed = 1.5f;
+    private CanvasModulate _night = null!;
+
     public override void _Ready()
     {
+        _night = new CanvasModulate { Name = "Night", Color = Colors.White };
+        AddChild(_night);
         var rules = GameRules.Parse(ReadText(RulesPath));
         ActualSeed = Config.Seed ?? (int)(GD.Randi() & int.MaxValue);
         // Every match is on a new map; the seed (the "map number" in the menu) reproduces it exactly,
@@ -312,6 +320,7 @@ public partial class MatchController : Node2D
             ProcessLocal(delta);
 
         UpdateFog();
+        _night.Color = _night.Color.Lerp(Sim.IsNight ? NightTint : Colors.White, 1f - MathF.Exp(-DuskSpeed * (float)delta));
         _battleHeat *= MathF.Pow(0.5f, (float)delta / BattleHeatHalfLife);
 
         if (_replayedThisFrame)
@@ -392,6 +401,7 @@ public partial class MatchController : Node2D
         ProjectileFired shot => Fog.IsVisible(shot.Position),
         UnitDied died => IsFriendly(died.FactionId) || Fog.IsVisible(died.Position),
         BuildingDestroyed destroyed => IsFriendly(destroyed.FactionId) || Fog.IsVisible(destroyed.Position),
+        BuildingDemolished demolished => IsFriendly(demolished.FactionId) || Fog.IsVisible(demolished.Position),
         BuildingCompleted completed => IsFriendly(completed.FactionId),
         _ => true,
     };

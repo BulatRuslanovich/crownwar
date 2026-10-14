@@ -375,17 +375,18 @@ public static class ArtGenerator
     /// </summary>
     private static PixelCanvas Units()
     {
-        var c = new PixelCanvas(ArtLayout.UnitCellWidth * ArtLayout.UnitFrames, ArtLayout.UnitCellHeight * 3);
+        var c = new PixelCanvas(ArtLayout.UnitCellWidth * ArtLayout.UnitFrames, ArtLayout.UnitCellHeight * ArtLayout.UnitRows);
         for (int frame = 0; frame < ArtLayout.UnitFrames; frame++)
         {
-            for (int row = 0; row < 3; row++)
+            for (int row = 0; row < ArtLayout.UnitRows; row++)
             {
                 c.Origin = new Vector2I(frame * ArtLayout.UnitCellWidth, row * ArtLayout.UnitCellHeight);
                 switch (row)
                 {
                     case 0: Infantry(c, frame); break;
                     case 1: Archer(c, frame); break;
-                    default: Heavy(c, frame); break;
+                    case 2: Heavy(c, frame); break;
+                    default: Ram(c, frame); break;
                 }
                 c.Outline(Outline, new Rect2I(c.Origin, new Vector2I(ArtLayout.UnitCellWidth, ArtLayout.UnitCellHeight)));
             }
@@ -466,6 +467,36 @@ public static class ArtGenerator
             c.Rect(11, 7, 1, 7, String);
         }
         c.Rect(11, 11, 1, 1, Skin);
+    }
+
+    /// <summary>
+    /// A covered battering ram on two wheels: the roof is in faction colours, the wheels turn while it rolls,
+    /// and on the attack frame the iron-headed log is thrust out of the front.
+    /// </summary>
+    private static void Ram(PixelCanvas c, int frame)
+    {
+        // Roof of hides over a timber frame.
+        for (int row = 0; row < 5; row++)
+        {
+            int inset = 4 - row;
+            for (int x = 1 + inset; x < 13 - inset; x++)
+                c.Team(x, 6 + row, row == 4 ? 0.6f : x < 7 ? 0.95f : 0.75f);
+        }
+        c.Rect(1, 11, 12, 4, Wood);
+        for (int x = 2; x < 13; x += 3)
+            c.Rect(x, 11, 1, 4, WoodDark);
+        // The log runs through the frame and out of the front; its iron head strikes on the attack frame.
+        int thrust = frame == 3 ? 2 : 0;
+        c.Rect(6 + thrust, 12, 7, 2, Bark);
+        c.Rect(13 + thrust, 11, 1, 4, SteelDark);
+        // Wheels whose spoke turns as it rolls.
+        foreach (int wx in new[] { 4, 11 })
+        {
+            c.Disc(wx, 16, 2.4f, WoodDark);
+            c.Px(wx, 16, Steel);
+            var spoke = (frame % 2 == 0) ? new Vector2I(wx, 14) : new Vector2I(wx + 2, 16);
+            c.Px(spoke.X, spoke.Y, WoodLight);
+        }
     }
 
     private static void Heavy(PixelCanvas c, int frame)
@@ -852,6 +883,7 @@ public static class ArtLayout
     public const int UnitCellWidth = 16;
     public const int UnitCellHeight = 20;
     public const int UnitFrames = 4;
+    public const int UnitRows = 4;
     public const int FrameIdle = 0, FrameWalk1 = 1, FrameWalk2 = 2, FrameAttack = 3;
     /// <summary>Feet position inside a unit cell.</summary>
     public static readonly Vector2I UnitFeet = new(8, 19);
@@ -860,6 +892,7 @@ public static class ArtLayout
     {
         "archer" => 1,
         "heavy" => 2,
+        "ram" => 3,
         _ => 0,
     };
 }

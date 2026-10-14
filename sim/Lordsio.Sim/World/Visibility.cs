@@ -69,7 +69,7 @@ public sealed class Visibility
         foreach (var unit in sim.Units)
         {
             if (unit.IsAlive && TeamOf(sim, unit.FactionId) == team)
-                Stamp(unit.Position, unit.Type.SightRange);
+                Stamp(unit.Position, sim.SightOf(unit));
         }
         foreach (var building in sim.Buildings)
         {

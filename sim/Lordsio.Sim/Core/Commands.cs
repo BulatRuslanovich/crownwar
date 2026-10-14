@@ -30,5 +30,8 @@ public sealed record RecruitCommand(int FactionId, int BuildingId, string UnitTy
 /// <summary>Pay for the next level of one of the faction's buildings (an archer tower or a mine) and start upgrading it.</summary>
 public sealed record UpgradeCommand(int FactionId, int BuildingId) : Command(FactionId);
 
+/// <summary>Pull down one of the faction's own buildings (not the castle) for part of what it cost.</summary>
+public sealed record DemolishCommand(int FactionId, int BuildingId) : Command(FactionId);
+
 /// <summary>Pay for a building and start constructing it with its top-left corner at <paramref name="Anchor"/>.</summary>
 public sealed record BuildCommand(int FactionId, string BuildingTypeId, Cell Anchor) : Command(FactionId);

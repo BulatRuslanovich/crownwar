@@ -191,6 +191,9 @@ public sealed partial class Simulation
             case UpgradeCommand upgrade:
                 ApplyUpgrade(upgrade);
                 break;
+            case DemolishCommand demolish:
+                ApplyDemolish(demolish);
+                break;
             default:
                 throw new NotSupportedException($"Unhandled command type {command.GetType().Name}.");
         }
@@ -226,12 +229,36 @@ public sealed partial class Simulation
             OrderGroupMove(group, component, move.Target, order);
     }
 
+    private int DayTicks => (int)MathF.Round(Rules.DaySeconds * TicksPerSecond);
+    private int NightTicks => (int)MathF.Round(Rules.NightSeconds * TicksPerSecond);
+
+    /// <summary>Night falls after every day; at night units see less far (the fog of war closes in).</summary>
+    public bool IsNight => NightTicks > 0 && Tick % (DayTicks + NightTicks) >= DayTicks;
+
+    /// <summary>Seconds until night falls or the day breaks; 0 if there is no night.</summary>
+    public float SecondsToDayNightChange
+    {
+        get
+        {
+            if (NightTicks <= 0)
+                return 0f;
+            int phase = Tick % (DayTicks + NightTicks);
+            int left = phase < DayTicks ? DayTicks - phase : DayTicks + NightTicks - phase;
+            return left / (float)TicksPerSecond;
+        }
+    }
+
+    /// <summary>How far a unit sees now: by night, a share of its sight range.</summary>
+    public float SightOf(Unit unit) => IsNight ? unit.Type.SightRange * Rules.NightSightFactor : unit.Type.SightRange;
+
     private void ApplyAttack(AttackCommand attack)
     {
         if (GetEntity(attack.TargetId) is not { IsAlive: true } target || !AreEnemies(attack.FactionId, target.FactionId))
             return;
         foreach (var unit in OwnLivingUnits(attack.FactionId, attack.UnitIds))
         {
+            if (unit.Type.IsSiege && target is not Building)
+                continue; // a ram cannot fight soldiers
             unit.StartAttack(target);
             unit.LastOrder = MoveOrderResult.Accepted;
         }
