@@ -126,8 +126,10 @@ public partial class MatchController : Node2D
     public MatchStats Stats { get; private set; } = null!;
     public int ActualSeed { get; private set; }
 
-    /// <summary>How the map looks (snow, sand or meadow), from its seed: the same for every player.</summary>
-    public Biome Biome => Biomes.ForSeed(ActualSeed);
+    /// <summary>The biome of every cell (meadow, snow, sand), row by row: from the map's seed, the same for every player.</summary>
+    public System.Collections.Generic.IReadOnlyList<Biome>? MapBiomes { get; private set; }
+
+    public Biome BiomeAt(Cell cell) => MapBiomes?[cell.Y * Sim.Map.Width + cell.X] ?? Biome.Meadow;
     public IReadOnlyList<BotBrain> Bots => _bots;
     public Selection Selection { get; } = new();
     public CameraController Camera { get; private set; } = null!;
@@ -168,6 +170,7 @@ public partial class MatchController : Node2D
         // Every match is on a new map; the seed (the "map number" in the menu) reproduces it exactly,
         // which is also how network players all get the same map.
         var map = MapGenerator.Generate(ActualSeed);
+        MapBiomes = map.Biomes;
         LocalFactionId = Config.LocalFactionId;
         Sim = new Simulation(map, rules, new MatchSetup(Config.Slots.Count, ActualSeed, Teams: Config.Teams));
         Stats = new MatchStats(LocalFactionId);
@@ -185,7 +188,7 @@ public partial class MatchController : Node2D
         Camera.SetBounds(new Rect2(Vector2.Zero, worldSize).Grow(SimConvert.TileSize * 2));
         Camera.CenterOn(StartingFocus() ?? worldSize / 2);
 
-        GetNode<MapView>("MapView").Build(Sim.Map, Biome);
+        GetNode<MapView>("MapView").Build(Sim.Map, MapBiomes);
         GetNode<DepositsView>("DepositsView").Initialize(this);
         GetNode<BuildingsView>("Actors/BuildingsView").Initialize(this);
         _unitsView = GetNode<UnitsView>("Actors/UnitsView");

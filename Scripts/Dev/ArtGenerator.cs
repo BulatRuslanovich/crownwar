@@ -21,6 +21,9 @@ public static class ArtGenerator
     private static readonly Color LeafDark = new("21501f");
     private static readonly Color TreeOutline = new("163a15");
     private static readonly Color Bark = new("5b3a1f");
+    private static readonly Color BarkDark = new("432a15");
+    private static readonly Color ForestShadow = new("426f2c");
+    private static readonly Color SnowShade = new("c9d3dc");
     private static readonly Color Dirt = new("a8864f");
     private static readonly Color DirtDark = new("8d6d3c");
     private static readonly Color DirtLight = new("bf9d64");
@@ -98,6 +101,7 @@ public static class ArtGenerator
         (Grass, new Color("e3eaee")), (GrassDark, new Color("cdd8df")), (GrassLight, new Color("f4f8fa")),
         (Leaf, new Color("1f4a3a")), (LeafLight, new Color("2c5e48")), (LeafHighlight, new Color("e8f0f2")),
         (LeafDark, new Color("163a2c")), (TreeOutline, new Color("10291f")), (Bark, new Color("4a3424")),
+        (ForestShadow, new Color("aebccb")), (BarkDark, new Color("33231a")),
         (Water, new Color("4a7aa5")), (WaterLight, new Color("9cc2de")), (WaterDark, new Color("3a6488")),
         (Sand, new Color("c9d6de")), (SandDark, new Color("aab8c2")), (Foam, new Color("ffffff")),
         (Rock, new Color("8a8c90")), (RockLight, new Color("e4eaee")), (RockDark, new Color("55585c")),
@@ -110,6 +114,7 @@ public static class ArtGenerator
         (Grass, new Color("d9b77a")), (GrassDark, new Color("c6a165")), (GrassLight, new Color("e8cb92")),
         (Leaf, new Color("4f7a32")), (LeafLight, new Color("6a9440")), (LeafHighlight, new Color("8db35a")),
         (LeafDark, new Color("3a5c24")), (TreeOutline, new Color("2a4219")), (Bark, new Color("7a5430")),
+        (ForestShadow, new Color("b8955c")), (SnowShade, new Color("cfae7e")),
         (Water, new Color("2f8fa8")), (WaterLight, new Color("6cc4d2")), (WaterDark, new Color("247488")),
         (Sand, new Color("f0dca0")), (SandDark, new Color("d6bd7e")), (Foam, new Color("e8fbff")),
         (Rock, new Color("a5683f")), (RockLight, new Color("c98a5a")), (RockDark, new Color("7a4a2c")),
@@ -264,11 +269,13 @@ public static class ArtGenerator
     /// <summary>
     /// 16×16 tiles, 16 columns. Row 0 grass, 1 forest, 2 water, 3 mountain (4 variants each);
     /// row 4 roads and row 5 shore overlays, both indexed by a 4-bit neighbour mask N=1, E=2, S=4, W=8;
-    /// row 6: bridge running east-west, bridge running north-south.
+    /// row 6: bridge running east-west, bridge running north-south; rows 7–10 forest and 11–14 mountain ranges, by
+    /// neighbour mask (column) and by the cell's position modulo 2 in each direction (row), so woods and ranges are
+    /// drawn as one canopy, one massif, whose pattern repeats only every two tiles.
     /// </summary>
     private static PixelCanvas Terrain()
     {
-        var c = new PixelCanvas(ArtLayout.Tile * 16, ArtLayout.Tile * 7);
+        var c = new PixelCanvas(ArtLayout.Tile * 16, ArtLayout.Tile * 15);
         for (int v = 0; v < ArtLayout.TerrainVariants; v++)
         {
             Cell(c, v, 0); GrassTile(c, v);
@@ -283,6 +290,14 @@ public static class ArtGenerator
         }
         Cell(c, 0, 6); WaterTile(c, 1); BridgeTile(c, horizontal: true);
         Cell(c, 1, 6); WaterTile(c, 2); BridgeTile(c, horizontal: false);
+        for (int parity = 0; parity < 4; parity++)
+        {
+            for (int mask = 0; mask < 16; mask++)
+            {
+                Cell(c, mask, ArtLayout.ForestRangeRow + parity); ForestRangeTile(c, mask, parity);
+                Cell(c, mask, ArtLayout.MountainRangeRow + parity); MountainRangeTile(c, mask, parity);
+            }
+        }
         return c;
 
         static void Cell(PixelCanvas canvas, int col, int row) =>
@@ -336,6 +351,195 @@ public static class ArtGenerator
         c.Px(cx - 2, cy - 3, LeafHighlight);
         c.Px(cx - 3, cy - 1, LeafHighlight);
         c.Outline(TreeOutline, new Rect2I(c.Origin, new Vector2I(16, 16)));
+    }
+
+    // ------------------------------------------------------------------ woods and ranges
+
+    /// <summary>
+    /// The neighbourhood of a forest or mountain tile: which of the 3×3 tiles around it (−1..1) are of the same kind
+    /// (its own, the four by the mask, a diagonal one when both tiles beside it are), and where the pattern's lattice
+    /// lies — lattice points every 8 px, jittered by their place in a 2×2-tile period, so both tiles that draw a
+    /// crown or a peak across their border draw it the same.
+    /// </summary>
+    private readonly struct Range
+    {
+        private readonly int _mask, _px, _py;
+
+        public Range(int mask, int parity)
+        {
+            _mask = mask;
+            _px = parity % 2;
+            _py = parity / 2;
+        }
+
+        public bool Present(int tx, int ty) => (tx, ty) switch
+        {
+            (0, 0) => true,
+            (0, -1) => (_mask & 1) != 0,
+            (1, 0) => (_mask & 2) != 0,
+            (0, 1) => (_mask & 4) != 0,
+            (-1, 0) => (_mask & 8) != 0,
+            _ when tx is < -1 or > 1 || ty is < -1 or > 1 => true, // beyond what this tile knows: assume more of it
+            _ => Present(tx, 0) && Present(0, ty),
+        };
+
+        /// <summary>
+        /// Lattice points owned by the present tiles, every <paramref name="spacing"/> px (8: four a tile, 16: one, with
+        /// every other row of tiles shifted half a peak sideways): (x, y) in this tile's pixels, and a hash for their look.
+        /// </summary>
+        public System.Collections.Generic.IEnumerable<(float X, float Y, int Hash)> Points(int spacing)
+        {
+            int perTile = 16 / spacing;
+            for (int ty = -1; ty <= 1; ty++)
+                for (int tx = -1; tx <= 1; tx++)
+                {
+                    if (!Present(tx, ty))
+                        continue;
+                    bool shifted = perTile == 1 && ((_py + ty) % 2 + 2) % 2 == 1;
+                    for (int j = 0; j < perTile; j++)
+                        for (int i = 0; i < perTile; i++)
+                        {
+                            int gx = (((_px + tx) * perTile + i) % 4 + 4) % 4, gy = (((_py + ty) * perTile + j) % 4 + 4) % 4;
+                            int h = Hash(gx, gy, 61 + spacing);
+                            float x = tx * 16 + spacing / 2 + spacing * i + h % 3 - 1 + (shifted ? 4 : -2);
+                            float y = ty * 16 + spacing / 2 + spacing * j + h / 10 % 3 - 1;
+                            yield return (x, y, h);
+                        }
+                }
+        }
+
+        /// <summary>How far a shape centred at (x, y) may reach before it would spill onto a tile of another kind.</summary>
+        public (float Left, float Right, float Up, float Down) Room(float x, float y)
+        {
+            int tx = (int)Mathf.Floor(x / 16f), ty = (int)Mathf.Floor(y / 16f);
+            float left = Present(tx - 1, ty) ? 99f : x - tx * 16;
+            float right = Present(tx + 1, ty) ? 99f : (tx + 1) * 16 - 1 - x;
+            float up = Present(tx, ty - 1) ? 99f : y - ty * 16;
+            float down = Present(tx, ty + 1) ? 99f : (ty + 1) * 16 - 1 - y;
+            return (left, right, up, down);
+        }
+    }
+
+    private static void Plot(PixelCanvas c, int x, int y, Color color)
+    {
+        if (x >= 0 && y >= 0 && x < 16 && y < 16)
+            c.Px(x, y, color, solid: false);
+    }
+
+    /// <summary>
+    /// Woods as one canopy: round crowns on the lattice, drawn from the back row to the front so each overlaps the one
+    /// behind, lit from the top-left, with a dark rim and their shadow on the ground; along the open southern edge the
+    /// trunks show. Crowns near an open edge are smaller, so the wood ends in a rounded fringe, not a cut.
+    /// </summary>
+    private static void ForestRangeTile(PixelCanvas c, int mask, int parity)
+    {
+        var range = new Range(mask, parity);
+        GrassTile(c, 30 + parity);
+        var crowns = new System.Collections.Generic.List<(float X, float Y, float R, int Hash)>();
+        foreach (var (x, y, h) in range.Points(8))
+        {
+            var room = range.Room(x, y);
+            float r = Mathf.Min(4.4f + h % 4 * 0.45f, Mathf.Min(Mathf.Min(room.Left, room.Right), Mathf.Min(room.Up, room.Down - 2f)) + 0.6f);
+            if (r >= 2.2f)
+                crowns.Add((x, y, r, h));
+        }
+        crowns.Sort((a, b) => a.Y.CompareTo(b.Y));
+
+        bool InCrown(int px, int py, float dx, float dy) =>
+            crowns.Exists(k => (px + 0.5f - k.X - dx) * (px + 0.5f - k.X - dx) + (py + 0.5f - k.Y - dy) * (py + 0.5f - k.Y - dy) <= k.R * k.R);
+        // Shadows on the ground, a little below and to the right of the canopy.
+        for (int y = 0; y < 16; y++)
+            for (int x = 0; x < 16; x++)
+                if (!InCrown(x, y, 0f, 0f) && InCrown(x, y, 1f, 2.5f))
+                    Plot(c, x, y, ForestShadow);
+        // Trunks under the crowns (only those at the front edge stay visible).
+        foreach (var k in crowns)
+        {
+            for (int ty = 0; ty < 3; ty++)
+            {
+                Plot(c, (int)k.X - 1, (int)(k.Y + k.R) + ty - 1, Bark);
+                Plot(c, (int)k.X, (int)(k.Y + k.R) + ty - 1, BarkDark);
+            }
+        }
+        foreach (var k in crowns)
+        {
+            int r = (int)Mathf.Ceil(k.R);
+            for (int dy = -r; dy <= r; dy++)
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    float fx = (int)k.X + dx + 0.5f - k.X, fy = (int)k.Y + dy + 0.5f - k.Y;
+                    float d2 = fx * fx + fy * fy;
+                    if (d2 > k.R * k.R)
+                        continue;
+                    float light = fx + fy;
+                    var color = d2 > (k.R - 1f) * (k.R - 1f) && light > -k.R * 0.6f ? TreeOutline
+                        : light < -k.R * 0.75f ? LeafLight
+                        : light > k.R * 0.55f ? LeafDark
+                        : Hash((int)k.X + dx + 40, (int)k.Y + dy + 40, k.Hash % 7) < 90 ? LeafDark
+                        : Leaf;
+                    Plot(c, (int)k.X + dx, (int)k.Y + dy, color);
+                }
+            Plot(c, (int)(k.X - k.R * 0.4f), (int)(k.Y - k.R * 0.45f), LeafHighlight);
+            Plot(c, (int)(k.X - k.R * 0.15f), (int)(k.Y - k.R * 0.6f), LeafHighlight);
+        }
+    }
+
+    /// <summary>
+    /// A mountain range: one big peak a tile, every other row shifted half a peak so the summits stagger into jagged
+    /// ridges, drawn from the back row to the front: a lit western face, a shaded eastern one, a crisp dark rim, a
+    /// snowcap on the tall ones, all on a rocky base. Near an open edge the peaks are lower and narrower — foothills —
+    /// so the range does not end in a cut.
+    /// </summary>
+    private static void MountainRangeTile(PixelCanvas c, int mask, int parity)
+    {
+        var range = new Range(mask, parity);
+        GrassTile(c, 40 + parity);
+        // Rocky ground under the range, ending raggedly a pixel or two short of open sides.
+        for (int y = 0; y < 16; y++)
+            for (int x = 0; x < 16; x++)
+            {
+                int ragged = 1 + Hash(x, y, 77 + parity) % 2;
+                bool open = (mask & 1) == 0 && y < ragged || (mask & 4) == 0 && y > 15 - ragged
+                            || (mask & 8) == 0 && x < ragged || (mask & 2) == 0 && x > 15 - ragged;
+                if (!open)
+                    Plot(c, x, y, Hash(x, y, 91) < 60 ? Rock : RockDark);
+            }
+
+        var peaks = new System.Collections.Generic.List<(float X, float Apex, float Base, float Half, int Hash)>();
+        foreach (var (x, y, h) in range.Points(16))
+        {
+            var room = range.Room(x, y);
+            float half = Mathf.Min(9.5f - h % 3, Mathf.Min(room.Left, room.Right) + 1f);
+            float apex = Mathf.Max(y - 11f - h % 4, y - room.Up + 1f);
+            float baseY = Mathf.Min(y + 7f, y + room.Down);
+            if (half >= 3f && baseY - apex >= 5f)
+                peaks.Add((x, apex, baseY, half, h));
+        }
+        peaks.Sort((a, b) => a.Base.CompareTo(b.Base));
+
+        foreach (var p in peaks)
+        {
+            float height = p.Base - p.Apex;
+            float snowLine = height >= 14f ? p.Apex + height * 0.28f : float.MinValue;
+            for (int y = (int)p.Apex; y <= (int)p.Base; y++)
+            {
+                float w = p.Half * (y - p.Apex) / height;
+                for (int x = (int)Mathf.Floor(p.X - w - 1f); x <= (int)Mathf.Ceil(p.X + w + 1f); x++)
+                {
+                    float fx = x + 0.5f - p.X;
+                    if (Mathf.Abs(fx) > w + 0.5f)
+                        continue;
+                    bool rim = Mathf.Abs(fx) > w - 0.7f;
+                    // The snow line wavers a little, so caps are not ruled straight.
+                    bool snow = y < snowLine + (Hash(x, 0, p.Hash % 13) % 3) - 1;
+                    var color = rim ? Outline
+                        : snow ? (fx < 0.5f ? Snow : SnowShade)
+                        : fx < 0.5f ? (Hash(x, y, 33) < 50 ? Rock : RockLight)
+                        : Hash(x, y, 34) < 60 ? RockDark : Rock;
+                    Plot(c, x, y, color);
+                }
+            }
+        }
     }
 
     private static void WaterTile(PixelCanvas c, int v)
@@ -944,6 +1148,8 @@ public static class ArtLayout
     public const int Tile = 16;
     public const int TerrainVariants = 4;
     public const int GrassRow = 0, ForestRow = 1, WaterRow = 2, MountainRow = 3, RoadRow = 4, ShoreRow = 5, BridgeRow = 6;
+    /// <summary>First of four rows each (one per cell position modulo 2 in x and y) of forest and mountain range tiles, by neighbour mask.</summary>
+    public const int ForestRangeRow = 7, MountainRangeRow = 11;
 
     public const int UnitCellWidth = 16;
     public const int UnitCellHeight = 20;

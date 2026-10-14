@@ -6,19 +6,19 @@ using Lordsio.Sim.World;
 namespace Lordsio.World;
 
 /// <summary>
-/// Draws the terrain of a <see cref="TileGrid"/> from the biome's tileset (Assets/Tilesets/terrain*.png): random
-/// variants for open ground, roads shaped by their road neighbours, bridges over water, and a second layer with
-/// sandy shores where water meets land.
+/// Draws the terrain of a <see cref="TileGrid"/>, each cell from its biome's tileset (Assets/Tilesets/terrain*.png,
+/// one atlas source per biome, so meadow, snow and sand mix on one map): random variants for open ground, roads
+/// shaped by their road neighbours, bridges over water, and a second layer with shores where water meets land.
 /// </summary>
 public partial class MapView : TileMapLayer
 {
-    private const int AtlasSourceId = 0;
 
     private TileMapLayer _shore = null!;
 
-    public void Build(TileGrid map, Biome biome = Biome.Meadow)
+    /// <param name="biomes">The biome of every cell, row by row; null for an all-meadow map.</param>
+    public void Build(TileGrid map, System.Collections.Generic.IReadOnlyList<Biome>? biomes = null)
     {
-        TileSet = CreateTileSet(Biomes.TilesetPath(biome));
+        TileSet = CreateTileSet();
         _shore = new TileMapLayer { Name = "Shore", TileSet = TileSet };
         AddChild(_shore);
 
@@ -29,18 +29,28 @@ public partial class MapView : TileMapLayer
             {
                 var cell = new Cell(x, y);
                 var coords = new Vector2I(x, y);
-                SetCell(coords, AtlasSourceId, AtlasFor(map, cell));
+                int source = (int)(biomes?[y * map.Width + x] ?? Biome.Meadow); // the atlas source of the cell's biome
+                SetCell(coords, source, AtlasFor(map, cell));
                 if (map.GetTerrain(cell) == Terrain.Water)
                 {
                     int land = NeighbourMask(map, cell, IsLand);
                     if (land != 0)
-                        _shore.SetCell(coords, AtlasSourceId, new Vector2I(land, ArtLayout.ShoreRow));
+                        _shore.SetCell(coords, source, new Vector2I(land, ArtLayout.ShoreRow));
                 }
             }
         }
     }
 
-    private static TileSet CreateTileSet(string texturePath)
+    /// <summary>One atlas source per biome, its id the biome's number.</summary>
+    private static TileSet CreateTileSet()
+    {
+        var tileSet = new TileSet { TileSize = new Vector2I(ArtLayout.Tile, ArtLayout.Tile) };
+        foreach (var biome in System.Enum.GetValues<Biome>())
+            tileSet.AddSource(CreateSource(Biomes.TilesetPath(biome)), (int)biome);
+        return tileSet;
+    }
+
+    private static TileSetAtlasSource CreateSource(string texturePath)
     {
         var texture = GD.Load<Texture2D>(texturePath);
         var source = new TileSetAtlasSource
@@ -53,9 +63,7 @@ public partial class MapView : TileMapLayer
             for (int col = 0; col < columns; col++)
                 source.CreateTile(new Vector2I(col, row));
 
-        var tileSet = new TileSet { TileSize = new Vector2I(ArtLayout.Tile, ArtLayout.Tile) };
-        tileSet.AddSource(source, AtlasSourceId);
-        return tileSet;
+        return source;
     }
 
     private static Vector2I AtlasFor(TileGrid map, Cell cell)
@@ -64,9 +72,15 @@ public partial class MapView : TileMapLayer
         int variant = (int)((uint)(cell.X * 73856093 ^ cell.Y * 19349663) % ArtLayout.TerrainVariants);
         switch (map.GetTerrain(cell))
         {
-            case Terrain.Forest: return new Vector2I(variant, ArtLayout.ForestRow);
+            // Woods and ranges join their neighbours into one canopy, one massif; the row follows the cell's position
+            // modulo 2, so the pattern repeats only every two tiles.
+            case Terrain.Forest:
+                return new Vector2I(NeighbourMask(map, cell, (m, x, y) => !m.InBounds(x, y) || m.GetTerrain(new Cell(x, y)) == Terrain.Forest),
+                    ArtLayout.ForestRangeRow + cell.X % 2 + cell.Y % 2 * 2);
             case Terrain.Water: return new Vector2I(variant, ArtLayout.WaterRow);
-            case Terrain.Mountain: return new Vector2I(variant, ArtLayout.MountainRow);
+            case Terrain.Mountain:
+                return new Vector2I(NeighbourMask(map, cell, (m, x, y) => !m.InBounds(x, y) || m.GetTerrain(new Cell(x, y)) == Terrain.Mountain),
+                    ArtLayout.MountainRangeRow + cell.X % 2 + cell.Y % 2 * 2);
             case Terrain.Road:
                 if (IsBridge(map, cell))
                     return new Vector2I(IsWater(map, cell.X, cell.Y - 1) || IsWater(map, cell.X, cell.Y + 1) ? 0 : 1, ArtLayout.BridgeRow);

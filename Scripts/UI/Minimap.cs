@@ -43,7 +43,7 @@ public partial class Minimap : Control
         var image = Image.CreateEmpty(map.Width, map.Height, false, Image.Format.Rgba8);
         for (int y = 0; y < map.Height; y++)
             for (int x = 0; x < map.Width; x++)
-                image.SetPixel(x, y, Lordsio.World.Biomes.MinimapColor(match.Biome, map.GetTerrain(new Cell(x, y))));
+                image.SetPixel(x, y, Lordsio.World.Biomes.MinimapColor(match.BiomeAt(new Cell(x, y)), map.GetTerrain(new Cell(x, y))));
         _terrain = ImageTexture.CreateFromImage(image);
         _fogImage = Image.CreateEmpty(map.Width, map.Height, false, Image.Format.Rgba8);
         _fogPixels = new byte[map.Width * map.Height * 4];

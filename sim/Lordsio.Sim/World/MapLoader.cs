@@ -9,11 +9,16 @@ public sealed record UnitSpawn(string TypeId, int FactionId, Cell Cell, int Coun
 public sealed record DepositSpawn(Cell Anchor, int Yield);
 
 /// <param name="StartPositions">Top-left cells where capitals may be placed; factions are assigned to them at match start.</param>
+/// <param name="Biomes">The biome of every cell, row by row (generated maps); null means all meadow.</param>
 public sealed record MapDefinition(
     TileGrid Grid,
     IReadOnlyList<UnitSpawn> UnitSpawns,
     IReadOnlyList<Cell> StartPositions,
-    IReadOnlyList<DepositSpawn> Deposits);
+    IReadOnlyList<DepositSpawn> Deposits,
+    IReadOnlyList<Biome>? Biomes = null)
+{
+    public Biome BiomeAt(Cell cell) => Biomes?[cell.Y * Grid.Width + cell.X] ?? Biome.Meadow;
+}
 
 /// <summary>
 /// Parses the text map format:

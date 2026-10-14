@@ -18,6 +18,33 @@ public class MapGeneratorTests
     }
 
     [Test]
+    public void BiomesMixOnEveryKindOfMap()
+    {
+        int mixed = 0;
+        var seen = new HashSet<Biome>();
+        for (int seed = 1; seed <= 30; seed++)
+        {
+            var map = MapGenerator.Generate(seed);
+            var g = map.Grid;
+            Assert.That(map.Biomes, Has.Count.EqualTo(g.Width * g.Height));
+            var kinds = map.Biomes!.Distinct().ToList();
+            seen.UnionWith(kinds);
+            if (kinds.Count > 1)
+                mixed++;
+        }
+        Assert.That(seen, Is.EquivalentTo(new[] { Biome.Meadow, Biome.Winter, Biome.Desert }), "every biome turns up");
+        Assert.That(mixed, Is.GreaterThan(20), "most maps mix two or three biomes");
+    }
+
+    [Test]
+    public void GeneratedMapsAreLargerAndRichInGold()
+    {
+        var map = MapGenerator.Generate(5);
+        Assert.That((map.Grid.Width, map.Grid.Height), Is.EqualTo((192, 128)));
+        Assert.That(map.Deposits.Count, Is.GreaterThanOrEqualTo(16));
+    }
+
+    [Test]
     public void SameSeedSameMapOtherSeedOtherMap()
     {
         string first = Fingerprint(MapGenerator.Generate(7));
@@ -31,26 +58,29 @@ public class MapGeneratorTests
     [TestCase(1)]
     [TestCase(2)]
     [TestCase(3)]
-    public void MapIsMirroredBothWays(int seed)
+    public void MapsAreNotMirroredButEveryCastleHasAFairChance(int seed)
     {
         var map = MapGenerator.Generate(seed);
         var g = map.Grid;
-        for (int y = 0; y < g.Height; y++)
-        {
-            for (int x = 0; x < g.Width; x++)
-            {
-                var t = g.GetTerrain(new Cell(x, y));
-                Assert.That(g.GetTerrain(new Cell(g.Width - 1 - x, y)), Is.EqualTo(t), $"left-right at ({x}, {y})");
-                Assert.That(g.GetTerrain(new Cell(x, g.Height - 1 - y)), Is.EqualTo(t), $"top-bottom at ({x}, {y})");
-            }
-        }
 
-        // Every player has the same gold around them.
-        var perCorner = map.StartPositions.Select(s => map.Deposits
-            .Select(d => (Distance: MathF.Round(System.Numerics.Vector2.Distance(new(d.Anchor.X + 1, d.Anchor.Y + 1), new(s.X + 1.5f, s.Y + 1.5f)), 1), d.Yield))
-            .OrderBy(p => p.Distance).ThenBy(p => p.Yield).ToList()).ToList();
-        foreach (var corner in perCorner.Skip(1))
-            Assert.That(corner, Is.EqualTo(perCorner[0]));
+        // No symmetry: luck decides what lies around each castle.
+        int differ = 0;
+        for (int y = 0; y < g.Height; y++)
+            for (int x = 0; x < g.Width / 2; x++)
+                if (g.GetTerrain(new Cell(x, y)) != g.GetTerrain(new Cell(g.Width - 1 - x, y)))
+                    differ++;
+        Assert.That(differ, Is.GreaterThan(g.Width * g.Height / 8), "the halves differ");
+
+        // But no hopeless start: castles far apart, in their own corners, each with a deposit close by.
+        var starts = map.StartPositions;
+        for (int i = 0; i < starts.Count; i++)
+        {
+            for (int j = i + 1; j < starts.Count; j++)
+                Assert.That(System.Numerics.Vector2.Distance(new(starts[i].X, starts[i].Y), new(starts[j].X, starts[j].Y)), Is.GreaterThan(60f));
+            var s = starts[i];
+            float nearest = map.Deposits.Min(d => System.Numerics.Vector2.Distance(new(d.Anchor.X + 1, d.Anchor.Y + 1), new(s.X + 1.5f, s.Y + 1.5f)));
+            Assert.That(nearest, Is.LessThan(16f), $"start {s}: gold nearby");
+        }
     }
 
     [Test]

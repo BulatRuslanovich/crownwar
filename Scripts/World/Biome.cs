@@ -3,21 +3,9 @@ using Lordsio.Sim.World;
 
 namespace Lordsio.World;
 
-/// <summary>
-/// The look of a map: green meadows, a snowy winter or a desert with oases. Purely visual (the rules and the terrain
-/// are the same); it follows from the map's seed, so every player of a network match sees the same one.
-/// </summary>
-public enum Biome
-{
-    Meadow,
-    Winter,
-    Desert,
-}
-
+/// <summary>How each <see cref="Biome"/> looks: its terrain tileset and its colours on the minimap.</summary>
 public static class Biomes
 {
-    public static Biome ForSeed(int seed) => (Biome)(((seed % 3) + 3) % 3);
-
     /// <summary>The terrain tileset of a biome (the winter and desert ones are recoloured copies of the meadow's).</summary>
     public static string TilesetPath(Biome biome) => biome switch
     {
