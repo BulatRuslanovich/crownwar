@@ -17,6 +17,9 @@ public static class Biomes
     /// <summary>A terrain's colour on the minimap.</summary>
     public static Color MinimapColor(Biome biome, Terrain terrain) => (biome, terrain) switch
     {
+        // The same in every biome.
+        (_, Terrain.Water) => new Color("2f6db0"),
+        (_, Terrain.Bridge) => new Color("8a6239"),
         (Biome.Winter, Terrain.Forest) => new Color("2c5e48"),
         (Biome.Winter, Terrain.Mountain) => new Color("b9c0c6"),
         (Biome.Winter, Terrain.Road) => new Color("9c8f80"),
@@ -26,7 +29,6 @@ public static class Biomes
         (Biome.Desert, Terrain.Road) => new Color("b08850"),
         (Biome.Desert, _) => new Color("d9b77a"),
         (_, Terrain.Forest) => new Color("2e6a2c"),
-        (_, Terrain.Water) => new Color("2f6db0"),
         (_, Terrain.Mountain) => new Color("7a746c"),
         (_, Terrain.Road) => new Color("b39461"),
         _ => new Color("5a9a3c"),

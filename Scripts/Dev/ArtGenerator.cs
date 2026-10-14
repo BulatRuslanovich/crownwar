@@ -129,6 +129,8 @@ public static class ArtGenerator
         var image = (Image)source.Duplicate();
         for (int y = 0; y < image.GetHeight(); y++)
         {
+            if (y / ArtLayout.Tile == ArtLayout.BridgeRow)
+                continue; // bridges are timber in every biome (their wood is close enough to dirt to be taken for it)
             for (int x = 0; x < image.GetWidth(); x++)
             {
                 var c = image.GetPixel(x, y);
@@ -267,7 +269,7 @@ public static class ArtGenerator
     /// <summary>
     /// 16×16 tiles, 16 columns. Row 0 grass, 1 forest, 2 water, 3 mountain (4 variants each);
     /// row 4 roads and row 5 shore overlays, both indexed by a 4-bit neighbour mask N=1, E=2, S=4, W=8;
-    /// row 6: bridge running east-west, bridge running north-south; rows 7–10 forest and 11–26 mountain ranges, by
+    /// row 6: bridge decks over water (transparent around them) by the mask of the road or bridge cells they join; rows 7–10 forest and 11–26 mountain ranges, by
     /// neighbour mask (column) and by the cell's position modulo 2 (woods) or 4 (ranges) in each direction (row), so
     /// woods and ranges are drawn as one canopy, one massif, whose pattern repeats only every two or four tiles;
     /// rows 27–42: this biome's ground reaching into a neighbouring cell of another biome, by the 8-bit mask of the
@@ -288,8 +290,11 @@ public static class ArtGenerator
             Cell(c, mask, 4); GrassTile(c, mask + 20); RoadTile(c, mask);
             Cell(c, mask, 5); ShoreTile(c, mask);
         }
-        Cell(c, 0, 6); WaterTile(c, 1); BridgeTile(c, horizontal: true);
-        Cell(c, 1, 6); WaterTile(c, 2); BridgeTile(c, horizontal: false);
+        for (int mask = 0; mask < 16; mask++)
+        {
+            Cell(c, mask, ArtLayout.BridgeRow);
+            BridgeTile(c, mask);
+        }
         for (int mask = 0; mask < 16; mask++)
         {
             for (int parity = 0; parity < 4; parity++)
@@ -704,18 +709,51 @@ public static class ArtGenerator
         }
     }
 
-    /// <summary>Wooden deck over water: planks across the direction of travel, darker rails along it.</summary>
-    private static void BridgeTile(PixelCanvas c, bool horizontal)
+    /// <summary>
+    /// A wooden deck, like a road tile shaped by the 4-bit mask of the road or bridge cells it joins (N=1, E=2, S=4,
+    /// W=8): straight runs, corners, forks and ends. Planks lie across the way (at a corner, across the way in), rails
+    /// run along the open sides with a post at each corner, and the deck throws a shadow on the water below it. The
+    /// rest of the tile is transparent: the water and its shores are drawn underneath.
+    /// </summary>
+    private static void BridgeTile(PixelCanvas c, int mask)
     {
-        for (int a = 0; a < 16; a++)
-        {
-            for (int b = 3; b < 13; b++)
+        const int from = 3, to = 13; // deck 10 px wide through the centre
+        bool north = (mask & 1) != 0, east = (mask & 2) != 0, south = (mask & 4) != 0, west = (mask & 8) != 0;
+        var deck = new bool[16, 16];
+        for (int y = 0; y < 16; y++)
+            for (int x = 0; x < 16; x++)
             {
-                int x = horizontal ? a : b, y = horizontal ? b : a;
-                var color = b is 3 or 12 ? WoodDark : a % 4 == 3 ? WoodDark : (a + b) % 7 == 0 ? WoodLight : Wood;
+                bool across = y >= from && y < to, along = x >= from && x < to;
+                deck[x, y] = across && along
+                             || along && (north && y < from || south && y >= to)
+                             || across && (west && x < from || east && x >= to);
+            }
+        bool verticalCentre = (north || south) && !(east || west);
+        bool Inside(int x, int y) => x >= 0 && y >= 0 && x < 16 && y < 16 && deck[x, y];
+        // An open edge of the deck has no deck beyond it, unless it is the tile's border where the way goes on.
+        bool Open(int x, int y) => x < 0 || y < 0 || x > 15 || y > 15 ? false : !deck[x, y];
+
+        for (int y = 0; y < 16; y++)
+            for (int x = 0; x < 16; x++)
+            {
+                if (!deck[x, y])
+                {
+                    if (Inside(x, y - 1) || Inside(x - 1, y - 1))
+                        c.Px(x, y, WaterDark, solid: false); // the deck's shadow on the water
+                    continue;
+                }
+                bool rail = Open(x - 1, y) || Open(x + 1, y) || Open(x, y - 1) || Open(x, y + 1);
+                bool post = rail && (Open(x - 1, y) || Open(x + 1, y)) && (Open(x, y - 1) || Open(x, y + 1));
+                // Which way the planks run here: across a north–south way, along an east–west one.
+                bool vertical = y < from || y >= to ? true : x < from || x >= to ? false : verticalCentre;
+                int plank = vertical ? y : x;
+                var color = post ? Outline
+                    : rail ? WoodDark
+                    : plank % 4 == 3 ? WoodDark
+                    : Hash(x, y, 17 + mask) < 120 ? WoodLight
+                    : Wood;
                 c.Px(x, y, color, solid: false);
             }
-        }
     }
 
     /// <summary>Transparent tile with sand and foam along the sides where land is.</summary>

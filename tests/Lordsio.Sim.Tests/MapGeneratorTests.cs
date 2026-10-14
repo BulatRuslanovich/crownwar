@@ -131,7 +131,7 @@ public class MapGeneratorTests
         for (int y = 0; y < g.Height; y++)
             rows.Add(Enumerable.Range(0, g.Width).Select(x => g.GetTerrain(new Cell(x, y)) switch
             {
-                Terrain.Grass => '.', Terrain.Forest => 'f', Terrain.Road => '=', Terrain.Water => '~', _ => '^',
+                Terrain.Grass => '.', Terrain.Forest => 'f', Terrain.Road => '=', Terrain.Water => '~', Terrain.Bridge => '#', _ => '^',
             }).ToArray());
         foreach (var d in map.Deposits)
             for (int y = d.Anchor.Y; y < d.Anchor.Y + 2; y++)

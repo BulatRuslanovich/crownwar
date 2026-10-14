@@ -289,7 +289,7 @@ public static class MapGenerator
     {
         static float Cost(Terrain t) => t switch
         {
-            Terrain.Road => 0.4f,
+            Terrain.Road or Terrain.Bridge => 0.4f,
             Terrain.Grass => 1f,
             Terrain.Forest => 2.5f,
             Terrain.Water => 9f,
@@ -326,8 +326,9 @@ public static class MapGenerator
                 queue.Enqueue(next, nd);
             }
         }
+        // Across water the road is a bridge.
         for (int cell = goal; cell != -1; cell = previous[cell])
-            tiles[cell] = Terrain.Road;
+            tiles[cell] = tiles[cell] is Terrain.Water or Terrain.Bridge ? Terrain.Bridge : Terrain.Road;
     }
 
     // ---------------------------------------------------------------- gold

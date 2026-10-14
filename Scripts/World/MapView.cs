@@ -16,6 +16,8 @@ public partial class MapView : TileMapLayer
     private TileMapLayer _shore = null!;
     /// <summary>A second shore layer, for water bordering the land of two biomes.</summary>
     private TileMapLayer _shore2 = null!;
+    /// <summary>Bridge decks, over the water and its shores.</summary>
+    private TileMapLayer _bridges = null!;
     /// <summary>Fringes of neighbouring biomes over a cell's ground (two layers: a cell can border two other biomes).</summary>
     private TileMapLayer _edges = null!;
     private TileMapLayer _edges2 = null!;
@@ -32,6 +34,8 @@ public partial class MapView : TileMapLayer
         AddChild(_shore);
         _shore2 = new TileMapLayer { Name = "Shore2", TileSet = TileSet };
         AddChild(_shore2);
+        _bridges = new TileMapLayer { Name = "Bridges", TileSet = TileSet };
+        AddChild(_bridges);
 
         Clear();
         for (int y = 0; y < map.Height; y++)
@@ -44,7 +48,9 @@ public partial class MapView : TileMapLayer
                 SetCell(coords, source, AtlasFor(map, cell));
                 if (biomes != null && map.GetTerrain(cell) == Terrain.Grass)
                     AddBiomeEdges(map, biomes, cell, (Biome)source);
-                if (map.GetTerrain(cell) == Terrain.Water)
+                if (map.GetTerrain(cell) == Terrain.Bridge)
+                    _bridges.SetCell(coords, source, new Vector2I(NeighbourMask(map, cell, IsWay), ArtLayout.BridgeRow));
+                if (map.GetTerrain(cell) is Terrain.Water or Terrain.Bridge)
                 {
                     // Each side's shore in the colours of the land it lies against (white snow, sand, meadow sand),
                     // so a lake across a biome border changes its shore with the land, not with the water's own cell.
@@ -126,14 +132,14 @@ public partial class MapView : TileMapLayer
             case Terrain.Forest:
                 return new Vector2I(NeighbourMask(map, cell, (m, x, y) => !m.InBounds(x, y) || m.GetTerrain(new Cell(x, y)) == Terrain.Forest),
                     ArtLayout.ForestRangeRow + cell.X % 2 + cell.Y % 2 * 2);
-            case Terrain.Water: return new Vector2I(variant, ArtLayout.WaterRow);
+            case Terrain.Water:
+            case Terrain.Bridge: // the deck is a layer of its own, over the water
+                return new Vector2I(variant, ArtLayout.WaterRow);
             case Terrain.Mountain:
                 return new Vector2I(NeighbourMask(map, cell, (m, x, y) => !m.InBounds(x, y) || m.GetTerrain(new Cell(x, y)) == Terrain.Mountain),
                     ArtLayout.MountainRangeRow + cell.X % ArtLayout.MountainPeriod + cell.Y % ArtLayout.MountainPeriod * ArtLayout.MountainPeriod);
             case Terrain.Road:
-                if (IsBridge(map, cell))
-                    return new Vector2I(IsWater(map, cell.X, cell.Y - 1) || IsWater(map, cell.X, cell.Y + 1) ? 0 : 1, ArtLayout.BridgeRow);
-                return new Vector2I(NeighbourMask(map, cell, (m, x, y) => m.InBounds(x, y) && m.GetTerrain(new Cell(x, y)) == Terrain.Road), ArtLayout.RoadRow);
+                return new Vector2I(NeighbourMask(map, cell, IsWay), ArtLayout.RoadRow);
             default: return new Vector2I(variant, ArtLayout.GrassRow);
         }
     }
@@ -143,20 +149,15 @@ public partial class MapView : TileMapLayer
         (test(map, c.X, c.Y - 1) ? 1 : 0) | (test(map, c.X + 1, c.Y) ? 2 : 0)
         | (test(map, c.X, c.Y + 1) ? 4 : 0) | (test(map, c.X - 1, c.Y) ? 8 : 0);
 
-    private static bool IsWater(TileGrid map, int x, int y) =>
-        map.InBounds(x, y) && map.GetTerrain(new Cell(x, y)) == Terrain.Water;
-
-    /// <summary>A road tile with water on two opposite sides is a bridge.</summary>
-    private static bool IsBridge(TileGrid map, Cell c) =>
-        (IsWater(map, c.X, c.Y - 1) || IsWater(map, c.X, c.Y + 1)) && !IsWater(map, c.X - 1, c.Y) && !IsWater(map, c.X + 1, c.Y)
-        || (IsWater(map, c.X - 1, c.Y) || IsWater(map, c.X + 1, c.Y)) && !IsWater(map, c.X, c.Y - 1) && !IsWater(map, c.X, c.Y + 1);
+    /// <summary>A road or a bridge: roads and decks join up with either.</summary>
+    private static bool IsWay(TileGrid map, int x, int y) =>
+        map.InBounds(x, y) && map.GetTerrain(new Cell(x, y)) is Terrain.Road or Terrain.Bridge;
 
     private static bool IsLand(TileGrid map, int x, int y)
     {
         if (!map.InBounds(x, y))
             return false;
         var terrain = map.GetTerrain(new Cell(x, y));
-        return terrain is Terrain.Grass or Terrain.Forest
-               || (terrain == Terrain.Road && !IsBridge(map, new Cell(x, y)));
+        return terrain is Terrain.Grass or Terrain.Forest or Terrain.Road;
     }
 }
