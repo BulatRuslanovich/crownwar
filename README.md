@@ -1,4 +1,6 @@
-# Lordsio
+# Warcrown
+
+(Рабочее название проекта и имена кода — Lordsio: `Lordsio.Sim`, `lordsio.sln`; игроку видно только Warcrown.)
 
 2D-стратегия с захватом территории в духе Lords.io. Godot 4.7 .NET, C#.
 
@@ -203,12 +205,12 @@ Godot_v4.7.2-stable_mono_win64_console.exe --path .
 лежит в `export_presets.cfg` (включает `*.txt` и `*.json`):
 ```sh
 mkdir -p build/windows
-Godot_v4.7.2-stable_mono_win64_console.exe --headless --path . --export-release "Windows Desktop" build/windows/Lordsio.exe
+Godot_v4.7.2-stable_mono_win64_console.exe --headless --path . --export-release "Windows Desktop" build/windows/Warcrown.exe
 ```
-Получается `Lordsio.exe` + `Lordsio.pck` + папка `data_lordsio_windows_x86_64` со встроенным .NET (~180 МБ);
+Получается `Warcrown.exe` + `Warcrown.pck` + папка `data_lordsio_windows_x86_64` со встроенным .NET (~180 МБ);
 устанавливать .NET игроку не нужно. В релизной сборке dev-флаги отключены.
 Для друзей: положить рядом `docs/Как запустить.txt` и запаковать папку целиком, например
-`Compress-Archive -Path build/windows/* -DestinationPath build/Lordsio-0.13.0-windows.zip` (≈70 МБ).
+`Compress-Archive -Path build/windows/* -DestinationPath build/Warcrown-0.13.0-windows.zip` (≈70 МБ).
 Иконку exe Godot ставит сам при экспорте (из `Assets/UI/icon.ico`), rcedit не нужен.
 
 Аудит готовности к мультиплееру — [docs/multiplayer-audit.md](docs/multiplayer-audit.md).

@@ -41,7 +41,7 @@ theme_override_constants/separation = 12
 [node name="Title" type="Label" parent="Center/Panel/Rows"]
 theme_type_variation = &"HeaderLarge"
 layout_mode = 2
-text = "Lordsio"
+text = "Warcrown"
 horizontal_alignment = 1
 
 [node name="Subtitle" type="Label" parent="Center/Panel/Rows"]
