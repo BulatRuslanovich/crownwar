@@ -3,7 +3,7 @@
   "goldCap": 5000,
   "lootPercent": 30,
   "demolishRefundPercent": 30,
-  "dayNight": { "day": 240, "night": 75, "sightFactor": 0.5 },
+  "dayNight": { "day": 240, "night": 240, "sightFactor": 0.5 },
   "buildRadius": 5,
   "depositReserveSeconds": 240,
   "depositRegenSeconds": 90,
@@ -70,23 +70,23 @@
       "armyCap": 10, "unlocksUnits": true
     },
     {
-      "id": "tower", "name": "Archer Tower", "size": 2, "cost": 250, "buildTime": 30, "health": 2000, "rangedArmor": 0.8, "maxCount": 12,
+      "id": "tower", "name": "Archer Tower", "size": 2, "cost": 250, "buildTime": 30, "health": 2000, "rangedArmor": 0.8, "maxCount": 20,
       "attack": { "damage": 20, "range": 8, "cooldown": 1.0, "projectileSpeed": 15 },
       "tiers": [
-        { "cost": 250, "time": 25, "health": 4000, "damage": 40 },
-        { "cost": 300, "time": 35, "health": 7500, "damage": 64, "range": 9 }
+        { "cost": 250, "time": 25, "health": 2800, "damage": 28 },
+        { "cost": 400, "time": 35, "health": 3800, "damage": 36, "range": 9 }
       ]
     },
     {
-      "id": "catapult", "name": "Catapult", "size": 2, "cost": 300, "buildTime": 30, "health": 1800, "rangedArmor": 0.8, "maxCount": 10,
-      "attack": { "damage": 18, "range": 5, "cooldown": 2.5, "projectileSpeed": 8, "splash": 1.5 },
+      "id": "catapult", "name": "Catapult", "size": 2, "cost": 300, "buildTime": 30, "health": 1800, "rangedArmor": 0.8, "maxCount": 20,
+      "attack": { "damage": 12, "range": 5, "cooldown": 2.5, "projectileSpeed": 8, "splash": 1.5 },
       "tiers": [
-        { "cost": 250, "time": 25, "health": 3000, "damage": 30, "splash": 1.75 },
-        { "cost": 400, "time": 35, "health": 4200, "damage": 40, "splash": 2.0, "range": 5.5 }
+        { "cost": 250, "time": 25, "health": 2500, "damage": 15, "splash": 1.75 },
+        { "cost": 400, "time": 35, "health": 3400, "damage": 18, "splash": 2.0, "range": 5.5 }
       ]
     },
     {
-      "id": "watchtower", "name": "Watchtower", "size": 3, "cost": 300, "buildTime": 25, "health": 2000, "rangedArmor": 0.8, "maxCount": 5,
+      "id": "watchtower", "name": "Watchtower", "size": 3, "cost": 300, "buildTime": 25, "health": 2000, "rangedArmor": 0.8, "maxCount": 10,
       "sight": 16
     }
   ]
