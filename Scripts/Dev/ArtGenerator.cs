@@ -64,6 +64,8 @@ public static class ArtGenerator
 
         var terrain = Terrain();
         terrain.Save(System.IO.Path.Combine(assets, "Tilesets", "terrain.png"));
+        Recolor(terrain.Base, WinterPalette).SavePng(System.IO.Path.Combine(assets, "Tilesets", "terrain_winter.png"));
+        Recolor(terrain.Base, DesertPalette).SavePng(System.IO.Path.Combine(assets, "Tilesets", "terrain_desert.png"));
 
         var units = Units();
         units.Save(System.IO.Path.Combine(assets, "Sprites", "units.png"), System.IO.Path.Combine(assets, "Sprites", "units_team.png"));
@@ -88,6 +90,69 @@ public static class ArtGenerator
         SavePreview(terrain, System.IO.Path.Combine(previewDir, "terrain.png"));
         SavePreview(units, System.IO.Path.Combine(previewDir, "units.png"));
         SavePreview(gold, System.IO.Path.Combine(previewDir, "gold.png"));
+    }
+
+    /// <summary>Meadow colours of the terrain and what they become in the snow.</summary>
+    private static readonly (Color From, Color To)[] WinterPalette =
+    {
+        (Grass, new Color("e3eaee")), (GrassDark, new Color("cdd8df")), (GrassLight, new Color("f4f8fa")),
+        (Leaf, new Color("1f4a3a")), (LeafLight, new Color("2c5e48")), (LeafHighlight, new Color("e8f0f2")),
+        (LeafDark, new Color("163a2c")), (TreeOutline, new Color("10291f")), (Bark, new Color("4a3424")),
+        (Water, new Color("4a7aa5")), (WaterLight, new Color("9cc2de")), (WaterDark, new Color("3a6488")),
+        (Sand, new Color("c9d6de")), (SandDark, new Color("aab8c2")), (Foam, new Color("ffffff")),
+        (Rock, new Color("8a8c90")), (RockLight, new Color("e4eaee")), (RockDark, new Color("55585c")),
+        (Dirt, new Color("9c8f80")), (DirtDark, new Color("7f7466")), (DirtLight, new Color("b5aa9c")),
+    };
+
+    /// <summary>Meadow colours of the terrain and what they become in the desert (palms and oases, red rocks).</summary>
+    private static readonly (Color From, Color To)[] DesertPalette =
+    {
+        (Grass, new Color("d9b77a")), (GrassDark, new Color("c6a165")), (GrassLight, new Color("e8cb92")),
+        (Leaf, new Color("4f7a32")), (LeafLight, new Color("6a9440")), (LeafHighlight, new Color("8db35a")),
+        (LeafDark, new Color("3a5c24")), (TreeOutline, new Color("2a4219")), (Bark, new Color("7a5430")),
+        (Water, new Color("2f8fa8")), (WaterLight, new Color("6cc4d2")), (WaterDark, new Color("247488")),
+        (Sand, new Color("f0dca0")), (SandDark, new Color("d6bd7e")), (Foam, new Color("e8fbff")),
+        (Rock, new Color("a5683f")), (RockLight, new Color("c98a5a")), (RockDark, new Color("7a4a2c")),
+        (Snow, new Color("e8c89a")),
+        (Dirt, new Color("b08850")), (DirtDark, new Color("94703e")), (DirtLight, new Color("c49c62")),
+    };
+
+    /// <summary>
+    /// A copy of <paramref name="source"/> with each colour moved by its nearest palette entry's shift, so shades
+    /// between palette colours follow too; colours far from every entry (wood, outlines) stay as they are.
+    /// </summary>
+    private static Image Recolor(Image source, (Color From, Color To)[] palette)
+    {
+        var image = (Image)source.Duplicate();
+        for (int y = 0; y < image.GetHeight(); y++)
+        {
+            for (int x = 0; x < image.GetWidth(); x++)
+            {
+                var c = image.GetPixel(x, y);
+                if (c.A <= 0f)
+                    continue;
+                float best = float.MaxValue;
+                (Color From, Color To) match = default;
+                foreach (var entry in palette)
+                {
+                    float d = (c.R - entry.From.R) * (c.R - entry.From.R) + (c.G - entry.From.G) * (c.G - entry.From.G)
+                              + (c.B - entry.From.B) * (c.B - entry.From.B);
+                    if (d < best)
+                    {
+                        best = d;
+                        match = entry;
+                    }
+                }
+                if (best > 0.012f)
+                    continue;
+                var moved = new Color(
+                    Mathf.Clamp(c.R + match.To.R - match.From.R, 0f, 1f),
+                    Mathf.Clamp(c.G + match.To.G - match.From.G, 0f, 1f),
+                    Mathf.Clamp(c.B + match.To.B - match.From.B, 0f, 1f), c.A);
+                image.SetPixel(x, y, moved);
+            }
+        }
+        return image;
     }
 
     /// <summary>

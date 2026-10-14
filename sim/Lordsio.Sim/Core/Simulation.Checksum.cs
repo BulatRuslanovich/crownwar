@@ -33,6 +33,7 @@ public sealed partial class Simulation
             hash.Add(building.Target?.Id ?? 0);
             hash.Add(building.Type.Tier);
             hash.Add(building.UpgradeTicksLeft);
+            hash.Add(building.RallyPoint is { } rally ? BitConverter.SingleToInt32Bits(rally.X) ^ BitConverter.SingleToInt32Bits(rally.Y) * 31 : -1);
         }
         foreach (var projectile in _projectiles)
         {

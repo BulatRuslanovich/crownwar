@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Lordsio.Core;
@@ -7,9 +8,10 @@ using Lordsio.Sim.World;
 namespace Lordsio.UI;
 
 /// <summary>
-/// The whole map in the corner: terrain, the fog of war, gold, buildings and units the player can see,
-/// and the camera's view. Left click or drag moves the camera; right click sends the selected troops
-/// (advancing, or retreating with Ctrl), like a right click on the map itself.
+/// The whole map in the corner: terrain, the fog of war, gold, buildings and units the player can see, enemy
+/// buildings scouted earlier (dimmed, as last seen), blinking rings where the player is attacked, the night, and
+/// the camera's view. Left click or drag moves the camera; right click sends the selected troops (advancing with
+/// Ctrl), or sets the rally point of a selected castle or barracks, like a right click on the map itself.
 /// </summary>
 public partial class Minimap : Control
 {
@@ -17,6 +19,14 @@ public partial class Minimap : Control
     private static readonly Color Gold = new("f2c230");
     private static readonly Color Unexplored = new(0.03f, 0.03f, 0.05f, 0.78f);
     private static readonly Color Remembered = new(0.03f, 0.03f, 0.05f, 0.45f);
+    private static readonly Color AlertColor = new("ff5a4a");
+    private static readonly Color NightShade = new(0.05f, 0.08f, 0.25f, 0.35f);
+    private static readonly Color Moon = new("e8ecff");
+    private const float AlertSeconds = 4f;
+
+    /// <summary>Enemy buildings as last seen: (owner, top-left cell, size), kept while they are in the fog.</summary>
+    private readonly Dictionary<int, (int Faction, Cell Anchor, int Size)> _scouted = new();
+    private readonly List<(System.Numerics.Vector2 Position, float Age)> _alerts = new();
 
     private MatchController _match = null!;
     private ImageTexture _terrain = null!;
@@ -33,28 +43,49 @@ public partial class Minimap : Control
         var image = Image.CreateEmpty(map.Width, map.Height, false, Image.Format.Rgba8);
         for (int y = 0; y < map.Height; y++)
             for (int x = 0; x < map.Width; x++)
-                image.SetPixel(x, y, TerrainColor(map.GetTerrain(new Cell(x, y))));
+                image.SetPixel(x, y, Lordsio.World.Biomes.MinimapColor(match.Biome, map.GetTerrain(new Cell(x, y))));
         _terrain = ImageTexture.CreateFromImage(image);
         _fogImage = Image.CreateEmpty(map.Width, map.Height, false, Image.Format.Rgba8);
         _fogPixels = new byte[map.Width * map.Height * 4];
         _fog = ImageTexture.CreateFromImage(_fogImage);
         TextureFilter = TextureFilterEnum.Nearest;
         MouseFilter = MouseFilterEnum.Stop;
+        match.AttackAlerted += position => _alerts.Add((position, 0f));
     }
-
-    private static Color TerrainColor(Terrain terrain) => terrain switch
-    {
-        Terrain.Forest => new Color("2e6a2c"),
-        Terrain.Water => new Color("2f6db0"),
-        Terrain.Mountain => new Color("7a746c"),
-        Terrain.Road => new Color("b39461"),
-        _ => new Color("5a9a3c"),
-    };
 
     public override void _Process(double delta)
     {
         UpdateFog();
+        UpdateScouted();
+        for (int i = _alerts.Count - 1; i >= 0; i--)
+        {
+            var (position, age) = _alerts[i];
+            if (age + (float)delta >= AlertSeconds)
+                _alerts.RemoveAt(i);
+            else
+                _alerts[i] = (position, age + (float)delta);
+        }
         QueueRedraw(); // units move every tick
+    }
+
+    /// <summary>
+    /// Remembers enemy buildings while in sight; forgets one once its ground is in sight again and it is gone
+    /// (destroyed or pulled down while nobody watched).
+    /// </summary>
+    private void UpdateScouted()
+    {
+        var sim = _match.Sim;
+        foreach (var building in sim.Buildings)
+        {
+            if (!_match.IsFriendly(building.FactionId) && !_match.IsHidden(building))
+                _scouted[building.Id] = (building.FactionId, building.Anchor, building.Type.Size);
+        }
+        foreach (var (id, seen) in _scouted.ToList())
+        {
+            bool visibleNow = sim.GetBuilding(id) is { } b && !_match.IsHidden(b);
+            if (!visibleNow && _match.Fog.IsAnyVisible(seen.Anchor, seen.Size))
+                _scouted.Remove(id);
+        }
     }
 
     private void UpdateFog()
@@ -99,6 +130,15 @@ public partial class Minimap : Control
             var color = deposit.IsExhausted ? Gold.Darkened(0.5f) : Gold;
             DrawRect(new Rect2(ToMinimap(new(deposit.Anchor.X, deposit.Anchor.Y)), Vector2.One * GoldDeposit.Size * s), color);
         }
+        // Scouted enemy buildings now in the fog: dimmed, where they were last seen.
+        foreach (var (id, seen) in _scouted)
+        {
+            if (_match.Sim.GetBuilding(id) is { } live && !_match.IsHidden(live))
+                continue; // drawn live below
+            var rect = new Rect2(ToMinimap(new(seen.Anchor.X, seen.Anchor.Y)), Vector2.One * seen.Size * s);
+            DrawRect(rect.Grow(0.5f), Colors.Black with { A = 0.6f });
+            DrawRect(rect, FactionColors.Get(seen.Faction).Darkened(0.35f) with { A = 0.75f });
+        }
         foreach (var building in _match.Sim.Buildings)
         {
             if (_match.IsHidden(building))
@@ -117,6 +157,24 @@ public partial class Minimap : Control
         }
 
         DrawTextureRect(_fog, area, tile: false);
+        if (_match.Sim.IsNight)
+        {
+            DrawRect(area, NightShade);
+            // A crescent moon in the corner.
+            var moon = area.Position + new Vector2(area.Size.X - 9f, 9f);
+            DrawCircle(moon, 5f, Moon);
+            DrawCircle(moon + new Vector2(2.5f, -1.5f), 4.2f, new Color(0.08f, 0.1f, 0.2f));
+        }
+
+        // Where the player is attacked: a ring pulsing out, blinking.
+        foreach (var (position, age) in _alerts)
+        {
+            float phase = age % 1f;
+            if ((int)(age * 4f) % 2 == 1 && age > AlertSeconds - 1.5f)
+                continue;
+            DrawArc(ToMinimap(position), 2f + 8f * phase, 0f, Mathf.Tau, 16, AlertColor with { A = 1f - phase }, 1.5f);
+            DrawRect(new Rect2(ToMinimap(position) - Vector2.One * 1.5f, Vector2.One * 3f), AlertColor);
+        }
 
         // What the camera shows.
         var camera = _match.Camera;
@@ -139,6 +197,12 @@ public partial class Minimap : Control
                 break;
             case InputEventMouseMotion motion when _dragging:
                 LookAt(motion.Position);
+                AcceptEvent();
+                break;
+            case InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } rally
+                when _match.Selection.BuildingId is { } id && _match.Sim.GetBuilding(id) is { } producer
+                     && producer.FactionId == _match.LocalFactionId && producer.Type.Recruits.Count > 0:
+                _match.Issue(new SetRallyCommand(_match.LocalFactionId, id, ToSim(rally.Position)));
                 AcceptEvent();
                 break;
             case InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } right when _match.Selection.Count > 0:

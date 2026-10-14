@@ -52,6 +52,16 @@ public partial class NetMenu : Control
         _status.Text = _problemKey != null ? Tr(_problemKey) : "";
 
         _host.Pressed += Host;
+        if (MatchSaveStore.TryLoad() is { } save)
+        {
+            // The host's last match was cut short (a crash, or the host left): offer to bring it back.
+            int minutes = save.Frames.Count / Sim.Core.Simulation.TicksPerSecond / 60;
+            var resume = new Button { Text = string.Format(Tr("NET_RESUME_SAVED"), save.Start.Seed, minutes) };
+            resume.Pressed += () => Resume(save);
+            var rows = GetNode<Control>("Center/Panel/Rows");
+            rows.AddChild(resume);
+            rows.MoveChild(resume, _host.GetIndex() + 1);
+        }
         _join.Pressed += () => Join(_address.Text);
         _address.TextSubmitted += Join;
         GetNode<Button>("Center/Panel/Rows/Back").Pressed += () => BackRequested?.Invoke();
@@ -131,6 +141,17 @@ public partial class NetMenu : Control
         // on this PC does not show up in our own list.
         _discovery.Stop();
         var error = _session.Host(SaveName());
+        if (error != Error.Ok)
+        {
+            _status.Text = Tr("NET_HOST_FAILED");
+            _discovery.Listen();
+        }
+    }
+
+    private void Resume(Sim.Net.SavedMatch save)
+    {
+        _discovery.Stop();
+        var error = _session.HostResume(SaveName(), save);
         if (error != Error.Ok)
         {
             _status.Text = Tr("NET_HOST_FAILED");

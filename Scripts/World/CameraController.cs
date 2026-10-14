@@ -63,6 +63,27 @@ public partial class CameraController : Camera2D
         ClampToBounds();
     }
 
+    /// <summary>Shake strength 0..1, fading by itself; the camera jitters by its square (small knocks stay gentle).</summary>
+    private float _trauma;
+    private const float MaxShakePixels = 7f;
+    private const float TraumaFadePerSecond = 1.8f;
+
+    /// <summary>A knock to the screen (a stone landing, a building collapsing): adds up, capped at 1.</summary>
+    public void Shake(float amount) => _trauma = Mathf.Min(1f, _trauma + amount);
+
+    /// <summary>Jitters the view through the offset, which leaves the camera's position and bounds alone.</summary>
+    private void UpdateShake(double delta)
+    {
+        if (_trauma <= 0f)
+        {
+            Offset = Vector2.Zero;
+            return;
+        }
+        _trauma = Mathf.Max(0f, _trauma - TraumaFadePerSecond * (float)delta);
+        float strength = _trauma * _trauma * MaxShakePixels / ZoomLevel; // the same on screen at every zoom
+        Offset = new Vector2(GD.Randf() * 2f - 1f, GD.Randf() * 2f - 1f) * strength;
+    }
+
     public void CenterOn(Vector2 worldPosition)
     {
         Position = worldPosition;
@@ -71,6 +92,7 @@ public partial class CameraController : Camera2D
 
     public override void _Process(double delta)
     {
+        UpdateShake(delta);
         if (!UserControl)
         {
             ClampToBounds();

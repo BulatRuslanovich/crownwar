@@ -6,20 +6,19 @@ using Lordsio.Sim.World;
 namespace Lordsio.World;
 
 /// <summary>
-/// Draws the terrain of a <see cref="TileGrid"/> from Assets/Tilesets/terrain.png: random variants for
-/// open ground, roads shaped by their road neighbours, bridges over water, and a second layer with
+/// Draws the terrain of a <see cref="TileGrid"/> from the biome's tileset (Assets/Tilesets/terrain*.png): random
+/// variants for open ground, roads shaped by their road neighbours, bridges over water, and a second layer with
 /// sandy shores where water meets land.
 /// </summary>
 public partial class MapView : TileMapLayer
 {
-    private const string TexturePath = "res://Assets/Tilesets/terrain.png";
     private const int AtlasSourceId = 0;
 
     private TileMapLayer _shore = null!;
 
-    public void Build(TileGrid map)
+    public void Build(TileGrid map, Biome biome = Biome.Meadow)
     {
-        TileSet = CreateTileSet();
+        TileSet = CreateTileSet(Biomes.TilesetPath(biome));
         _shore = new TileMapLayer { Name = "Shore", TileSet = TileSet };
         AddChild(_shore);
 
@@ -41,9 +40,9 @@ public partial class MapView : TileMapLayer
         }
     }
 
-    private static TileSet CreateTileSet()
+    private static TileSet CreateTileSet(string texturePath)
     {
-        var texture = GD.Load<Texture2D>(TexturePath);
+        var texture = GD.Load<Texture2D>(texturePath);
         var source = new TileSetAtlasSource
         {
             Texture = texture,

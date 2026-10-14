@@ -93,6 +93,9 @@ public partial class MatchController : Node2D
     private MatchSounds _sounds = null!;
     private AttackAlerts _alerts = null!;
 
+    /// <summary>The player's troops or buildings came under attack here (the minimap blinks it).</summary>
+    public event Action<System.Numerics.Vector2>? AttackAlerted;
+
     private readonly List<BotBrain> _bots = new();
 
     /// <summary>Set by <see cref="Main"/> before the match enters the tree; defaults when the scene runs alone.</summary>
@@ -122,6 +125,9 @@ public partial class MatchController : Node2D
     private int _fogTick = -1;
     public MatchStats Stats { get; private set; } = null!;
     public int ActualSeed { get; private set; }
+
+    /// <summary>How the map looks (snow, sand or meadow), from its seed: the same for every player.</summary>
+    public Biome Biome => Biomes.ForSeed(ActualSeed);
     public IReadOnlyList<BotBrain> Bots => _bots;
     public Selection Selection { get; } = new();
     public CameraController Camera { get; private set; } = null!;
@@ -179,7 +185,7 @@ public partial class MatchController : Node2D
         Camera.SetBounds(new Rect2(Vector2.Zero, worldSize).Grow(SimConvert.TileSize * 2));
         Camera.CenterOn(StartingFocus() ?? worldSize / 2);
 
-        GetNode<MapView>("MapView").Build(Sim.Map);
+        GetNode<MapView>("MapView").Build(Sim.Map, Biome);
         GetNode<DepositsView>("DepositsView").Initialize(this);
         GetNode<BuildingsView>("Actors/BuildingsView").Initialize(this);
         _unitsView = GetNode<UnitsView>("Actors/UnitsView");
@@ -203,12 +209,16 @@ public partial class MatchController : Node2D
         _pauseMenu = GetNode<PauseMenu>("PauseMenu");
         _pauseMenu.Initialize(this, placement);
         if (Net != null)
+        {
             Net.DesyncDetected += _ => ShowNetworkProblem("NET_DESYNC");
+            Net.PauseChanged += OnNetPauseChanged;
+        }
         if (IsShowcase)
             BecomeShowcase();
 
         _alerts.Alerted += position =>
         {
+            AttackAlerted?.Invoke(position);
             _hud.ShowAlert(position);
             _airEffects.Ping(position);
             _sounds.PlayAlert();
@@ -287,7 +297,16 @@ public partial class MatchController : Node2D
     {
         if (Net == null)
             GetTree().Paused = paused;
+        else
+            Net.RequestPause(paused); // everyone stops (or goes on) together
         _pauseMenu.Visible = paused;
+    }
+
+    /// <summary>A network pause began or ended (perhaps by someone else): show or hide the pause menu to match.</summary>
+    private void OnNetPauseChanged()
+    {
+        _pauseMenu.Visible = Net!.IsPausedByPlayer;
+        _pauseMenu.ShowPausedBy(Net.IsPausedByPlayer ? Net.PausedBy : null);
     }
 
     /// <summary>A network game cannot go on (desync, host gone): show why and offer the way out.</summary>
@@ -311,6 +330,27 @@ public partial class MatchController : Node2D
                 return SimConvert.ToWorld(unit.Position);
         return null;
     }
+
+    /// <summary>Heavy blows on screen shake it: a stone landing a little, a building collapsing more, a castle most.</summary>
+    private void ShakeFor(SimEvent e)
+    {
+        var (at, amount) = e switch
+        {
+            SplashLanded s => (s.Position, 0.18f),
+            BuildingDestroyed d => (d.Position, Sim.Rules.GetBuildingType(d.BuildingTypeId).IsCapital ? 0.9f : 0.4f),
+            _ => (default(System.Numerics.Vector2), 0f),
+        };
+        if (amount <= 0f)
+            return;
+        // Fades with the distance from the middle of the screen: a far-off collapse is only felt a little.
+        var screen = GetViewportRect().Size / Camera.ZoomLevel;
+        float distance = SimConvert.ToWorld(at).DistanceTo(Camera.GetScreenCenterPosition());
+        float nearness = Mathf.Clamp(1f - distance / screen.Length(), 0f, 1f);
+        Camera.Shake(amount * nearness);
+    }
+
+    /// <summary>Leaving the match (menu, restart, quit): the host's save keeps everything played so far.</summary>
+    public override void _ExitTree() => Net?.CloseSave();
 
     public override void _Process(double delta)
     {
@@ -356,8 +396,11 @@ public partial class MatchController : Node2D
             _endScreen.OnSimEvent(e);
             if (e is FactionEliminated { FactionId: var fallen } && fallen == LocalFactionId || e is MatchEnded)
                 Fog.RevealAll(); // spectating: the rest of the match in full view
+            if (e is MatchEnded)
+                Net?.DiscardSave(); // a finished match is not one to bring back
             if (!CanSee(e))
                 continue; // a fight in the fog makes no sparks or sounds
+            ShakeFor(e);
             _unitsView.OnSimEvent(e);
             _groundEffects.OnSimEvent(e);
             _airEffects.OnSimEvent(e);
@@ -384,7 +427,7 @@ public partial class MatchController : Node2D
         Fog.Update(Sim, LocalTeam);
     }
 
-    private bool IsFriendly(int factionId) => factionId >= 0 && Sim.GetFaction(factionId)?.Team == LocalTeam;
+    public bool IsFriendly(int factionId) => factionId >= 0 && Sim.GetFaction(factionId)?.Team == LocalTeam;
 
     /// <summary>An enemy (or neutral) unit out of the local team's sight.</summary>
     public bool IsHidden(Sim.Units.Unit unit) => !IsFriendly(unit.FactionId) && !Fog.IsVisible(unit.Position);
@@ -439,17 +482,28 @@ public partial class MatchController : Node2D
     private void StepNetworked(NetMatchDriver net, double delta)
     {
         _replayedThisFrame = false;
+        if (net.IsPausedByPlayer && !CatchingUp)
+        {
+            // Everyone stands still; do not bank the time, nor take the silence for a slow link.
+            _accumulator = 0;
+            WaitingForPlayers = false;
+            _starving = false;
+            return;
+        }
         if (Sim.IsOver || net.IsDesynced)
             return;
 
-        if (net.LatestFrameTick - Sim.Tick > ReplayThreshold)
+        if (net.LatestFrameTick - Sim.Tick > ReplayThreshold && Sim.Tick < net.SilentReplayLimit)
         {
             CatchingUp = true;
             _replayedThisFrame = true;
             WaitingForPlayers = false;
             _accumulator = 0;
             long start = Stopwatch.GetTimestamp();
-            while (net.HasFrame(Sim.Tick + 1) && Stopwatch.GetElapsedTime(start).TotalMilliseconds < ReplayBudgetMilliseconds)
+            // Only the decided past is replayed silently: a host resuming its save must send input for its first new
+            // ticks, or it would wait for itself forever.
+            while (net.HasFrame(Sim.Tick + 1) && Sim.Tick < net.SilentReplayLimit
+                   && Stopwatch.GetElapsedTime(start).TotalMilliseconds < ReplayBudgetMilliseconds)
                 ApplyFrame(net, net.TakeFrame(Sim.Tick + 1), replaying: true);
             return;
         }

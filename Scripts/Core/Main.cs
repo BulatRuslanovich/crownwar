@@ -35,6 +35,7 @@ public partial class Main : Node
     private int _devAutoStartPlayers;
     private bool _devAutoplay;
     private bool _devNetLog;
+    private bool _devPauseTest;
     private int[]? _devTeams;
 
     public override void _EnterTree()
@@ -195,6 +196,12 @@ public partial class Main : Node
         match.MenuRequested += ShowMenu;
         if (_devAutoplay)
             match.AddBot(match.LocalFactionId, BotDifficulty.Hard).CommandSink = match.Issue;
+        if (_devPauseTest)
+        {
+            // Dev: this player pauses the match for everyone at 20 s and resumes it at 26 s.
+            GetTree().CreateTimer(20.0).Timeout += () => { if (IsInstanceValid(match)) match.SetPaused(true); };
+            GetTree().CreateTimer(26.0, processAlways: true).Timeout += () => { if (IsInstanceValid(match)) match.SetPaused(false); };
+        }
     }
 
     /// <summary>Lost connection, rejected, host gone: in a match the end screen explains; elsewhere back to the network menu.</summary>
@@ -212,12 +219,15 @@ public partial class Main : Node
     /// makes the host start once N players are in (open slots become Hard bots), --net-teams=0,0,1,1 sets the
     /// slots' teams; --net-autoplay lets a bot
     /// play the local faction through the network; --net-log prints checksums to compare the copies' logs;
-    /// --net-lag=MS[,JITTER] holds this copy's outgoing packets back (a poor link on one PC; ENet's ping does not see it).
+    /// --net-lag=MS[,JITTER] holds this copy's outgoing packets back (a poor link on one PC; ENet's ping does not see it);
+    /// --net-resume hosts the saved match again (as after a crash), if there is one; --net-pause-test pauses the
+    /// match from this copy at 20 s and resumes it at 26 s.
     /// </summary>
     private void StartDevNetwork(string[] args)
     {
         _devAutoplay = System.Array.IndexOf(args, "--net-autoplay") >= 0;
         _devNetLog = System.Array.IndexOf(args, "--net-log") >= 0;
+        _devPauseTest = System.Array.IndexOf(args, "--net-pause-test") >= 0;
         string name = DevTools.Arg(args, "--net-name") ?? GameSettings.Instance?.PlayerName ?? "Player";
         ShowNetMenu(null);
         if (DevTools.Arg(args, "--net-lag") is { } lag)
@@ -228,6 +238,13 @@ public partial class Main : Node
         }
         if (System.Array.IndexOf(args, "--net-browse") >= 0)
             return;
+        if (System.Array.IndexOf(args, "--net-resume") >= 0 && Net.MatchSaveStore.TryLoad() is { } save)
+        {
+            var resumed = Session().HostResume(name, save);
+            if (resumed != Error.Ok)
+                GD.PushError($"Could not resume: {resumed}");
+            return;
+        }
         if (DevTools.Arg(args, "--net-join") is { } address)
         {
             Session().Join(address, name);

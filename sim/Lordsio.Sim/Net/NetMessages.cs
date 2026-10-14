@@ -60,6 +60,12 @@ public sealed record FrameMessage(int Tick, IReadOnlyList<Command> Commands, IRe
 /// <summary>Returning client → host: the replay reached <paramref name="Tick"/>; the faction can be handed back.</summary>
 public sealed record CaughtUpMessage(int Tick) : NetMessage;
 
+/// <summary>
+/// A player asks to pause or resume the match (client to host; <paramref name="By"/> is ignored), or the host tells
+/// everyone that it is now paused or running, and who did it.
+/// </summary>
+public sealed record PauseMessage(bool Paused, string By = "") : NetMessage;
+
 /// <summary>Peer → host: state fingerprint after simulating <paramref name="Tick"/>.</summary>
 public sealed record ChecksumMessage(int Tick, ulong Value) : NetMessage;
 
@@ -78,12 +84,12 @@ public static class NetCodec
 
     private enum Tag : byte
     {
-        Hello = 1, Reject, Lobby, SetTeam, Start, Input, Frame, Checksum, Desync, CaughtUp,
+        Hello = 1, Reject, Lobby, SetTeam, Start, Input, Frame, Checksum, Desync, CaughtUp, Pause,
     }
 
     private enum CommandTag : byte
     {
-        Move = 1, Attack, Recruit, Build, Upgrade, Demolish,
+        Move = 1, Attack, Recruit, Build, Upgrade, Demolish, Rally,
     }
 
     public static byte[] Encode(NetMessage message)
@@ -116,6 +122,7 @@ public static class NetCodec
                 }
                 break;
             case CaughtUpMessage m: w.Write((byte)Tag.CaughtUp); w.Write(m.Tick); break;
+            case PauseMessage m: w.Write((byte)Tag.Pause); w.Write(m.Paused); WriteString(w, m.By); break;
             case ChecksumMessage m: w.Write((byte)Tag.Checksum); w.Write(m.Tick); w.Write(m.Value); break;
             case DesyncMessage m: w.Write((byte)Tag.Desync); w.Write(m.Tick); break;
             default: throw new NotSupportedException($"Cannot encode {message.GetType().Name}.");
@@ -141,6 +148,7 @@ public static class NetCodec
                 Tag.Input => new InputMessage(r.ReadInt32(), ReadCommands(r)),
                 Tag.Frame => new FrameMessage(r.ReadInt32(), ReadCommands(r), ReadInts(r), ReadReturns(r)),
                 Tag.CaughtUp => new CaughtUpMessage(r.ReadInt32()),
+                Tag.Pause => new PauseMessage(r.ReadBoolean(), ReadString(r)),
                 Tag.Checksum => new ChecksumMessage(r.ReadInt32(), r.ReadUInt64()),
                 Tag.Desync => new DesyncMessage(r.ReadInt32()),
                 var tag => throw new FormatException($"Unknown message tag {(byte)tag}."),
@@ -260,6 +268,11 @@ public static class NetCodec
                 case DemolishCommand c:
                     w.Write((byte)CommandTag.Demolish); w.Write(c.FactionId); w.Write(c.BuildingId);
                     break;
+                case SetRallyCommand c:
+                    w.Write((byte)CommandTag.Rally); w.Write(c.FactionId); w.Write(c.BuildingId);
+                    w.Write(c.Point.HasValue);
+                    if (c.Point is { } point) { w.Write(point.X); w.Write(point.Y); }
+                    break;
                 default:
                     throw new NotSupportedException($"Cannot encode {command.GetType().Name}.");
             }
@@ -280,6 +293,7 @@ public static class NetCodec
                 CommandTag.Build => new BuildCommand(r.ReadInt32(), ReadString(r), new Cell(r.ReadInt32(), r.ReadInt32())),
                 CommandTag.Upgrade => new UpgradeCommand(r.ReadInt32(), r.ReadInt32()),
                 CommandTag.Demolish => new DemolishCommand(r.ReadInt32(), r.ReadInt32()),
+                CommandTag.Rally => new SetRallyCommand(r.ReadInt32(), r.ReadInt32(), r.ReadBoolean() ? ReadVector(r) : null),
                 var tag => throw new FormatException($"Unknown command tag {(byte)tag}."),
             });
         }

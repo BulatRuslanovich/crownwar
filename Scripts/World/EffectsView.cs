@@ -23,6 +23,8 @@ public partial class EffectsView : Node2D
         Sparkle,
         Ping,
         Impact,
+        /// <summary>A fallen soldier lying on the ground for a while, then fading (ground layer).</summary>
+        Corpse,
     }
 
     private record struct Effect(Kind Kind, Vector2 Position, float Age, float Duration, float Size, int Seed, Color Color);
@@ -60,6 +62,10 @@ public partial class EffectsView : Node2D
                 break;
             case UnitDied died when !Ground:
                 Add(Kind.Puff, SimConvert.ToWorld(died.Position) + new Vector2(0, -5), 0.6f, 6f, FactionColors.Get(died.FactionId));
+                break;
+            case UnitDied died when Ground && died.UnitTypeId.Length > 0:
+                Add(Kind.Corpse, SimConvert.ToWorld(died.Position), CorpseSeconds, Dev.ArtLayout.UnitRow(died.UnitTypeId),
+                    FactionColors.Get(died.FactionId));
                 break;
             case BuildingDestroyed or BuildingDemolished:
                 // A demolished building comes down the same way, only on its owner's orders.
@@ -130,6 +136,9 @@ public partial class EffectsView : Node2D
                         DrawRect(new Rect2(p, Vector2.One * 2), color);
                     }
                     break;
+                case Kind.Corpse:
+                    DrawCorpse(e, t);
+                    break;
                 case Kind.Impact:
                     // A flattened ring of dust spreading over the splash area, with specks thrown out.
                     DrawSetTransform(e.Position, 0f, new Vector2(1f, 0.5f));
@@ -186,6 +195,30 @@ public partial class EffectsView : Node2D
                     break;
             }
         }
+    }
+
+    private const float CorpseSeconds = 8f;
+    private Texture2D? _units;
+    private Texture2D? _unitsTeam;
+
+    /// <summary>
+    /// The unit's standing picture tipped onto its side (left or right at random), darkened; it lies still, then
+    /// fades over its last quarter. Size carries the unit's row in the atlas.
+    /// </summary>
+    private void DrawCorpse(Effect e, float t)
+    {
+        _units ??= GD.Load<Texture2D>("res://Assets/Sprites/units.png");
+        _unitsTeam ??= GD.Load<Texture2D>("res://Assets/Sprites/units_team.png");
+        int w = Dev.ArtLayout.UnitCellWidth, h = Dev.ArtLayout.UnitCellHeight;
+        var region = new Rect2(Dev.ArtLayout.FrameIdle * w, (int)e.Size * h, w, h);
+        float alpha = t < 0.75f ? 1f : 1f - (t - 0.75f) / 0.25f;
+        float side = e.Seed % 2 == 0 ? 1f : -1f;
+        DrawSetTransform(e.Position + new Vector2(0, -3), side * Mathf.Pi / 2f, Vector2.One);
+        var rect = new Rect2(-w / 2f, -h + 2f, w, h);
+        var shade = new Color(0.62f, 0.62f, 0.62f, alpha);
+        DrawTextureRectRegion(_units, rect, region, shade);
+        DrawTextureRectRegion(_unitsTeam, rect, region, e.Color * shade);
+        DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
     }
 
     private void Add(Kind kind, Vector2 position, float duration, float size, Color color) =>

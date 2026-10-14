@@ -52,9 +52,28 @@ public sealed class NetMatchDriver
         if (session.IsHost)
         {
             var humans = start.Slots.Select((slot, faction) => (slot, faction))
-                .Where(p => p.slot.Kind == NetSlotKind.Human).Select(p => p.faction);
-            _host = new LockstepHost(humans);
+                .Where(p => p.slot.Kind == NetSlotKind.Human).Select(p => p.faction).ToList();
             _checksums = new ChecksumTracker();
+            if (session.Resumed is { } save)
+            {
+                // Brought back after a crash: replay the saved frames, then go on from the next tick; the others are
+                // bots' until they rejoin.
+                _host = new LockstepHost(humans, save.Frames.Count + 1);
+                SilentReplayLimit = save.Frames.Count;
+                foreach (int faction in humans.Where(f => f != start.YourFaction))
+                    _host.DropFaction(faction);
+                foreach (var frame in save.Frames)
+                {
+                    _history.Add(frame);
+                    _peer.ReceiveFrame(frame);
+                }
+                _save = MatchSaveStore.Append();
+            }
+            else
+            {
+                _host = new LockstepHost(humans);
+                _save = MatchSaveStore.Create(start, session.MatchPlayers);
+            }
             session.PlayerLeftMatch += faction => _host.DropFaction(faction);
             session.PlayerRejoining += SendMatchSoFar;
         }
@@ -64,6 +83,12 @@ public sealed class NetMatchDriver
     }
 
     public bool IsHost => _host != null;
+
+    /// <summary>
+    /// The last tick a replay may run without sending our input: a rejoining player's input is ignored until they
+    /// take their faction back, but a host resuming its save plays its own faction from the first new tick on.
+    /// </summary>
+    public int SilentReplayLimit { get; } = int.MaxValue;
 
     /// <summary>This machine came back into a running match and is replaying it.</summary>
     public bool IsRejoin { get; }
@@ -77,7 +102,85 @@ public sealed class NetMatchDriver
         if (!IsRejoin || _caughtUpReported)
             return;
         _caughtUpReported = true;
-        _session.Send(1, new CaughtUpMessage(tick));
+        if (_host == null)
+            _session.Send(1, new CaughtUpMessage(tick)); // a host resuming its own save has no one to tell
+    }
+
+    // ---------------------------------------------------------------- the save (host)
+
+    private System.IO.FileStream? _save;
+    private readonly List<FrameMessage> _unsaved = new();
+    private double _sinceSave;
+    private const double SaveIntervalSeconds = 1.0;
+
+    /// <summary>Writes the frames made since the last save (about once a second).</summary>
+    private void SaveNow()
+    {
+        if (_save == null)
+        {
+            _unsaved.Clear(); // nothing to save to (finished, or the disk refused)
+            return;
+        }
+        if (_unsaved.Count == 0)
+            return;
+        try
+        {
+            MatchSave.AppendFrames(_save, _unsaved);
+            _save.Flush(flushToDisk: true);
+        }
+        catch (System.IO.IOException e)
+        {
+            Godot.GD.PushWarning($"Saving the network match failed: {e.Message}");
+        }
+        _unsaved.Clear();
+    }
+
+    /// <summary>The match is over: its save is of no use any more.</summary>
+    public void DiscardSave()
+    {
+        _save?.Dispose();
+        _save = null;
+        _unsaved.Clear();
+        if (_host != null)
+            MatchSaveStore.Delete();
+    }
+
+    /// <summary>Leaving the match screen (to the menu, or quitting): the save keeps what was played so far.</summary>
+    public void CloseSave()
+    {
+        SaveNow();
+        _save?.Dispose();
+        _save = null;
+    }
+
+    // ---------------------------------------------------------------- pause
+
+    /// <summary>Someone paused the match: no frames are made, every machine stands still with the pause menu open.</summary>
+    public bool IsPausedByPlayer { get; private set; }
+
+    /// <summary>Who paused the match.</summary>
+    public string PausedBy { get; private set; } = "";
+
+    public event Action? PauseChanged;
+
+    /// <summary>Asks to pause or resume for everyone (the host decides and tells all).</summary>
+    public void RequestPause(bool paused)
+    {
+        if (_host != null)
+            SetPause(paused, _session.NameOfPeer(1));
+        else
+            _session.Send(1, new PauseMessage(paused));
+    }
+
+    private void SetPause(bool paused, string by)
+    {
+        if (paused == IsPausedByPlayer)
+            return;
+        IsPausedByPlayer = paused;
+        PausedBy = by;
+        if (_host != null)
+            _session.Broadcast(new PauseMessage(paused, by));
+        PauseChanged?.Invoke();
     }
 
     /// <summary>Host: a player is back; send them the start of the match and every frame so far.</summary>
@@ -90,6 +193,8 @@ public sealed class NetMatchDriver
         _session.Send(peer, start with { YourFaction = faction, RejoinToken = _session.TokenOf(faction), Rejoin = true });
         foreach (var frame in _history)
             _session.Send(peer, frame);
+        if (IsPausedByPlayer)
+            _session.Send(peer, new PauseMessage(true, PausedBy));
     }
 
     /// <summary>Raised once when the machines' simulations diverged; the argument is the tick.</summary>
@@ -119,6 +224,12 @@ public sealed class NetMatchDriver
     public void Pump(double delta)
     {
         _session.Receive();
+        _sinceSave += delta;
+        if (_sinceSave >= SaveIntervalSeconds)
+        {
+            _sinceSave = 0;
+            SaveNow();
+        }
         _sinceLinkCheck += delta;
         if (_sinceLinkCheck >= 1.0)
         {
@@ -143,13 +254,14 @@ public sealed class NetMatchDriver
 
     private void EmitFrames()
     {
-        if (_host == null)
-            return;
+        if (_host == null || IsPausedByPlayer)
+            return; // paused: no new ticks for anyone
         foreach (var frame in _host.CollectReadyFrames())
         {
             _session.Broadcast(frame);
             _peer.ReceiveFrame(frame);
             _history.Add(frame);
+            _unsaved.Add(frame);
         }
     }
 
@@ -257,6 +369,14 @@ public sealed class NetMatchDriver
                 break;
             case DesyncMessage desync when _host == null:
                 MarkDesynced(desync.Tick);
+                break;
+            case PauseMessage pause when _host != null:
+                SetPause(pause.Paused, _session.NameOfPeer(from));
+                break;
+            case PauseMessage pause:
+                IsPausedByPlayer = pause.Paused;
+                PausedBy = pause.By;
+                PauseChanged?.Invoke();
                 break;
         }
     }

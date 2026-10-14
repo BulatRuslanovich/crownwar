@@ -58,13 +58,16 @@ public partial class MatchSounds : Node
         switch (e)
         {
             case SplashLanded splash:
-                PlayAt(Sound.BuildingHit, splash.Position, 0f);
+                PlayAt(Sound.StoneImpact, splash.Position, 0f);
                 break;
             case AttackLanded { Splash: true }:
                 break; // the stone's own thud covers everyone it hit
             case AttackLanded hit:
                 bool building = _match.Sim.GetBuilding(hit.TargetId) != null;
                 PlayAt(building ? Sound.BuildingHit : hit.Ranged ? Sound.ArrowHit : Sound.SwordHit, hit.Position, -4f);
+                break;
+            case ProjectileFired { Splash: true } throw_:
+                PlayAt(Sound.CatapultShot, throw_.Position, -4f);
                 break;
             case ProjectileFired shot:
                 PlayAt(Sound.ArrowShot, shot.Position, -8f);

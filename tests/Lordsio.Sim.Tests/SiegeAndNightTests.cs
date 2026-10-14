@@ -63,7 +63,7 @@ public class SiegeAndNightTests
     }
 
     [Test]
-    public void RamRefusesAnOrderToAttackAUnit()
+    public void RamSentAtAUnitAdvancesWithTheArmyInstead()
     {
         var sim = CreateSim();
         var ram = sim.SpawnUnit("ram", 1, new Vector2(20.5f, 5.5f));
@@ -72,8 +72,50 @@ public class SiegeAndNightTests
         sim.Issue(new AttackCommand(1, new[] { ram.Id }, enemy.Id));
         sim.Step();
 
-        Assert.That(ram.Order, Is.Not.EqualTo(UnitOrder.AttackUnit));
-        Assert.That(ram.Target, Is.Null);
+        Assert.That(ram.Order, Is.EqualTo(UnitOrder.AttackMove), "it marches on, ready to hit buildings on the way");
+        Assert.That(ram.Target, Is.Null, "but never swings at the soldier");
+        Assert.That(Vector2.Distance(ram.Destination!.Value, enemy.Position), Is.LessThan(1.5f));
+    }
+
+    // ---------------------------------------------------------------- rally points
+
+    [Test]
+    public void RecruitsWalkToTheRallyPoint()
+    {
+        var sim = CreateSim();
+        var castle = sim.GetBuilding(sim.GetFaction(0)!.CapitalId)!;
+        var rally = new Vector2(14.5f, 8.5f);
+        sim.Issue(new SetRallyCommand(0, castle.Id, rally));
+        sim.Issue(new RecruitCommand(0, castle.Id, "infantry"));
+        RunSeconds(sim, TestMaps.Infantry.BuildTime + 0.1f);
+
+        var recruit = sim.Units.Last(u => u.FactionId == 0);
+        Assert.That(castle.RallyPoint, Is.EqualTo(rally));
+        Assert.That(recruit.Order, Is.EqualTo(UnitOrder.Move));
+        RunSeconds(sim, 6f);
+        Assert.That(Vector2.Distance(recruit.Position, rally), Is.LessThan(1f));
+    }
+
+    [Test]
+    public void RallyPointsAreTheOwnersAndCanBeCleared()
+    {
+        var sim = CreateSim();
+        var castle = sim.GetBuilding(sim.GetFaction(0)!.CapitalId)!;
+        sim.Issue(new SetRallyCommand(1, castle.Id, new Vector2(5f, 5f)));
+        sim.Step();
+        Assert.That(castle.RallyPoint, Is.Null, "not someone else's to set");
+
+        sim.Issue(new SetRallyCommand(0, castle.Id, new Vector2(500f, -3f)));
+        sim.Step();
+        Assert.That(castle.RallyPoint, Is.EqualTo(new Vector2(sim.Map.Width - 0.5f, 0.5f)), "kept on the map");
+
+        sim.Issue(new SetRallyCommand(0, castle.Id, null));
+        sim.Step();
+        Assert.That(castle.RallyPoint, Is.Null);
+
+        var decoded = (InputMessage)NetCodec.Decode(NetCodec.Encode(new InputMessage(3, new Command[]
+            { new SetRallyCommand(0, 7, new Vector2(1.5f, 2.5f)), new SetRallyCommand(0, 7, null) })));
+        Assert.That(decoded.Commands, Is.EqualTo(new Command[] { new SetRallyCommand(0, 7, new Vector2(1.5f, 2.5f)), new SetRallyCommand(0, 7, null) }));
     }
 
     // ---------------------------------------------------------------- loot

@@ -10,6 +10,10 @@ public enum Sound
     ArrowShot,
     ArrowHit,
     BuildingHit,
+    /// <summary>A catapult's arm swings: a wooden creak, a whoosh and a thump.</summary>
+    CatapultShot,
+    /// <summary>A catapult's stone comes down: a heavy thud with grit.</summary>
+    StoneImpact,
     UnitDeath,
     BuildingDestroyed,
     BuildingPlaced,
@@ -61,6 +65,12 @@ public static class SoundBank
         [Sound.ArrowShot] = Make(0.2f, Whoosh),
         [Sound.ArrowHit] = Make(0.09f, (t, n) => Sine(170 - 400 * t, t) * Decay(t, 0.03f) + n * Decay(t, 0.008f) * 0.4f),
         [Sound.BuildingHit] = Make(0.18f, (t, n) => Sine(95, t) * Decay(t, 0.05f) * 0.9f + LowNoise(n) * Decay(t, 0.03f) * 0.6f),
+        [Sound.CatapultShot] = Make(0.5f, (t, n) =>
+            Soft(Saw(150 + 40 * MathF.Sin(t * 70f), t)) * Decay(t, 0.06f) * 0.25f // the creak of the arm
+            + LowNoise(n) * Attack(t, 0.05f) * Decay(t, 0.18f) * 0.5f // the throw
+            + Sine(70 - 40 * t, t) * Decay(t, 0.1f) * 0.7f), // the arm hits the crossbar
+        [Sound.StoneImpact] = Make(0.45f, (t, n) =>
+            Sine(58 - 30 * t, t) * Decay(t, 0.14f) + LowNoise(n) * Decay(t, 0.09f) * 0.8f + n * Decay(t, 0.02f) * 0.25f),
         [Sound.UnitDeath] = Make(0.38f, (t, n) =>
             Soft(Square(300 - 420 * t, t)) * Decay(t, 0.12f) * 0.45f + n * Decay(t, 0.05f) * 0.25f),
         [Sound.BuildingDestroyed] = Make(1.3f, (t, n) =>

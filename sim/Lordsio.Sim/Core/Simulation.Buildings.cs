@@ -318,6 +318,7 @@ public sealed partial class Simulation
             if (building.AdvanceProduction() is not { } type)
                 continue;
             var unit = SpawnUnit(type.Id, building.FactionId, FreeSpotNear(building, type.Radius));
+            SendToRally(unit, building);
             _events.Add(new UnitRecruited(building.FactionId, building.Id, unit.Id));
         }
     }

@@ -22,11 +22,20 @@ public sealed class LockstepHost
     private readonly List<FactionReturn> _pendingReturns = new();
     /// <summary>Returning factions: their input is needed only from this tick on (the bot plays until then).</summary>
     private readonly Dictionary<int, int> _returnAt = new();
-    private int _nextFrameTick = 1;
+    private int _nextFrameTick;
+    /// <summary>
+    /// Ticks up to here need no input: nobody could have sent any yet (the first ticks of a match, or of a match
+    /// resumed from a save, since inputs are always addressed <see cref="InputDelay"/> ticks ahead).
+    /// </summary>
+    private readonly int _freeUntil;
 
-    public LockstepHost(IEnumerable<int> humanFactions)
+    /// <param name="nextFrameTick">The first tick to make a frame for: 1 for a new match, the tick after the last
+    /// saved frame for a match resumed from a save.</param>
+    public LockstepHost(IEnumerable<int> humanFactions, int nextFrameTick = 1)
     {
         _humans = new SortedSet<int>(humanFactions);
+        _nextFrameTick = nextFrameTick;
+        _freeUntil = nextFrameTick + InputDelay - 1;
     }
 
     /// <summary>Human factions the host is still waiting on.</summary>
@@ -78,7 +87,7 @@ public sealed class LockstepHost
         {
             int tick = _nextFrameTick;
             _inputs.TryGetValue(tick, out var byFaction);
-            bool ready = tick <= InputDelay || _humans.All(f =>
+            bool ready = tick <= _freeUntil || _humans.All(f =>
                 (_returnAt.TryGetValue(f, out int from) && tick < from) || (byFaction != null && byFaction.ContainsKey(f)));
             if (!ready)
                 break;

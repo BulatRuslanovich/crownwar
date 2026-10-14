@@ -30,6 +30,9 @@ public sealed record RecruitCommand(int FactionId, int BuildingId, string UnitTy
 /// <summary>Pay for the next level of one of the faction's buildings (an archer tower or a mine) and start upgrading it.</summary>
 public sealed record UpgradeCommand(int FactionId, int BuildingId) : Command(FactionId);
 
+/// <summary>Where a castle's or barracks' new recruits walk to once trained (null: they stay at the door).</summary>
+public sealed record SetRallyCommand(int FactionId, int BuildingId, Vector2? Point) : Command(FactionId);
+
 /// <summary>Pull down one of the faction's own buildings (not the castle) for part of what it cost.</summary>
 public sealed record DemolishCommand(int FactionId, int BuildingId) : Command(FactionId);
 

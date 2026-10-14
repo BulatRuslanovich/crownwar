@@ -129,6 +129,9 @@ public sealed class Building : Entity
     /// <summary>Units being trained; only the first one makes progress. Any length: queued units count against the army cap.</summary>
     public IReadOnlyList<ProductionItem> Queue => _queue;
 
+    /// <summary>Where new recruits walk to once trained; null to stay at the door.</summary>
+    public Vector2? RallyPoint { get; internal set; }
+
     /// <summary>Enemy unit a tower is shooting at.</summary>
     public Unit? Target { get; internal set; }
     internal int AttackCooldownTicks { get; set; }

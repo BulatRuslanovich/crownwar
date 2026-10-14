@@ -11,6 +11,15 @@ namespace Lordsio.UI;
 public partial class PauseMenu : CanvasLayer
 {
     private MatchController _match = null!;
+    private Label _pausedBy = null!;
+
+    /// <summary>In a network game: who paused it (null hides the line).</summary>
+    public void ShowPausedBy(string? name)
+    {
+        _pausedBy.Visible = name != null;
+        if (name != null)
+            _pausedBy.Text = string.Format(Tr("NET_PAUSED_BY"), name);
+    }
     private BuildPlacement _placement = null!;
     private Control _menu = null!;
     private SettingsPanel _settings = null!;
@@ -30,6 +39,10 @@ public partial class PauseMenu : CanvasLayer
         };
         _help.Closed += () => _menu.Visible = true;
         GetNode<Button>("Dim/Center/Panel/Rows/Resume").Pressed += () => _match.SetPaused(false);
+        _pausedBy = new Label { HorizontalAlignment = HorizontalAlignment.Center, Visible = false };
+        var rows = GetNode<Control>("Dim/Center/Panel/Rows");
+        rows.AddChild(_pausedBy);
+        rows.MoveChild(_pausedBy, 1);
         var restart = GetNode<Button>("Dim/Center/Panel/Rows/Restart");
         restart.Pressed += () => _match.RequestRestart();
         restart.Visible = _match.Net == null;

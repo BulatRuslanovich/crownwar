@@ -90,7 +90,7 @@ public sealed record BuildingDestroyed(int FactionId, int BuildingId, string Bui
     : SimEvent(FactionId);
 
 /// <summary><see cref="SimEvent.FactionId"/> is the dead unit's faction; the killer may be -1 (unknown).</summary>
-public sealed record UnitDied(int FactionId, int UnitId, int KillerFactionId, Vector2 Position) : SimEvent(FactionId);
+public sealed record UnitDied(int FactionId, int UnitId, int KillerFactionId, Vector2 Position, string UnitTypeId = "") : SimEvent(FactionId);
 
 /// <summary>The faction's capital fell: its army disbands and its buildings collapse.</summary>
 public sealed record FactionEliminated(int FactionId) : SimEvent(FactionId);

@@ -58,6 +58,42 @@ public partial class NetSession : Node
     /// <summary>Host: the seed and factions the match started with, for players who rejoin.</summary>
     public StartMessage? StartedWith { get; private set; }
 
+    /// <summary>Host: the saved match this session brought back after a crash (its driver replays these frames).</summary>
+    public SavedMatch? Resumed { get; private set; }
+
+    /// <summary>Host, during the match: every human player (faction, rejoin key, name), for the save.</summary>
+    public IEnumerable<SavedPlayer> MatchPlayers => _players.Select(p => new SavedPlayer(p.Key, p.Value.Token, p.Value.Name));
+
+    /// <summary>Host: the name of the player at a peer (the host's own for peer 1).</summary>
+    public string NameOfPeer(int peerId) =>
+        peerId == 1 ? _localName
+        : _factionOfPeer.TryGetValue(peerId, out int faction) && _players.TryGetValue(faction, out var p) ? p.Name
+        : "?";
+
+    /// <summary>
+    /// Hosts a saved match again after a crash: the server starts already in the match, every other player counts as
+    /// departed (a bot plays them) and can rejoin with their key as usual; the host replays the save and plays on.
+    /// </summary>
+    public Error HostResume(string playerName, SavedMatch save)
+    {
+        var error = Host(playerName);
+        if (error != Error.Ok)
+            return error;
+        Resumed = save;
+        int own = save.Start.YourFaction;
+        foreach (var player in save.Players)
+        {
+            _players[player.Faction] = (player.Token, player.Name);
+            if (player.Faction != own)
+                _departed.Add(player.Faction);
+        }
+        _factionOfPeer[1] = own;
+        InMatch = true;
+        StartedWith = save.Start;
+        MatchStarting?.Invoke(save.Start with { Rejoin = true });
+        return Error.Ok;
+    }
+
     /// <summary>Host: a faction's rejoin key.</summary>
     public string TokenOf(int faction) => _players.TryGetValue(faction, out var p) ? p.Token : "";
 
@@ -351,7 +387,7 @@ public partial class NetSession : Node
             case SetTeamMessage team when !InMatch && Slots.FindIndex(s => s.PeerId == from) is var own and >= 0:
                 SetTeam(own, team.Team);
                 break;
-            case InputMessage or ChecksumMessage or CaughtUpMessage when InMatch && _greeted.Contains(from):
+            case InputMessage or ChecksumMessage or CaughtUpMessage or PauseMessage when InMatch && _greeted.Contains(from):
                 MessageReceived?.Invoke(from, message);
                 break;
         }
@@ -373,7 +409,7 @@ public partial class NetSession : Node
                 RejoinStore.Save(start.RejoinToken); // survives a crash, so the player can come back
                 MatchStarting?.Invoke(start);
                 break;
-            case FrameMessage or DesyncMessage:
+            case FrameMessage or DesyncMessage or PauseMessage:
                 if (MessageReceived == null)
                     _early.Add(message); // the match is still being built; its driver will ask for them
                 else

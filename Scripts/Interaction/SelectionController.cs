@@ -26,6 +26,7 @@ public partial class SelectionController : Node2D
 
     private static readonly Color MarkerColor = new("7cff6b");
     private static readonly Color AttackMarkerColor = new("ff5a4a");
+    private static readonly Color RallyColor = new("ffd84a");
     private static readonly Color BoxFill = new(0.48f, 1f, 0.42f, 0.12f);
     private static readonly Color BoxOutline = new(0.48f, 1f, 0.42f, 0.9f);
 
@@ -79,6 +80,11 @@ public partial class SelectionController : Node2D
                     _boxActive = true;
                 if (_boxActive)
                     QueueRedraw();
+                break;
+
+            case InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } when RallyBuilding() is { } producer:
+                SetRally(producer, GetGlobalMousePosition());
+                GetViewport().SetInputAsHandled();
                 break;
 
             case InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } right when _match.Selection.Count > 0:
@@ -187,9 +193,28 @@ public partial class SelectionController : Node2D
         _markerTimeLeft = MarkerDuration;
     }
 
+    /// <summary>The selected building, if it is ours and trains troops (so a right click sets its rally point).</summary>
+    private Building? RallyBuilding() =>
+        _match.Selection.BuildingId is { } id && _match.Sim.GetBuilding(id) is { } building
+        && building.FactionId == _match.LocalFactionId && building.Type.Recruits.Count > 0
+            ? building
+            : null;
+
+    /// <summary>Right click with a castle or barracks selected: new recruits walk there; on the building itself, they stay put.</summary>
+    private void SetRally(Building producer, Vector2 world)
+    {
+        bool onItself = PickBuilding(world)?.Id == producer.Id;
+        _match.Issue(new SetRallyCommand(_match.LocalFactionId, producer.Id, onItself ? null : SimConvert.ToSim(world)));
+        _markerPosition = onItself ? SimConvert.ToWorld(producer.Position) : world;
+        _markerColor = RallyColor;
+        _markerTimeLeft = MarkerDuration;
+    }
+
     public override void _Process(double delta)
     {
         UpdateCursor();
+        if (RallyBuilding() != null)
+            QueueRedraw(); // the rally flag follows the selection
         // The box is anchored in the world, so it must follow the camera even without mouse motion.
         if (_boxActive)
             QueueRedraw();
@@ -201,6 +226,16 @@ public partial class SelectionController : Node2D
 
     public override void _Draw()
     {
+        // The selected castle's or barracks' rally point: a dashed line from the door and a small flag.
+        if (RallyBuilding() is { RallyPoint: { } rally } producer)
+        {
+            var from = SimConvert.ToWorld(producer.Position);
+            var to = SimConvert.ToWorld(rally);
+            DrawDashedLine(from, to, RallyColor with { A = 0.7f }, 1f / _match.Camera.ZoomLevel, 4f);
+            DrawLine(to, to + new Vector2(0, -12), new Color("4a3a2a"), 1f);
+            DrawColoredPolygon(new[] { to + new Vector2(0, -12), to + new Vector2(7, -9.5f), to + new Vector2(0, -7) }, RallyColor);
+        }
+
         if (_boxActive)
         {
             var box = new Rect2(_pressWorld, Vector2.Zero).Expand(GetGlobalMousePosition());

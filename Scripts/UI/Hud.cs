@@ -407,7 +407,7 @@ public partial class Hud : CanvasLayer
             // Buttons stay clickable: the simulation is the judge and explains a refusal with a message.
             var error = _match.Sim.CanRecruit(_match.LocalFactionId, building.Id, typeId);
             MarkAvailable(button, error == RecruitError.None);
-            string upkeep = Names.Of(type) + "\n" + string.Format(Tr("INFO_UPKEEP"), type.Upkeep)
+            string upkeep = Names.Of(type) + "\n" + string.Format(Tr("INFO_UPKEEP"), type.Upkeep) + "\n" + Tr("HUD_RECRUIT_SHIFT")
                             + (type.IsSiege ? "\n" + string.Format(Tr("INFO_SIEGE"), type.BuildingDamageMultiplier) : "");
             button.TooltipText = error == RecruitError.None ? upkeep : Describe(error) + "\n" + upkeep;
         }
@@ -534,8 +534,13 @@ public partial class Hud : CanvasLayer
                 Icon = Icons.Unit(typeId, FactionColors.Get(_match.LocalFactionId)),
             };
             int buildingId = building.Id;
-            button.Pressed += () => _match.Issue(
-                new RecruitCommand(_match.LocalFactionId, buildingId, typeId));
+            // Shift orders five at once (the queue has no limit, only the army cap).
+            button.Pressed += () =>
+            {
+                int count = Input.IsKeyPressed(Key.Shift) ? 5 : 1;
+                for (int i = 0; i < count; i++)
+                    _match.Issue(new RecruitCommand(_match.LocalFactionId, buildingId, typeId));
+            };
             _recruitRow.AddChild(button);
             _recruitButtons.Add((button, typeId));
         }

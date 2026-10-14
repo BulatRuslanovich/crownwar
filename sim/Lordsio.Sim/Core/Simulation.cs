@@ -194,6 +194,9 @@ public sealed partial class Simulation
             case DemolishCommand demolish:
                 ApplyDemolish(demolish);
                 break;
+            case SetRallyCommand rally:
+                ApplyRally(rally);
+                break;
             default:
                 throw new NotSupportedException($"Unhandled command type {command.GetType().Name}.");
         }
@@ -255,13 +258,35 @@ public sealed partial class Simulation
     {
         if (GetEntity(attack.TargetId) is not { IsAlive: true } target || !AreEnemies(attack.FactionId, target.FactionId))
             return;
+        // A ram cannot fight soldiers: sent at one, it advances with the army and goes for the buildings it meets.
+        var rams = OwnLivingUnits(attack.FactionId, attack.UnitIds).Where(u => u.Type.IsSiege && target is not Building).Select(u => u.Id).ToList();
+        if (rams.Count > 0)
+            ApplyMove(new MoveCommand(attack.FactionId, rams, target.Position, MoveMode.AttackMove));
         foreach (var unit in OwnLivingUnits(attack.FactionId, attack.UnitIds))
         {
             if (unit.Type.IsSiege && target is not Building)
-                continue; // a ram cannot fight soldiers
+                continue;
             unit.StartAttack(target);
             unit.LastOrder = MoveOrderResult.Accepted;
         }
+    }
+
+    private void ApplyRally(SetRallyCommand rally)
+    {
+        if (GetBuilding(rally.BuildingId) is not { IsAlive: true } building || building.FactionId != rally.FactionId
+            || building.Type.Recruits.Count == 0)
+            return;
+        building.RallyPoint = rally.Point is { } p
+            ? new Vector2(Math.Clamp(p.X, 0.5f, Map.Width - 0.5f), Math.Clamp(p.Y, 0.5f, Map.Height - 0.5f))
+            : null;
+    }
+
+    /// <summary>A recruit fresh out of a building with a rally point walks there.</summary>
+    private void SendToRally(Unit unit, Building building)
+    {
+        if (building.RallyPoint is not { } rally)
+            return;
+        OrderGroupMove(new List<Unit> { unit }, Map.ComponentOf(Cell.FromPosition(unit.Position)), rally, UnitOrder.Move);
     }
 
     private void OrderGroupMove(List<Unit> group, int component, Vector2 target, UnitOrder order)
@@ -390,7 +415,7 @@ public sealed partial class Simulation
                 continue;
             _units.RemoveAt(i);
             _entitiesById.Remove(unit.Id);
-            _events.Add(new UnitDied(unit.FactionId, unit.Id, unit.KilledByFactionId, unit.Position));
+            _events.Add(new UnitDied(unit.FactionId, unit.Id, unit.KilledByFactionId, unit.Position, unit.Type.Id));
         }
     }
 }

@@ -31,6 +31,8 @@ public class NetCodecTests
         yield return new CaughtUpMessage(500);
         yield return new ChecksumMessage(80, 0xDEADBEEFCAFEUL);
         yield return new DesyncMessage(81);
+        yield return new PauseMessage(true, "Аня");
+        yield return new PauseMessage(false);
     }
 
     [TestCaseSource(nameof(Samples))]
@@ -202,6 +204,101 @@ public class LockstepEndToEndTests
         foreach (var bot in p.Bots)
             bot.Update();
         p.Checksums[p.Sim.Tick] = p.Sim.ComputeChecksum();
+    }
+
+    [Test]
+    public void MatchSaveRoundTripsAndSurvivesACutShortTail()
+    {
+        var start = new StartMessage(77, new[] { new NetSlot(NetSlotKind.Human, "Аня", 0, 0, 1), new NetSlot(NetSlotKind.Human, "Борис", 0, 1, 2) }, 0, "tok0");
+        var players = new[] { new SavedPlayer(0, "tok0", "Аня"), new SavedPlayer(1, "tok1", "Борис") };
+        var frames = Enumerable.Range(1, 5).Select(t => new FrameMessage(t, new Command[] { new RecruitCommand(0, 3, "infantry") }, Array.Empty<int>(), Array.Empty<FactionReturn>())).ToList();
+
+        var stream = new MemoryStream();
+        MatchSave.WriteHeader(stream, "1.0+x", start, players);
+        MatchSave.AppendFrames(stream, frames.Take(3));
+        MatchSave.AppendFrames(stream, frames.Skip(3));
+        stream.Position = 0;
+        var save = MatchSave.Read(stream)!;
+
+        Assert.That(save.Version, Is.EqualTo("1.0+x"));
+        Assert.That(save.Start.Seed, Is.EqualTo(77));
+        Assert.That(save.Players, Is.EqualTo(players));
+        Assert.That(save.Frames.Select(f => f.Tick), Is.EqualTo(new[] { 1, 2, 3, 4, 5 }));
+
+        // A crash in the middle of writing the last frame: the match resumes after the last whole one.
+        var cut = new MemoryStream(stream.ToArray()[..^3]);
+        Assert.That(MatchSave.Read(cut)!.Frames, Has.Count.EqualTo(4));
+        Assert.That(MatchSave.Read(new MemoryStream(new byte[] { 1, 2, 3 })), Is.Null, "not a save");
+    }
+
+    [Test]
+    public void HostResumedFromASaveReplaysTheMatchExactlyAndPlaysOn()
+    {
+        var rng = new Random(4);
+        var host = new LockstepHost(new[] { 0, 1 });
+        var history = new List<FrameMessage>();
+        var a = CreatePlayer(0);
+        var b = CreatePlayer(1);
+        var returns = new Dictionary<int, int>();
+
+        void Play(Player p)
+        {
+            if (p.Sim.Tick % 60 == 10)
+            {
+                var army = p.Sim.Units.Where(u => u.FactionId == p.Faction).Select(u => u.Id).ToList();
+                p.Peer.QueueLocal(new MoveCommand(p.Faction, army, new Vector2(30 + rng.Next(30), 20 + rng.Next(20)), MoveMode.AttackMove));
+            }
+        }
+
+        // Thirty seconds of a two-player match, every frame saved.
+        while (a.Sim.Tick < 30 * Simulation.TicksPerSecond)
+        {
+            foreach (var frame in host.CollectReadyFrames())
+            {
+                history.Add(frame);
+                a.Peer.ReceiveFrame(frame);
+                b.Peer.ReceiveFrame(frame);
+            }
+            foreach (var p in new[] { a, b })
+            {
+                Play(p);
+                if (p.Peer.HasFrame(p.Sim.Tick + 1))
+                {
+                    Apply(p, p.Peer.TakeFrame(p.Sim.Tick + 1), returns);
+                    foreach (var input in p.Peer.TakeInputs(p.Sim.Tick))
+                        host.SubmitInput(p.Faction, input);
+                }
+            }
+        }
+        int savedTicks = history.Count;
+        int crashTick = a.Sim.Tick;
+
+        // The host's game crashes. Restarted, it replays the save and takes up from the frame after the last.
+        var resumed = CreatePlayer(0);
+        var resumedReturns = new Dictionary<int, int>();
+        foreach (var frame in history)
+        {
+            Apply(resumed, frame, resumedReturns);
+            resumed.Peer.TakeInputs(resumed.Sim.Tick); // the past is decided: nothing to send
+        }
+        Assert.That(resumed.Checksums[crashTick], Is.EqualTo(a.Checksums[crashTick]), "the replay reaches the same state");
+
+        var newHost = new LockstepHost(new[] { 0, 1 }, savedTicks + 1);
+        newHost.DropFaction(1); // the other player has not come back yet: a bot plays them
+        for (int step = 0; step < 20 * Simulation.TicksPerSecond; step++)
+        {
+            foreach (var frame in newHost.CollectReadyFrames())
+                resumed.Peer.ReceiveFrame(frame);
+            Play(resumed);
+            if (!resumed.Peer.HasFrame(resumed.Sim.Tick + 1))
+                continue;
+            Apply(resumed, resumed.Peer.TakeFrame(resumed.Sim.Tick + 1), resumedReturns);
+            foreach (var input in resumed.Peer.TakeInputs(resumed.Sim.Tick))
+                newHost.SubmitInput(0, input);
+        }
+
+        Assert.That(resumed.Sim.Tick, Is.GreaterThan(crashTick + 19 * Simulation.TicksPerSecond), "the resumed match does not stall");
+        Assert.That(resumed.Bots.Any(bot => bot.FactionId == 1), Is.True, "the absent player's faction is a bot's until they return");
     }
 
     [Test]

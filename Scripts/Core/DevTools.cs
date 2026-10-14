@@ -40,7 +40,7 @@ public static class DevTools
                       || a.StartsWith("--zoom-index=", StringComparison.Ordinal) || a == "--pause" || a == "--debug-hud");
 
     public static bool WantsNetwork(string[] args) =>
-        args.Any(a => a == "--net-host" || a == "--net-browse" || a.StartsWith("--net-join=", StringComparison.Ordinal));
+        args.Any(a => a == "--net-host" || a == "--net-resume" || a == "--net-browse" || a.StartsWith("--net-join=", StringComparison.Ordinal));
 
     public static int? Seed(string[] args) => Arg(args, "--seed") is { } s ? int.Parse(s, CultureInfo.InvariantCulture) : null;
 
@@ -153,7 +153,7 @@ public static class DevTools
     private static void DemoArmy(MatchController match, int perSide)
     {
         var sim = match.Sim;
-        var center = SimConvert.ToSim(match.Camera.GetScreenCenterPosition());
+        var center = SimConvert.ToSim(match.Camera.Position); // where the camera is going, even before it has moved
         var types = new[] { "infantry", "infantry", "archer", "heavy" };
         var west = sim.Map.FindNearestInComponent(Cell.FromPosition(center + new SimVector2(-8f, 0f)), TileGrid.AnyComponent, 12)!.Value.Center;
         var east = sim.Map.FindNearestInComponent(Cell.FromPosition(center + new SimVector2(8f, 0f)), TileGrid.AnyComponent, 12)!.Value.Center;
