@@ -123,9 +123,10 @@ public class BuildingPlacementTests
     public void BuildingLimitsPerPlayer()
     {
         var rules = GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
-        Assert.That(rules.GetBuildingType("tower").MaxCount, Is.EqualTo(20));
-        Assert.That(rules.GetBuildingType("barracks").MaxCount, Is.EqualTo(10));
-        Assert.That(rules.GetBuildingType("watchtower").MaxCount, Is.EqualTo(10));
+        Assert.That(rules.GetBuildingType("tower").MaxCount, Is.EqualTo(12));
+        Assert.That(rules.GetBuildingType("catapult").MaxCount, Is.EqualTo(10));
+        Assert.That(rules.GetBuildingType("barracks").MaxCount, Is.EqualTo(10), "seven open every kind of unit, the rest add training places");
+        Assert.That(rules.GetBuildingType("watchtower").MaxCount, Is.EqualTo(5));
         Assert.That(rules.GetBuildingType("mine").MaxCount, Is.EqualTo(0), "mines are limited by the deposits only");
     }
 

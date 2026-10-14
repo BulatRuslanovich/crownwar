@@ -65,7 +65,11 @@ public class MatchScenarioTests
 
     /// <summary>Roughly equal gold on both sides; the counter relationships the unit data is meant to create.</summary>
     [TestCase("heavy", 1, "archer", 2, Description = "arrow armor: heavies shrug off archers")]
-    [TestCase("infantry", 2, "heavy", 1, Description = "cheap infantry swarm the slow heavy")]
+    [TestCase("infantry", 3, "heavy", 1, Description = "cheap infantry swarm the slow heavy")]
+    [TestCase("infantry", 3, "cavalry", 1, Description = "spearmen bring down a rider")]
+    [TestCase("cavalry", 1, "archer", 2, Description = "a rider runs down archers")]
+    [TestCase("crossbowman", 2, "heavy", 1, Description = "bolts go through plate")]
+    [TestCase("archer", 3, "infantry", 3, Description = "archers shoot down spearmen")]
     [TestCase("heavy", 1, "infantry", 1, Description = "one heavy beats one infantry")]
     public void UnitMatchups(string winnerType, int winnerCount, string loserType, int loserCount)
     {
