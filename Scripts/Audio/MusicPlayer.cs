@@ -64,6 +64,7 @@ public partial class MusicPlayer : Node
         return stream;
     }
 
+    /// <summary>Interleaved stereo samples (left, right, …) as a looping 16-bit stream.</summary>
     private static AudioStreamWav ToStream(float[] samples)
     {
         var data = new byte[samples.Length * 2];
@@ -77,11 +78,11 @@ public partial class MusicPlayer : Node
         {
             Format = AudioStreamWav.FormatEnum.Format16Bits,
             MixRate = MusicComposer.Rate,
-            Stereo = false,
+            Stereo = true,
             Data = data,
             LoopMode = AudioStreamWav.LoopModeEnum.Forward,
             LoopBegin = 0,
-            LoopEnd = samples.Length,
+            LoopEnd = samples.Length / 2, // in frames (a left and a right sample each)
         };
     }
 
