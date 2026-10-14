@@ -90,6 +90,16 @@ public partial class MatchSounds : Node
             case UnitRecruited recruited when recruited.FactionId == player:
                 PlayUi(Sound.UnitReady, -10f);
                 break;
+            case PeaceOffered offer when offer.OtherFactionId == player:
+                PlayUi(Sound.BuildingCompleted, -4f); // a herald's call: someone wants peace
+                break;
+            case PeaceMade made when made.FactionId == player || made.OtherFactionId == player:
+                PlayUi(Sound.UnitReady, -4f);
+                break;
+            case WarDeclared war when war.OtherFactionId == player:
+            case WarBegan began when began.FactionId == player || began.OtherFactionId == player:
+                PlayAlert();
+                break;
             case FactionEliminated eliminated when eliminated.FactionId == player:
                 PlayUi(Sound.Defeat, 0f);
                 break;

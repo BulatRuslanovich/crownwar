@@ -17,6 +17,10 @@ public class NetCodecTests
             new AttackCommand(1, new[] { 7 }, 99),
             new RecruitCommand(2, 12, "heavy"),
             new BuildCommand(3, "tower", new Cell(40, 21)),
+            new ProposePeaceCommand(0, 2),
+            new AnswerPeaceCommand(2, 0, Accept: true),
+            new AnswerPeaceCommand(1, 0, Accept: false),
+            new DeclareWarCommand(3, 1),
         };
         yield return new HelloMessage("1.0+abc", "Игрок");
         yield return new HelloMessage("1.0+abc", "Игрок", "a1b2c3");

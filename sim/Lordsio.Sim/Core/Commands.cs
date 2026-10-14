@@ -36,5 +36,14 @@ public sealed record SetRallyCommand(int FactionId, int BuildingId, Vector2? Poi
 /// <summary>Pull down one of the faction's own buildings (not the castle) for part of what it cost.</summary>
 public sealed record DemolishCommand(int FactionId, int BuildingId) : Command(FactionId);
 
+/// <summary>Offer peace to another faction; it holds for the rules' offer time unless answered.</summary>
+public sealed record ProposePeaceCommand(int FactionId, int OtherFactionId) : Command(FactionId);
+
+/// <summary>Accept or refuse the peace <paramref name="OtherFactionId"/> offered.</summary>
+public sealed record AnswerPeaceCommand(int FactionId, int OtherFactionId, bool Accept) : Command(FactionId);
+
+/// <summary>Break the peace with another faction: war begins after the rules' warning time.</summary>
+public sealed record DeclareWarCommand(int FactionId, int OtherFactionId) : Command(FactionId);
+
 /// <summary>Pay for a building and start constructing it with its top-left corner at <paramref name="Anchor"/>.</summary>
 public sealed record BuildCommand(int FactionId, string BuildingTypeId, Cell Anchor) : Command(FactionId);

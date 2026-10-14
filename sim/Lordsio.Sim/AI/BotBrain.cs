@@ -93,6 +93,11 @@ public sealed class BotBrain
         if (_sim.GetFaction(FactionId) is not { IsEliminated: false } me || _sim.GetBuilding(me.CapitalId) is not { } capital)
             return;
 
+        // Bots do not do diplomacy: any offer of peace is turned down at once.
+        foreach (var faction in _sim.Factions)
+            if (_sim.HasPeaceOffer(faction.Id, FactionId))
+                Issue(new AnswerPeaceCommand(FactionId, faction.Id, Accept: false));
+
         var army = _sim.Units.Where(u => u.FactionId == FactionId).ToList();
         int armyValue = army.Sum(u => u.Type.Cost);
         var threats = FindThreats();

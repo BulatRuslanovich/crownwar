@@ -121,7 +121,8 @@ internal sealed class CombatSystem
         if (tower.AttackCooldownTicks > 0)
             tower.AttackCooldownTicks--;
 
-        if (tower.Target is { } current && (!current.IsAlive || tower.SurfaceDistance(current.Position) > attack.Range))
+        if (tower.Target is { } current && (!current.IsAlive || tower.SurfaceDistance(current.Position) > attack.Range
+                                            || !_areEnemies(tower.FactionId, current.FactionId)))
             tower.Target = null;
         if (tower.Target == null && (tick + tower.Id) % ScanIntervalTicks == 0)
             tower.Target = FindEnemyUnit(tower, units, attack.Range);
@@ -147,6 +148,12 @@ internal sealed class CombatSystem
             float step = p.Speed * dt;
             if (p.Target.SurfaceDistance(p.Position) <= step)
             {
+                if (!_areEnemies(p.FactionId, p.Target.FactionId))
+                {
+                    // Peace was made while it flew: it falls harmlessly.
+                    _projectiles.RemoveAt(i);
+                    continue;
+                }
                 if (p.SplashRadius > 0f)
                     Splash(p, units);
                 else
@@ -191,8 +198,8 @@ internal sealed class CombatSystem
 
     private bool IsStillValidTarget(Unit unit, Entity target)
     {
-        if (!target.IsAlive)
-            return false;
+        if (!target.IsAlive || !_areEnemies(unit.FactionId, target.FactionId))
+            return false; // dead, or made peace with
         if (unit.Order == UnitOrder.AttackUnit)
             return true; // explicit orders are followed anywhere
         float limit = unit.Type.SightRange * LoseTargetFactor;

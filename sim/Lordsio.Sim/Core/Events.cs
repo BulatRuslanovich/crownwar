@@ -95,6 +95,39 @@ public sealed record UnitDied(int FactionId, int UnitId, int KillerFactionId, Ve
 /// <summary>The faction's capital fell: its army disbands and its buildings collapse.</summary>
 public sealed record FactionEliminated(int FactionId) : SimEvent(FactionId);
 
+public enum DiplomacyError
+{
+    None,
+    UnknownFaction,
+    Self,
+    /// <summary>The same team from the lobby: allies for good.</summary>
+    Allies,
+    AlreadyAtPeace,
+    AlreadyAtWar,
+    AlreadyOffered,
+    /// <summary>Nothing to answer: the offer ran out or was never made.</summary>
+    NoOffer,
+    /// <summary>War is already declared and on its way.</summary>
+    WarComing,
+}
+
+/// <summary><see cref="SimEvent.FactionId"/> offered peace to <paramref name="OtherFactionId"/>, who has <paramref name="Seconds"/> to accept.</summary>
+public sealed record PeaceOffered(int FactionId, int OtherFactionId, float Seconds) : SimEvent(FactionId);
+
+/// <summary><see cref="SimEvent.FactionId"/> did not take the peace <paramref name="OtherFactionId"/> offered (refused, or let it run out).</summary>
+public sealed record PeaceRefused(int FactionId, int OtherFactionId, bool Expired) : SimEvent(FactionId);
+
+/// <summary>A treaty between <see cref="SimEvent.FactionId"/> (who offered) and <paramref name="OtherFactionId"/>: their fighting stops.</summary>
+public sealed record PeaceMade(int FactionId, int OtherFactionId) : SimEvent(FactionId);
+
+/// <summary><see cref="SimEvent.FactionId"/> declared war on <paramref name="OtherFactionId"/>; it begins in <paramref name="Seconds"/>.</summary>
+public sealed record WarDeclared(int FactionId, int OtherFactionId, float Seconds) : SimEvent(FactionId);
+
+/// <summary>The war <see cref="SimEvent.FactionId"/> declared on <paramref name="OtherFactionId"/> has begun.</summary>
+public sealed record WarBegan(int FactionId, int OtherFactionId) : SimEvent(FactionId);
+
+public sealed record DiplomacyRejected(int FactionId, int OtherFactionId, DiplomacyError Reason) : SimEvent(FactionId);
+
 /// <summary>The match is over. <paramref name="WinningTeam"/> is the team that won, or -1 if nobody survived.</summary>
 public sealed record MatchEnded(int WinningTeam) : SimEvent(-1);
 

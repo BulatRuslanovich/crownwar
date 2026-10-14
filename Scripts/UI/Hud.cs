@@ -63,6 +63,10 @@ public partial class Hud : CanvasLayer
     private AlertIndicator _alert = null!;
     private int? _panelBuildingId;
     private float _messageTimeLeft;
+    private Button _diplomacyButton = null!;
+
+    /// <summary>Peace and war with the other players (P).</summary>
+    public DiplomacyPanel Diplomacy { get; private set; } = null!;
 
     public void Initialize(MatchController match, BuildPlacement placement)
     {
@@ -101,6 +105,14 @@ public partial class Hud : CanvasLayer
         var scoreboard = new Scoreboard { Name = "Scoreboard" };
         AddChild(scoreboard);
         scoreboard.Initialize(match);
+        Diplomacy = new DiplomacyPanel { Name = "Diplomacy" };
+        AddChild(Diplomacy);
+        Diplomacy.Initialize(match, this);
+        // On the top bar only when there is someone to deal with: bots do not do diplomacy.
+        _diplomacyButton = new Button { Text = "DIPLO_BUTTON", FocusMode = Control.FocusModeEnum.None, Visible = false };
+        _diplomacyButton.AddThemeFontSizeOverride("font_size", 14);
+        _diplomacyButton.Pressed += Diplomacy.Toggle;
+        GetNode("ResourceBar/Row").AddChild(_diplomacyButton);
         _selectionPanel = GetNode<Control>("SelectionPanel");
         _selectionTitle = GetNode<Label>("SelectionPanel/Rows/Title");
         _selectionTypes = GetNode<Container>("SelectionPanel/Rows/Types");
@@ -171,6 +183,7 @@ public partial class Hud : CanvasLayer
             _buildHint.Text = DescribePlacement(_placement.CurrentError);
 
         UpdateBuildingPanel();
+        _diplomacyButton.Visible = Diplomacy.HasCounterparts;
 
         // Lockstep stall: keep the notice up for as long as we wait.
         if (_match.CatchingUp)
@@ -190,6 +203,12 @@ public partial class Hud : CanvasLayer
     {
         if (@event is not InputEventKey { Pressed: true, Echo: false, CtrlPressed: false } key)
             return;
+        if (key.PhysicalKeycode == Key.P)
+        {
+            Diplomacy.Toggle();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (key.PhysicalKeycode == Key.U)
         {
             UpgradeSelected();
@@ -250,6 +269,10 @@ public partial class Hud : CanvasLayer
             case BuildingDemolished demolished when demolished.FactionId == player:
                 ShowMessage(string.Format(Tr("MSG_DEMOLISHED"),
                     Names.Of(_match.Sim.Rules.GetBuildingType(demolished.BuildingTypeId)), demolished.Refund));
+                break;
+            case PeaceOffered or PeaceRefused or PeaceMade or WarDeclared or WarBegan or DiplomacyRejected:
+                if (DescribeDiplomacy(e) is { } news)
+                    ShowMessage(news);
                 break;
             case GoldLooted loot when loot.FactionId == player:
                 ShowMessage(string.Format(Tr("MSG_LOOTED"), loot.Amount));
@@ -548,6 +571,35 @@ public partial class Hud : CanvasLayer
 
     /// <summary>A short message in the middle of the screen, e.g. about other players in a network game.</summary>
     public void ShowNotice(string text) => ShowMessage(text);
+
+    /// <summary>
+    /// News of diplomacy: what concerns the player in full; treaties and wars between others too, since everyone
+    /// should know who is fighting whom. Null for what is not worth a message.
+    /// </summary>
+    private string? DescribeDiplomacy(SimEvent e)
+    {
+        int me = _match.LocalFactionId;
+        string Name(int faction) => Names.Player(_match, faction);
+        return e switch
+        {
+            PeaceOffered o when o.OtherFactionId == me => string.Format(Tr("MSG_PEACE_OFFERED_TO_YOU"), Name(o.FactionId)),
+            PeaceOffered o when o.FactionId == me => string.Format(Tr("MSG_PEACE_OFFER_SENT"), Name(o.OtherFactionId)),
+            PeaceRefused r when r.OtherFactionId == me =>
+                string.Format(Tr(r.Expired ? "MSG_PEACE_EXPIRED" : "MSG_PEACE_REFUSED"), Name(r.FactionId)),
+            PeaceMade m when m.FactionId == me || m.OtherFactionId == me =>
+                string.Format(Tr("MSG_PEACE_MADE"), Name(m.FactionId == me ? m.OtherFactionId : m.FactionId)),
+            PeaceMade m => string.Format(Tr("MSG_PEACE_MADE_OTHERS"), Name(m.FactionId), Name(m.OtherFactionId)),
+            WarDeclared w when w.OtherFactionId == me =>
+                string.Format(Tr("MSG_WAR_DECLARED_ON_YOU"), Name(w.FactionId), Mathf.RoundToInt(w.Seconds)),
+            WarDeclared w when w.FactionId == me =>
+                string.Format(Tr("MSG_WAR_DECLARED_BY_YOU"), Name(w.OtherFactionId), Mathf.RoundToInt(w.Seconds)),
+            WarDeclared w => string.Format(Tr("MSG_WAR_DECLARED_OTHERS"), Name(w.FactionId), Name(w.OtherFactionId)),
+            WarBegan b when b.FactionId == me || b.OtherFactionId == me =>
+                string.Format(Tr("MSG_WAR_BEGAN"), Name(b.FactionId == me ? b.OtherFactionId : b.FactionId)),
+            DiplomacyRejected r when r.FactionId == me => Tr("MSG_DIPLOMACY_REJECTED"),
+            _ => null,
+        };
+    }
 
     private void ShowMessage(string text)
     {

@@ -423,6 +423,8 @@ public partial class MatchController : Node2D
             if (e is AttackLanded hit && (IsFriendly(hit.FactionId) || IsFriendly(hit.TargetFactionId)))
                 _battleHeat = MathF.Min(BattleHeatMax, _battleHeat + 1f);
             Stats.OnSimEvent(e);
+            if (Net is { LogChecksums: true } && e is PeaceOffered or PeaceRefused or PeaceMade or WarDeclared or WarBegan or DiplomacyRejected)
+                GD.Print($"[net] tick {Sim.Tick}: {e}"); // both copies' logs must agree on these
             _hud.OnSimEvent(e);
             _alerts.OnSimEvent(e, Sim.Tick);
             _endScreen.OnSimEvent(e);
@@ -458,6 +460,9 @@ public partial class MatchController : Node2D
         _fogTick = Sim.Tick;
         Fog.Update(Sim, LocalTeam);
     }
+
+    /// <summary>A side played by the computer on every machine (a bot slot, or a player who left): it does no diplomacy.</summary>
+    public bool IsBotControlled(int factionId) => _bots.Any(b => b.FactionId == factionId && b.CommandSink == null);
 
     public bool IsFriendly(int factionId) => factionId >= 0 && Sim.GetFaction(factionId)?.Team == LocalTeam;
 

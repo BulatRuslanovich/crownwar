@@ -15,7 +15,8 @@ public sealed class GameRules
         UnitCatalog units, IEnumerable<BuildingType> buildingTypes,
         float depositReserveSeconds = 0f, float depositRegenSeconds = 0f, int upkeepAllowance = 0,
         int goldCap = 0, int lootPercent = 0, int demolishRefundPercent = 0,
-        float daySeconds = 0f, float nightSeconds = 0f, float nightSightFactor = 1f)
+        float daySeconds = 0f, float nightSeconds = 0f, float nightSightFactor = 1f,
+        float peaceOfferSeconds = 30f, float warWarningSeconds = 30f)
     {
         if (startingGold < 0)
             throw new ArgumentOutOfRangeException(nameof(startingGold));
@@ -31,6 +32,10 @@ public sealed class GameRules
             throw new ArgumentOutOfRangeException(nameof(lootPercent), "Loot and refund are percentages.");
         if (daySeconds < 0f || nightSeconds < 0f || nightSightFactor is <= 0f or > 1f)
             throw new ArgumentOutOfRangeException(nameof(nightSeconds), "Day and night last a non-negative time; night sight is a factor in (0, 1].");
+        if (peaceOfferSeconds <= 0f || warWarningSeconds < 0f)
+            throw new ArgumentOutOfRangeException(nameof(warWarningSeconds), "An offer of peace must stand a while; the war warning cannot be negative.");
+        PeaceOfferSeconds = peaceOfferSeconds;
+        WarWarningSeconds = warWarningSeconds;
         StartingGold = startingGold;
         GoldCap = goldCap;
         LootPercent = lootPercent;
@@ -114,6 +119,12 @@ public sealed class GameRules
 
     /// <summary>At night units see this share of their sight range (buildings see as far as by day).</summary>
     public float NightSightFactor { get; }
+
+    /// <summary>Seconds an offer of peace waits for an answer.</summary>
+    public float PeaceOfferSeconds { get; }
+
+    /// <summary>Seconds between declaring war on a faction at peace and the fighting.</summary>
+    public float WarWarningSeconds { get; }
 
     /// <summary>Army each faction starts with next to its capital.</summary>
     public IReadOnlyList<StartingUnits> StartingUnits { get; }
@@ -218,7 +229,9 @@ public sealed class GameRules
             OptionalInt(root, "demolishRefundPercent"),
             root.TryGetProperty("dayNight", out var dayNight) ? OptionalSingle(dayNight, "day") : 0f,
             root.TryGetProperty("dayNight", out var night) ? OptionalSingle(night, "night") : 0f,
-            root.TryGetProperty("dayNight", out var sight) && sight.TryGetProperty("sightFactor", out var factor) ? factor.GetSingle() : 1f);
+            root.TryGetProperty("dayNight", out var sight) && sight.TryGetProperty("sightFactor", out var factor) ? factor.GetSingle() : 1f,
+            root.TryGetProperty("diplomacy", out var offer) && offer.TryGetProperty("offerSeconds", out var offerSeconds) ? offerSeconds.GetSingle() : 30f,
+            root.TryGetProperty("diplomacy", out var war) && war.TryGetProperty("warWarningSeconds", out var warning) ? warning.GetSingle() : 30f);
     }
 
     /// <summary>

@@ -52,6 +52,7 @@ public sealed partial class Simulation
             hash.Add(faction.Treasury.Remainder);
             hash.Add(faction.IsEliminated ? 1 : 0);
         }
+        HashDiplomacy(ref hash);
         return hash.Value;
     }
 

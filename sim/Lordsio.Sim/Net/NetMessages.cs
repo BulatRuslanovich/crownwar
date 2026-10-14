@@ -89,7 +89,7 @@ public static class NetCodec
 
     private enum CommandTag : byte
     {
-        Move = 1, Attack, Recruit, Build, Upgrade, Demolish, Rally,
+        Move = 1, Attack, Recruit, Build, Upgrade, Demolish, Rally, ProposePeace, AnswerPeace, DeclareWar,
     }
 
     public static byte[] Encode(NetMessage message)
@@ -268,6 +268,15 @@ public static class NetCodec
                 case DemolishCommand c:
                     w.Write((byte)CommandTag.Demolish); w.Write(c.FactionId); w.Write(c.BuildingId);
                     break;
+                case ProposePeaceCommand c:
+                    w.Write((byte)CommandTag.ProposePeace); w.Write(c.FactionId); w.Write(c.OtherFactionId);
+                    break;
+                case AnswerPeaceCommand c:
+                    w.Write((byte)CommandTag.AnswerPeace); w.Write(c.FactionId); w.Write(c.OtherFactionId); w.Write(c.Accept);
+                    break;
+                case DeclareWarCommand c:
+                    w.Write((byte)CommandTag.DeclareWar); w.Write(c.FactionId); w.Write(c.OtherFactionId);
+                    break;
                 case SetRallyCommand c:
                     w.Write((byte)CommandTag.Rally); w.Write(c.FactionId); w.Write(c.BuildingId);
                     w.Write(c.Point.HasValue);
@@ -294,6 +303,9 @@ public static class NetCodec
                 CommandTag.Upgrade => new UpgradeCommand(r.ReadInt32(), r.ReadInt32()),
                 CommandTag.Demolish => new DemolishCommand(r.ReadInt32(), r.ReadInt32()),
                 CommandTag.Rally => new SetRallyCommand(r.ReadInt32(), r.ReadInt32(), r.ReadBoolean() ? ReadVector(r) : null),
+                CommandTag.ProposePeace => new ProposePeaceCommand(r.ReadInt32(), r.ReadInt32()),
+                CommandTag.AnswerPeace => new AnswerPeaceCommand(r.ReadInt32(), r.ReadInt32(), r.ReadBoolean()),
+                CommandTag.DeclareWar => new DeclareWarCommand(r.ReadInt32(), r.ReadInt32()),
                 var tag => throw new FormatException($"Unknown command tag {(byte)tag}."),
             });
         }

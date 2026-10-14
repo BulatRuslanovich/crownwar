@@ -66,6 +66,7 @@ public sealed partial class Simulation
             _factions.Add(new Faction(id, team, rules));
             _teamOf[id] = team;
         }
+        InitDiplomacy(_teamOf.Length);
 
         PlaceCapitals(map.StartPositions, setup);
 
@@ -94,17 +95,10 @@ public sealed partial class Simulation
     public int WinningTeam { get; private set; } = -1;
 
     /// <summary>
-    /// Whether units of the two factions fight each other: different factions on different teams.
-    /// Neutral (-1) is hostile to everyone.
+    /// Whether units of the two factions fight each other: different factions on different teams, not at peace
+    /// (see <see cref="StanceBetween"/>). Neutral (-1) is hostile to everyone.
     /// </summary>
-    public bool AreEnemies(int factionA, int factionB)
-    {
-        if (factionA == factionB)
-            return false;
-        if (factionA < 0 || factionB < 0 || factionA >= _teamOf.Length || factionB >= _teamOf.Length)
-            return true;
-        return _teamOf[factionA] != _teamOf[factionB];
-    }
+    public bool AreEnemies(int factionA, int factionB) => StanceBetween(factionA, factionB) == Stance.War;
 
     public Entity? GetEntity(int id) => _entitiesById.GetValueOrDefault(id);
     public Unit? GetUnit(int id) => GetEntity(id) as Unit;
@@ -133,6 +127,7 @@ public sealed partial class Simulation
 
         while (_pending.TryDequeue(out var command))
             Apply(command);
+        UpdateDiplomacy();
 
         UpdateDeposits();
         UpdateEconomy(payIncome: true);
@@ -196,6 +191,15 @@ public sealed partial class Simulation
                 break;
             case SetRallyCommand rally:
                 ApplyRally(rally);
+                break;
+            case ProposePeaceCommand offer:
+                ApplyProposePeace(offer);
+                break;
+            case AnswerPeaceCommand answer:
+                ApplyAnswerPeace(answer);
+                break;
+            case DeclareWarCommand war:
+                ApplyDeclareWar(war);
                 break;
             default:
                 throw new NotSupportedException($"Unhandled command type {command.GetType().Name}.");

@@ -31,6 +31,7 @@ namespace Lordsio.Core;
 ///   --demo-upgrade           keep upgrading the player's finished towers and mines to their highest level
 ///   --demo-no-fog            show the whole map (no fog of war)
 ///   --demo-scoreboard        keep the players table (Tab) open
+///   --demo-diplomacy         open the diplomacy panel (P)
 /// </summary>
 public static class DevTools
 {
@@ -53,6 +54,8 @@ public static class DevTools
             match.AddBot(match.LocalFactionId, Sim.AI.BotDifficulty.Hard);
         if (Arg(args, "--demo-time-scale") is { } scale)
             Godot.Engine.TimeScale = double.Parse(scale, CultureInfo.InvariantCulture);
+        if (args.Contains("--demo-diplomacy"))
+            match.GetNode<UI.Hud>("Hud").Diplomacy.Visible = true;
         if (args.Contains("--demo-scoreboard"))
             match.GetNode<UI.Scoreboard>("Hud/Scoreboard").Pinned = true;
         if (args.Contains("--demo-no-fog"))

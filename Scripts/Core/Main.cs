@@ -36,6 +36,7 @@ public partial class Main : Node
     private bool _devAutoplay;
     private bool _devNetLog;
     private bool _devPauseTest;
+    private bool _devDiplomacyTest;
     private int[]? _devTeams;
 
     public override void _EnterTree()
@@ -202,6 +203,30 @@ public partial class Main : Node
             GetTree().CreateTimer(20.0).Timeout += () => { if (IsInstanceValid(match)) match.SetPaused(true); };
             GetTree().CreateTimer(26.0, processAlways: true).Timeout += () => { if (IsInstanceValid(match)) match.SetPaused(false); };
         }
+        if (_devDiplomacyTest)
+            DevDiplomacyTest(match);
+    }
+
+    /// <summary>
+    /// Dev (--net-diplo-test, on both copies): the host offers the other player peace at 6 s, the guest accepts at
+    /// 12 s (the offer pop-up shows meanwhile), the host opens the diplomacy panel at 22 s and declares war at 24 s.
+    /// </summary>
+    private void DevDiplomacyTest(MatchController match)
+    {
+        int me = match.LocalFactionId;
+        int other = match.Config.Slots.Select((s, i) => (s, i)).First(p => p.s.Kind == SlotKind.Human && p.i != me).i;
+        void At(double seconds, System.Action action) =>
+            GetTree().CreateTimer(seconds).Timeout += () => { if (IsInstanceValid(match)) action(); };
+        if (_session!.IsHost)
+        {
+            At(6, () => match.Issue(new Sim.Core.ProposePeaceCommand(me, other)));
+            At(22, () => match.GetNode<UI.Hud>("Hud").Diplomacy.Visible = true);
+            At(24, () => match.Issue(new Sim.Core.DeclareWarCommand(me, other)));
+        }
+        else
+        {
+            At(12, () => match.Issue(new Sim.Core.AnswerPeaceCommand(me, other, Accept: true)));
+        }
     }
 
     /// <summary>Lost connection, rejected, host gone: in a match the end screen explains; elsewhere back to the network menu.</summary>
@@ -217,7 +242,7 @@ public partial class Main : Node
     /// Dev-only, for two copies on one PC: --net-browse opens the network menu; --net-host or --net-join=ADDRESS
     /// skip the menus; --net-players=N
     /// makes the host start once N players are in (open slots become Hard bots), --net-teams=0,0,1,1 sets the
-    /// slots' teams; --net-autoplay lets a bot
+    /// slots' teams; --net-diplo-test plays a scripted round of diplomacy (see DevDiplomacyTest); --net-autoplay lets a bot
     /// play the local faction through the network; --net-log prints checksums to compare the copies' logs;
     /// --net-lag=MS[,JITTER] holds this copy's outgoing packets back (a poor link on one PC; ENet's ping does not see it);
     /// --net-resume hosts the saved match again (as after a crash), if there is one; --net-pause-test pauses the
@@ -228,6 +253,7 @@ public partial class Main : Node
         _devAutoplay = System.Array.IndexOf(args, "--net-autoplay") >= 0;
         _devNetLog = System.Array.IndexOf(args, "--net-log") >= 0;
         _devPauseTest = System.Array.IndexOf(args, "--net-pause-test") >= 0;
+        _devDiplomacyTest = System.Array.IndexOf(args, "--net-diplo-test") >= 0;
         string name = DevTools.Arg(args, "--net-name") ?? GameSettings.Instance?.PlayerName ?? "Player";
         ShowNetMenu(null);
         if (DevTools.Arg(args, "--net-lag") is { } lag)
