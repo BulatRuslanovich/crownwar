@@ -211,3 +211,5 @@ INFO_RANGE,Shoots at {0:0.#} tiles,Стреляет на {0:0.#} клетки
 INFO_PIERCING,Bolts ignore {0:0}% of armour,Болты пробивают {0:0}% брони
 INFO_ARROW_ARMOR,Arrows: −{0:0}% damage,Стрелы: −{0:0}% урона
 INFO_BONUS_AGAINST,×{0:0.#} damage against: {1},Урон ×{0:0.#} против: {1}
+MSG_BUILDER_SENT,A soldier goes to build: {0},Боец идёт строить: {0}
+MSG_BUILD_PLAN_CANCELLED,Building called off: {0} (+{1} gold back),Стройка отменена: {0} (возвращено {1} золота)

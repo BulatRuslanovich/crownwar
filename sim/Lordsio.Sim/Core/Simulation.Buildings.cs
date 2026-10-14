@@ -19,15 +19,20 @@ public sealed partial class Simulation
     /// Whether a <see cref="BuildCommand"/> would currently succeed: the same check the command runs,
     /// exposed so the UI can colour the placement ghost and bots can plan without guessing the rules.
     /// </summary>
-    public BuildError CanBuild(int factionId, string buildingTypeId, Cell anchor)
+    public BuildError CanBuild(int factionId, string buildingTypeId, Cell anchor) => CanBuild(factionId, buildingTypeId, anchor, checkGold: true);
+
+    /// <param name="checkGold">False for a building already paid for (a builder arriving at a planned site).</param>
+    private BuildError CanBuild(int factionId, string buildingTypeId, Cell anchor, bool checkGold)
     {
         if (!Rules.HasBuildingType(buildingTypeId))
             return BuildError.UnknownType;
         var type = Rules.GetBuildingType(buildingTypeId);
         if (!type.IsBuildable || GetFaction(factionId) is not { IsEliminated: false } faction)
             return BuildError.NotBuildable;
-        if (type.MaxCount > 0 && CountBuildings(factionId, type.Id) >= type.MaxCount)
+        if (type.MaxCount > 0 && CountBuildings(factionId, type.Id) + PlannedCount(factionId, type.Id) >= type.MaxCount)
             return BuildError.LimitReached;
+        if (OverlapsPlan(factionId, anchor, type.Size))
+            return BuildError.Occupied;
 
         foreach (var cell in Building.FootprintOf(anchor, type.Size))
         {
@@ -54,7 +59,7 @@ public sealed partial class Simulation
         if (!_units.Any(u => u.FactionId == factionId && u.IsAlive && Vector2.DistanceSquared(u.Position, center) <= radiusSq))
             return BuildError.NoUnitsNearby;
 
-        if (!faction.Treasury.CanAfford(type.Cost))
+        if (checkGold && !faction.Treasury.CanAfford(type.Cost))
             return BuildError.NotEnoughGold;
         return BuildError.None;
     }
@@ -147,6 +152,9 @@ public sealed partial class Simulation
     private void ApplyBuild(BuildCommand build)
     {
         var error = CanBuild(build.FactionId, build.BuildingTypeId, build.Anchor);
+        // Nobody near: the nearest free soldier is sent to build it.
+        if (error == BuildError.NoUnitsNearby && TryPlanBuild(build))
+            return;
         if (error != BuildError.None)
         {
             _events.Add(new BuildRejected(build.FactionId, build.BuildingTypeId, error));

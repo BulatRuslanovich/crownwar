@@ -32,6 +32,7 @@ namespace Lordsio.Core;
 ///   --demo-no-fog            show the whole map (no fog of war)
 ///   --demo-scoreboard        keep the players table (Tab) open
 ///   --demo-diplomacy         open the diplomacy panel (P)
+///   --demo-far-build         order a barracks far from the player's troops (a soldier walks over to build it)
 /// </summary>
 public static class DevTools
 {
@@ -66,6 +67,8 @@ public static class DevTools
             match.Sim.GetFaction(match.LocalFactionId)!.Treasury.Add(int.Parse(gold, CultureInfo.InvariantCulture));
         if (args.Contains("--demo-build"))
             DemoBuild(match);
+        if (args.Contains("--demo-far-build"))
+            DemoFarBuild(match);
         if (Arg(args, "--demo-recruit") is { } recruit)
             DemoRecruit(match, int.Parse(recruit, CultureInfo.InvariantCulture));
         if (Arg(args, "--demo-camera") is { } camera)
@@ -136,6 +139,26 @@ public static class DevTools
                         taken.Add(new Cell(anchor.X + x, anchor.Y + y));
                 break;
             }
+        }
+    }
+
+    /// <summary>A barracks some 12 tiles from the capital, where nobody stands: the nearest soldier is sent to build it.</summary>
+    private static void DemoFarBuild(MatchController match)
+    {
+        var sim = match.Sim;
+        var capital = PlayerCapital(match);
+        for (int r = 11; r < 16; r++)
+        {
+            var anchor = Enumerable.Range(-r, 2 * r + 1)
+                .SelectMany(dy => Enumerable.Range(-r, 2 * r + 1).Select(dx => new Cell(capital.Anchor.X + dx, capital.Anchor.Y + dy)))
+                .Where(c => Math.Max(Math.Abs(c.X - capital.Anchor.X), Math.Abs(c.Y - capital.Anchor.Y)) == r)
+                .FirstOrDefault(c => sim.CanBuild(match.LocalFactionId, "barracks", c) == BuildError.NoUnitsNearby
+                                     && sim.FindBuilder(match.LocalFactionId, "barracks", c) != null);
+            if (anchor == default)
+                continue;
+            match.Issue(new BuildCommand(match.LocalFactionId, "barracks", anchor));
+            match.Camera.CenterOn(SimConvert.ToWorld(new SimVector2((anchor.X + capital.Anchor.X) / 2f, (anchor.Y + capital.Anchor.Y) / 2f)));
+            return;
         }
     }
 

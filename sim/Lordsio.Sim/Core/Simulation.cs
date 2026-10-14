@@ -148,6 +148,7 @@ public sealed partial class Simulation
             CheckProgress(unit);
             CompleteFinishedOrder(unit);
         }
+        UpdatePlans();
 
         RemoveDeadUnits();
         RemoveDestroyedBuildings();

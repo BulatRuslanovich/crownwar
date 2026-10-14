@@ -84,6 +84,9 @@ public partial class MatchSounds : Node
             case BuildingDemolished demolished:
                 PlayAt(Sound.BuildingDestroyed, demolished.Position, -2f, margin: 600f);
                 break;
+            case BuildPlanned planned when planned.FactionId == player:
+                PlayUi(Sound.BuildingPlaced, -10f);
+                break;
             case BuildingPlaced placed when placed.FactionId == player:
                 PlayUi(Sound.BuildingPlaced, -6f);
                 break;

@@ -69,6 +69,12 @@ public sealed record BuildRejected(int FactionId, string BuildingTypeId, BuildEr
 
 public sealed record BuildingPlaced(int FactionId, int BuildingId) : SimEvent(FactionId);
 
+/// <summary>Nobody stood near the place: <paramref name="BuilderId"/> walks over to put up the (already paid) building.</summary>
+public sealed record BuildPlanned(int FactionId, int PlanId, string BuildingTypeId, int BuilderId) : SimEvent(FactionId);
+
+/// <summary>A planned building was given up (builder lost, sent elsewhere or stuck, or the place taken); the gold came back.</summary>
+public sealed record BuildPlanCancelled(int FactionId, int PlanId, string BuildingTypeId, int Refund, BuildError Reason) : SimEvent(FactionId);
+
 public sealed record BuildingCompleted(int FactionId, int BuildingId) : SimEvent(FactionId);
 
 public sealed record BuildingUpgradeStarted(int FactionId, int BuildingId) : SimEvent(FactionId);

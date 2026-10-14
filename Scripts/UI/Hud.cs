@@ -177,7 +177,8 @@ public partial class Hud : CanvasLayer
     private void UpdateRest(double delta)
     {
         // Only while placing, and only to say why it cannot go here.
-        bool blocked = _placement.ActiveType != null && _placement.CurrentError != BuildError.None;
+        // Nobody near is no obstacle while someone can walk over to build.
+        bool blocked = _placement.ActiveType != null && _placement.CurrentError != BuildError.None && _placement.Builder == null;
         _buildHint.Visible = blocked;
         if (blocked)
             _buildHint.Text = DescribePlacement(_placement.CurrentError);
@@ -273,6 +274,13 @@ public partial class Hud : CanvasLayer
             case PeaceOffered or PeaceRefused or PeaceMade or WarDeclared or WarBegan or DiplomacyRejected:
                 if (DescribeDiplomacy(e) is { } news)
                     ShowMessage(news);
+                break;
+            case BuildPlanned planned when planned.FactionId == player:
+                ShowMessage(string.Format(Tr("MSG_BUILDER_SENT"), Names.Of(_match.Sim.Rules.GetBuildingType(planned.BuildingTypeId))));
+                break;
+            case BuildPlanCancelled cancelled when cancelled.FactionId == player:
+                ShowMessage(string.Format(Tr("MSG_BUILD_PLAN_CANCELLED"),
+                    Names.Of(_match.Sim.Rules.GetBuildingType(cancelled.BuildingTypeId)), cancelled.Refund));
                 break;
             case GoldLooted loot when loot.FactionId == player:
                 ShowMessage(string.Format(Tr("MSG_LOOTED"), loot.Amount));

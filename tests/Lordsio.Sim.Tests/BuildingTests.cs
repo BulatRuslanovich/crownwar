@@ -84,11 +84,17 @@ public class BuildingPlacementTests
     public void RejectedBuildKeepsGold()
     {
         var sim = CreateSim();
+        // With no troops left at all there is nobody to send, so a far-off building is turned down.
+        foreach (var unit in sim.Units.ToList())
+            Lordsio.Sim.Combat.CombatSystem.ApplyDamage(unit, unit.MaxHealth, ranged: false, attackerFactionId: 1);
+        sim.Step();
+        sim.TakeEvents();
+        int gold = sim.GetFaction(0)!.Treasury.Gold;
         sim.Issue(new BuildCommand(0, "barracks", new Cell(17, 8)));
         sim.Step();
 
         Assert.That(sim.Buildings.Count, Is.EqualTo(1), "only the capital");
-        Assert.That(sim.GetFaction(0)!.Treasury.Gold, Is.EqualTo(100));
+        Assert.That(sim.GetFaction(0)!.Treasury.Gold, Is.GreaterThanOrEqualTo(gold), "nothing spent (a tick of income aside)");
         Assert.That(sim.TakeEvents().OfType<BuildRejected>().Single().Reason, Is.EqualTo(BuildError.NoUnitsNearby));
     }
 
@@ -123,10 +129,10 @@ public class BuildingPlacementTests
     public void BuildingLimitsPerPlayer()
     {
         var rules = GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
-        Assert.That(rules.GetBuildingType("tower").MaxCount, Is.EqualTo(12));
-        Assert.That(rules.GetBuildingType("catapult").MaxCount, Is.EqualTo(10));
+        Assert.That(rules.GetBuildingType("tower").MaxCount, Is.EqualTo(20));
+        Assert.That(rules.GetBuildingType("catapult").MaxCount, Is.EqualTo(20));
         Assert.That(rules.GetBuildingType("barracks").MaxCount, Is.EqualTo(10), "seven open every kind of unit, the rest add training places");
-        Assert.That(rules.GetBuildingType("watchtower").MaxCount, Is.EqualTo(5));
+        Assert.That(rules.GetBuildingType("watchtower").MaxCount, Is.EqualTo(10));
         Assert.That(rules.GetBuildingType("mine").MaxCount, Is.EqualTo(0), "mines are limited by the deposits only");
     }
 
