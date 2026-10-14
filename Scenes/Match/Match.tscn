@@ -16,6 +16,9 @@
 [ext_resource type="Script" path="res://Scripts/World/EffectsView.cs" id="14_effects"]
 [ext_resource type="Script" path="res://Scripts/Audio/MatchSounds.cs" id="15_sounds"]
 [ext_resource type="Script" path="res://Scripts/World/FogView.cs" id="16_fog"]
+[ext_resource type="Script" path="res://Scripts/World/ShadowsView.cs" id="17_shadows"]
+[ext_resource type="Script" path="res://Scripts/World/CloudsView.cs" id="18_clouds"]
+[ext_resource type="Script" path="res://Scripts/World/WeatherView.cs" id="19_weather"]
 
 [node name="Match" type="Node2D"]
 script = ExtResource("1_match")
@@ -29,6 +32,9 @@ script = ExtResource("9_deposits")
 [node name="GroundEffects" type="Node2D" parent="."]
 script = ExtResource("14_effects")
 Ground = true
+
+[node name="Shadows" type="CanvasGroup" parent="."]
+script = ExtResource("17_shadows")
 
 [node name="Actors" type="Node2D" parent="."]
 y_sort_enabled = true
@@ -46,6 +52,12 @@ script = ExtResource("10_projectiles")
 
 [node name="AirEffects" type="Node2D" parent="."]
 script = ExtResource("14_effects")
+
+[node name="Clouds" type="Node2D" parent="."]
+script = ExtResource("18_clouds")
+
+[node name="Weather" type="Node2D" parent="."]
+script = ExtResource("19_weather")
 
 [node name="FogView" type="Node2D" parent="."]
 script = ExtResource("16_fog")

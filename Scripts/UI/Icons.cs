@@ -18,9 +18,10 @@ public static class Icons
         return Compose("res://Assets/Sprites/units.png", "res://Assets/Sprites/units_team.png", region, team, scale);
     }
 
-    /// <summary>The building sprite at its natural size (or scaled), tinted for its owner.</summary>
+    /// <summary>The building sprite (its sheet's first frame) at its natural size (or scaled), tinted for its owner.</summary>
     public static Texture2D Building(string buildingTypeId, Color team, int scale = 1) =>
-        Compose($"res://Assets/Sprites/{buildingTypeId}.png", $"res://Assets/Sprites/{buildingTypeId}_team.png", null, team, scale);
+        Compose($"res://Assets/Sprites/{buildingTypeId}.png", $"res://Assets/Sprites/{buildingTypeId}_team.png", null, team, scale,
+            frames: ArtLayout.BuildingFrames);
 
     /// <summary>A 12×12 gold coin, enlarged <paramref name="scale"/> times.</summary>
     public static Texture2D Coin(int scale = 2)
@@ -46,14 +47,15 @@ public static class Icons
         return Scaled(image, scale);
     }
 
-    private static Texture2D Compose(string basePath, string maskPath, Rect2I? region, Color team, int scale)
+    /// <param name="frames">Frames side by side in the sheet: without a region, the first one is taken.</param>
+    private static Texture2D Compose(string basePath, string maskPath, Rect2I? region, Color team, int scale, int frames = 1)
     {
         var baseImage = GD.Load<Texture2D>(basePath).GetImage();
         var maskTexture = ResourceLoader.Exists(maskPath) ? GD.Load<Texture2D>(maskPath) : null;
         var mask = maskTexture?.GetImage();
         baseImage.Decompress();
         mask?.Decompress();
-        var r = region ?? new Rect2I(0, 0, baseImage.GetWidth(), baseImage.GetHeight());
+        var r = region ?? new Rect2I(0, 0, baseImage.GetWidth() / frames, baseImage.GetHeight());
         var image = Image.CreateEmpty(r.Size.X, r.Size.Y, false, Image.Format.Rgba8);
         for (int y = 0; y < r.Size.Y; y++)
         {

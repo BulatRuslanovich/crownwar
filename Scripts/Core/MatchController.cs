@@ -161,6 +161,22 @@ public partial class MatchController : Node2D
     private const float DuskSpeed = 1.5f;
     private CanvasModulate _night = null!;
 
+    /// <summary>How dark it is now, 0 by day to 1 at full night (dusk and dawn in between): how bright lights shine.</summary>
+    public float NightAmount { get; private set; }
+
+    /// <summary>
+    /// Undoes the night's darkening of the world (1 / the tint, per channel): lights, fires and fireflies are multiplied
+    /// by it, so they shine at their own colour through the dark.
+    /// </summary>
+    public Color LightBoost { get; private set; } = Colors.White;
+
+    /// <summary>The wind (pixels a second) that drifts clouds, smoke, snow and sand; it veers and gusts slowly.</summary>
+    public Vector2 Wind { get; private set; } = new(7f, 1.5f);
+    private float _windTime;
+
+    /// <summary>The terrain view (its decor is cleared under buildings).</summary>
+    public MapView Map { get; private set; } = null!;
+
     public override void _Ready()
     {
         _night = new CanvasModulate { Name = "Night", Color = Colors.White };
@@ -188,11 +204,18 @@ public partial class MatchController : Node2D
         Camera.SetBounds(new Rect2(Vector2.Zero, worldSize).Grow(SimConvert.TileSize * 2));
         Camera.CenterOn(StartingFocus() ?? worldSize / 2);
 
-        GetNode<MapView>("MapView").Build(Sim.Map, MapBiomes);
+        Map = GetNode<MapView>("MapView");
+        Map.Build(Sim.Map, MapBiomes);
+        foreach (var deposit in Sim.Deposits)
+            Map.ClearDecor(deposit.Anchor, GoldDeposit.Size);
         GetNode<DepositsView>("DepositsView").Initialize(this);
-        GetNode<BuildingsView>("Actors/BuildingsView").Initialize(this);
+        var buildings = GetNode<BuildingsView>("Actors/BuildingsView");
+        buildings.Initialize(this);
         _unitsView = GetNode<UnitsView>("Actors/UnitsView");
         _unitsView.Initialize(this);
+        GetNode<ShadowsView>("Shadows").Initialize(this, _unitsView, buildings);
+        GetNode<CloudsView>("Clouds").Initialize(this);
+        GetNode<WeatherView>("Weather").Initialize(this);
         GetNode<ProjectilesView>("ProjectilesView").Initialize(this);
         GetNode<FogView>("FogView").Initialize(this);
         _groundEffects = GetNode<EffectsView>("GroundEffects");
@@ -267,7 +290,9 @@ public partial class MatchController : Node2D
                 _showcaseFocus = SimConvert.ToWorld(castles[(int)(GD.Randi() % castles.Count)].Position);
             _lastFight = null;
         }
-        Camera.GlideTowards(_showcaseFocus, 3f, delta);
+        // The menu covers the left of the screen: keep the action in the open part on the right.
+        var shift = new Vector2(GetViewportRect().Size.X * 0.2f / Camera.ZoomLevel, 0f);
+        Camera.GlideTowards(_showcaseFocus - shift, 3f, delta);
 
         if (!Sim.IsOver)
             return;
@@ -364,6 +389,10 @@ public partial class MatchController : Node2D
 
         UpdateFog();
         _night.Color = _night.Color.Lerp(Sim.IsNight ? NightTint : Colors.White, 1f - MathF.Exp(-DuskSpeed * (float)delta));
+        NightAmount = Mathf.Clamp((1f - _night.Color.R) / (1f - NightTint.R), 0f, 1f);
+        LightBoost = new Color(1f / _night.Color.R, 1f / _night.Color.G, 1f / _night.Color.B);
+        _windTime += (float)delta;
+        Wind = new Vector2(7f + 3f * MathF.Sin(_windTime / 41f), 1.5f + 2f * MathF.Sin(_windTime / 27f + 1f));
         _battleHeat *= MathF.Pow(0.5f, (float)delta / BattleHeatHalfLife);
 
         if (_replayedThisFrame)

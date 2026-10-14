@@ -5,7 +5,8 @@ namespace Lordsio.Units;
 
 /// <summary>
 /// Draws arrows in flight as short strokes pointing at their target, and catapult stones as small rocks flying
-/// in an arc with their shadow on the ground.
+/// in an arc with their shadow on the ground; after dark the stones are set alight and fly as fireballs trailing
+/// embers, bright against the night.
 /// </summary>
 public partial class ProjectilesView : Node2D
 {
@@ -13,6 +14,8 @@ public partial class ProjectilesView : Node2D
     private static readonly Color Stone = new("6e6862");
     private static readonly Color StoneLight = new("9d968e");
     private static readonly Color Shadow = new(0f, 0f, 0f, 0.3f);
+    private static readonly Color FireCore = new("fff0a0");
+    private static readonly Color FireOuter = new("ff7a1a");
     private const float Length = 5f;
     /// <summary>How high (pixels) a stone rises at the middle of its flight.</summary>
     private const float ArcHeight = 18f;
@@ -58,5 +61,21 @@ public partial class ProjectilesView : Node2D
         var at = ground + new Vector2(0, -height);
         DrawCircle(at, 2f, Stone);
         DrawRect(new Rect2(at + new Vector2(-1, -1), Vector2.One), StoneLight);
+
+        float night = _match.NightAmount;
+        if (night <= 0.01f)
+            return;
+        // Burning pitch: a glow and a trail of embers along the arc, undoing the night's darkening.
+        var boost = _match.LightBoost;
+        Color Lit(Color c, float a) => new(c.R * boost.R, c.G * boost.G, c.B * boost.B, a * night);
+        var direction = SimConvert.ToWorld(p.Target.Position) - SimConvert.ToWorld(p.Origin);
+        for (int i = 1; i <= 4; i++)
+        {
+            float q = Mathf.Max(0f, progress - i * 0.025f);
+            var trail = ground - direction * (progress - q) + new Vector2(0, -(Mathf.Sin(q * Mathf.Pi) * ArcHeight + 4f));
+            DrawRect(new Rect2((trail - Vector2.One).Round(), new Vector2(2, 2) * (i < 3 ? 1f : 0.5f)), Lit(FireOuter, 0.8f - i * 0.15f));
+        }
+        DrawCircle(at, 3f, Lit(FireOuter, 0.85f));
+        DrawCircle(at, 1.5f, Lit(FireCore, 1f));
     }
 }

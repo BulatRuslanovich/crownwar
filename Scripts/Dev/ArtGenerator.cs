@@ -75,6 +75,7 @@ public static class ArtGenerator
 
         System.IO.Directory.CreateDirectory(System.IO.Path.Combine(assets, "UI"));
         AppIcon(Castle(), System.IO.Path.Combine(assets, "UI"));
+        Interface(System.IO.Path.Combine(assets, "UI"));
 
         foreach (var (name, canvas) in new (string, PixelCanvas)[]
                  {
@@ -84,7 +85,7 @@ public static class ArtGenerator
                  })
         {
             canvas.Save(System.IO.Path.Combine(assets, "Sprites", name + ".png"),
-                System.IO.Path.Combine(assets, "Sprites", name + "_team.png"));
+                System.IO.Path.Combine(assets, "Sprites", name + "_team.png"), System.IO.Path.Combine(assets, "Sprites", name + "_lights.png"));
             SavePreview(canvas, System.IO.Path.Combine(previewDir, name + ".png"));
         }
         var gold = Deposit();
@@ -187,10 +188,11 @@ public static class ArtGenerator
                 icon.SetPixel(x, y, edge ? gold : inner ? goldDark : y < size / 2 ? plateLight : plate);
             }
         }
-        int ox = (size - castle.Width) / 2, oy = size - castle.Height - 8;
+        int castleWidth = castle.Width / ArtLayout.BuildingFrames; // the sheet's first frame
+        int ox = (size - castleWidth) / 2, oy = size - castle.Height - 8;
         for (int y = 0; y < castle.Height; y++)
         {
-            for (int x = 0; x < castle.Width; x++)
+            for (int x = 0; x < castleWidth; x++)
             {
                 var m = castle.Mask.GetPixel(x, y);
                 var c = m.A > 0 ? new Color(team.R * m.R, team.G * m.G, team.B * m.B) : castle.Base.GetPixel(x, y);
@@ -267,40 +269,43 @@ public static class ArtGenerator
     // ------------------------------------------------------------------ terrain
 
     /// <summary>
-    /// 16×16 tiles, 16 columns. Row 0 grass, 1 forest, 2 water, 3 mountain (4 variants each);
-    /// row 4 roads and row 5 shore overlays, both indexed by a 4-bit neighbour mask N=1, E=2, S=4, W=8;
-    /// row 6: bridge decks over water (transparent around them) by the mask of the road or bridge cells they join; rows 7–10 forest and 11–26 mountain ranges, by
-    /// neighbour mask (column) and by the cell's position modulo 2 (woods) or 4 (ranges) in each direction (row), so
-    /// woods and ranges are drawn as one canopy, one massif, whose pattern repeats only every two or four tiles;
-    /// rows 27–42: this biome's ground reaching into a neighbouring cell of another biome, by the 8-bit mask of the
-    /// neighbours of this biome (row = mask / 16, column = mask % 16).
+    /// 16×16 tiles, 16 columns. Row 0 grass, 1 a lone tree, 3 a lone mountain (4 variants each); row 4 roads, by a 4-bit
+    /// neighbour mask N=1, E=2, S=4, W=8; row 6 bridge decks over water (transparent around them) by the mask of the
+    /// road or bridge cells they join; rows 11–26 mountain ranges, by neighbour mask (column) and the cell's position
+    /// modulo 4 in each direction (row); rows 27–42 this biome's ground reaching into a neighbouring cell of another
+    /// biome, by the 8-bit mask of its neighbours of this biome (row = mask / 16, column = mask % 16).
+    /// Animated tiles keep their frames in the rows under the first one (<see cref="ArtLayout.TileFrames"/>): water
+    /// (4 variants) from row 43, shore overlays by mask from row 47, and woods by mask and by the cell's position
+    /// modulo 2 from row 51 (four positions, each with its frames). Rows 67–68 hold the decor (one kind a column).
+    /// Rows 2, 5 and 7–10 are free.
     /// </summary>
     private static PixelCanvas Terrain()
     {
-        var c = new PixelCanvas(ArtLayout.Tile * 16, ArtLayout.Tile * (ArtLayout.BiomeBlendRow + 16));
+        var c = new PixelCanvas(ArtLayout.Tile * 16, ArtLayout.Tile * ArtLayout.TerrainRows);
         for (int v = 0; v < ArtLayout.TerrainVariants; v++)
         {
-            Cell(c, v, 0); GrassTile(c, v);
+            Cell(c, v, ArtLayout.GrassRow); GrassTile(c, v);
             Cell(c, v, 1); GrassTile(c, v + 10); TreeTile(c, v);
-            Cell(c, v, 2); WaterTile(c, v);
             Cell(c, v, 3); MountainTile(c, v);
-        }
-        for (int mask = 0; mask < 16; mask++)
-        {
-            Cell(c, mask, 4); GrassTile(c, mask + 20); RoadTile(c, mask);
-            Cell(c, mask, 5); ShoreTile(c, mask);
-        }
-        for (int mask = 0; mask < 16; mask++)
-        {
-            Cell(c, mask, ArtLayout.BridgeRow);
-            BridgeTile(c, mask);
-        }
-        for (int mask = 0; mask < 16; mask++)
-        {
-            for (int parity = 0; parity < 4; parity++)
+            for (int frame = 0; frame < ArtLayout.TileFrames; frame++)
             {
-                Cell(c, mask, ArtLayout.ForestRangeRow + parity);
-                ForestRangeTile(c, mask, parity);
+                Cell(c, v, ArtLayout.WaterRow + frame);
+                WaterTile(c, v, frame);
+            }
+        }
+        for (int mask = 0; mask < 16; mask++)
+        {
+            Cell(c, mask, ArtLayout.RoadRow); GrassTile(c, mask + 20); RoadTile(c, mask);
+            Cell(c, mask, ArtLayout.BridgeRow); BridgeTile(c, mask);
+            for (int frame = 0; frame < ArtLayout.TileFrames; frame++)
+            {
+                Cell(c, mask, ArtLayout.ShoreRow + frame);
+                ShoreTile(c, mask, frame);
+                for (int parity = 0; parity < 4; parity++)
+                {
+                    Cell(c, mask, ArtLayout.ForestRangeRow + parity * ArtLayout.TileFrames + frame);
+                    ForestRangeTile(c, mask, parity, frame);
+                }
             }
             for (int parity = 0; parity < 16; parity++)
             {
@@ -312,6 +317,11 @@ public static class ArtGenerator
         {
             Cell(c, mask % 16, ArtLayout.BiomeBlendRow + mask / 16);
             BiomeBlendTile(c, mask);
+        }
+        for (int kind = 0; kind < ArtLayout.DecorKinds; kind++)
+        {
+            Cell(c, kind % 16, ArtLayout.DecorRow + kind / 16);
+            DecorTile(c, kind);
         }
         return c;
 
@@ -338,11 +348,6 @@ public static class ArtGenerator
             c.Px(x, y, GrassLight, solid: false);
             c.Px(x - 1, y + 1, GrassDark, solid: false);
             c.Px(x + 1, y + 1, GrassDark, solid: false);
-        }
-        if (v == 3)
-        {
-            c.Px(4, 11, Snow, solid: false);
-            c.Px(11, 4, Gold, solid: false);
         }
     }
 
@@ -452,8 +457,10 @@ public static class ArtGenerator
     /// behind, lit from the top-left, with a dark rim and their shadow on the ground; along the open southern edge the
     /// trunks show. Crowns near an open edge are smaller, so the wood ends in a rounded fringe, not a cut.
     /// </summary>
-    private static void ForestRangeTile(PixelCanvas c, int mask, int parity)
+    /// <remarks>Through the frames the crowns' tops lean with the wind and back: one pixel downwind, upright, one upwind.</remarks>
+    private static void ForestRangeTile(PixelCanvas c, int mask, int parity, int frame)
     {
+        int sway = frame switch { 1 => 1, 3 => -1, _ => 0 };
         var range = new Range(mask, parity);
         GrassTile(c, 30 + parity);
         var crowns = new System.Collections.Generic.List<(float X, float Y, float R, int Hash)>();
@@ -498,10 +505,10 @@ public static class ArtGenerator
                         : light > k.R * 0.55f ? LeafDark
                         : Hash((int)k.X + dx + 40, (int)k.Y + dy + 40, k.Hash % 7) < 90 ? LeafDark
                         : Leaf;
-                    Plot(c, (int)k.X + dx, (int)k.Y + dy, color);
+                    Plot(c, (int)k.X + dx + (fy < -k.R * 0.2f ? sway : 0), (int)k.Y + dy, color);
                 }
-            Plot(c, (int)(k.X - k.R * 0.4f), (int)(k.Y - k.R * 0.45f), LeafHighlight);
-            Plot(c, (int)(k.X - k.R * 0.15f), (int)(k.Y - k.R * 0.6f), LeafHighlight);
+            Plot(c, (int)(k.X - k.R * 0.4f) + sway, (int)(k.Y - k.R * 0.45f), LeafHighlight);
+            Plot(c, (int)(k.X - k.R * 0.15f) + sway, (int)(k.Y - k.R * 0.6f), LeafHighlight);
         }
     }
 
@@ -641,19 +648,29 @@ public static class ArtGenerator
             }
     }
 
-    private static void WaterTile(PixelCanvas c, int v)
+    /// <summary>
+    /// Open water; through the frames its wavelets drift a pixel at a time, swell and ebb, and now and then the sun
+    /// glints on it. Wavelets wrap around inside the tile, so the frames loop without a seam.
+    /// </summary>
+    private static void WaterTile(PixelCanvas c, int v, int frame)
     {
         c.Ground(0, 0, 16, 16, Water);
         for (int y = 0; y < 16; y++)
             for (int x = 0; x < 16; x++)
                 if (Hash(x, y, v + 40) < 60)
                     c.Px(x, y, WaterDark, solid: false);
+        int[] lengths = { 3, 4, 4, 2 };
         for (int w = 0; w < 3; w++)
         {
-            int x = (Hash(w, v, 3) % 11) + 1, y = (Hash(v, w, 5) % 13) + 1;
-            c.Ground(x, y, 4, 1, WaterLight);
-            c.Px(x + 1, y - 1, WaterLight, solid: false);
+            int x = (Hash(w, v, 3) % 11) + 1 + frame, y = (Hash(v, w, 5) % 13) + 1;
+            int length = lengths[(frame + w) % 4];
+            for (int i = 0; i < length; i++)
+                c.Px((x + i) % 16, y, WaterLight, solid: false);
+            if (length >= 3)
+                c.Px((x + 1) % 16, y - 1, WaterLight, solid: false);
         }
+        if (Hash(v, frame, 77) % 2 == 0)
+            c.Px(Hash(frame, v, 78) % 14 + 1, Hash(v, frame, 79) % 14 + 1, Foam, solid: false);
     }
 
     private static void MountainTile(PixelCanvas c, int v)
@@ -756,23 +773,553 @@ public static class ArtGenerator
             }
     }
 
-    /// <summary>Transparent tile with sand and foam along the sides where land is.</summary>
-    private static void ShoreTile(PixelCanvas c, int mask)
+    /// <summary>
+    /// Transparent tile with sand and foam along the sides where land is. Through the frames the surf washes in and
+    /// out: the foam line comes up to the sand, wets it, and falls back leaving bubbles.
+    /// </summary>
+    private static void ShoreTile(PixelCanvas c, int mask, int frame)
     {
+        int foam = frame is 1 or 2 ? 2 : 3;
+        var wet = frame == 2 ? WaterLight : SandDark;
         for (int i = 0; i < 16; i++)
         {
-            if ((mask & 1) != 0) { c.Px(i, 0, Sand, false); c.Px(i, 1, SandDark, false); c.Px(i, 2, Foam, false); }
-            if ((mask & 4) != 0) { c.Px(i, 15, Sand, false); c.Px(i, 14, SandDark, false); c.Px(i, 13, Foam, false); }
-            if ((mask & 8) != 0) { c.Px(0, i, Sand, false); c.Px(1, i, SandDark, false); c.Px(2, i, Foam, false); }
-            if ((mask & 2) != 0) { c.Px(15, i, Sand, false); c.Px(14, i, SandDark, false); c.Px(13, i, Foam, false); }
+            bool bubble = frame == 3 && (i + mask) % 3 == 0 || frame == 0 && (i + mask) % 4 == 1;
+            void Side(Func<int, Vector2I> at)
+            {
+                c.Px(at(0).X, at(0).Y, Sand, false);
+                c.Px(at(1).X, at(1).Y, wet, false);
+                c.Px(at(foam).X, at(foam).Y, Foam, false);
+                if (bubble)
+                    c.Px(at(foam + 1).X, at(foam + 1).Y, Foam, false);
+            }
+            if ((mask & 1) != 0) Side(d => new Vector2I(i, d));
+            if ((mask & 4) != 0) Side(d => new Vector2I(i, 15 - d));
+            if ((mask & 8) != 0) Side(d => new Vector2I(d, i));
+            if ((mask & 2) != 0) Side(d => new Vector2I(15 - d, i));
         }
+    }
+
+    // ------------------------------------------------------------------ interface
+
+    private static readonly Color UiOutline = new("140d08");
+    private static readonly Color UiGold = new("d9b060");
+    private static readonly Color UiGoldDark = new("8a6430");
+    private static readonly Color UiGoldDeep = new("5a3e1c");
+    private static readonly Color UiLeather = new("2b2017");
+    private static readonly Color UiLeatherDark = new("231910");
+    private static readonly Color UiWood = new("5a3f24");
+    private static readonly Color UiWoodLight = new("7a5832");
+    private static readonly Color UiWoodDark = new("3a2715");
+
+    /// <summary>
+    /// The interface's nine-slice pictures (Assets/UI/*.png, used by theme.tres): framed panels, buttons in their four
+    /// states, text fields, tooltips and bar backs, drawn at two screen pixels a pixel so they are as chunky as the
+    /// world; and the crown logo of the title screen.
+    /// </summary>
+    private static void Interface(string uiDir)
+    {
+        void Save(Image image, string name) => Doubled(image).SavePng(System.IO.Path.Combine(uiDir, name + ".png"));
+        Save(Panel(), "panel");
+        Save(Button(UiWood, UiWoodLight, UiWoodDark, UiGoldDeep, pressed: false), "button_normal");
+        Save(Button(new Color("6a4a2a"), new Color("8f6a3c"), UiWoodDark, UiGold, pressed: false), "button_hover");
+        Save(Button(new Color("4a321b"), UiWoodDark, new Color("6a4a2a"), UiGold, pressed: true), "button_pressed");
+        Save(Button(new Color("3a3029"), new Color("4a3e35"), new Color("2a221c"), new Color("3a2e22"), pressed: false), "button_disabled");
+        Save(Field(), "field");
+        Save(Tooltip(), "tooltip");
+        Save(BarBack(), "bar_back");
+        Logo().SavePng(System.IO.Path.Combine(uiDir, "logo.png"));
+    }
+
+    private static Image Doubled(Image image)
+    {
+        var copy = (Image)image.Duplicate();
+        copy.Resize(image.GetWidth() * 2, image.GetHeight() * 2, Image.Interpolation.Nearest);
+        return copy;
+    }
+
+    /// <summary>
+    /// 24×24, slice 6: a dark outline, a bevelled gold frame (lit top-left), a dark groove, rivets in the corners and a
+    /// leather centre with a faint weave that tiles.
+    /// </summary>
+    private static Image Panel()
+    {
+        const int size = 24;
+        var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                int edge = Math.Min(Math.Min(x, y), Math.Min(size - 1 - x, size - 1 - y));
+                bool lit = x + y < size - 1;
+                var color = edge switch
+                {
+                    0 => UiOutline,
+                    1 => lit ? UiGold : UiGoldDark,
+                    2 => lit ? UiGoldDark : UiGoldDeep,
+                    3 => UiOutline,
+                    _ => (x + y) % 4 == 0 || (x - y + 64) % 4 == 0 ? UiLeatherDark : UiLeather,
+                };
+                // Corners cut off, so the frame looks forged rather than ruled.
+                if ((x == 0 || x == size - 1) && (y == 0 || y == size - 1))
+                    color = Colors.Transparent;
+                image.SetPixel(x, y, color with { A = color.A > 0 && edge >= 4 ? 0.95f : color.A });
+            }
+        foreach (var (rx, ry) in new[] { (1, 1), (size - 3, 1), (1, size - 3), (size - 3, size - 3) })
+        {
+            image.SetPixel(rx, ry, UiGold);
+            image.SetPixel(rx + 1, ry, UiGoldDark);
+            image.SetPixel(rx, ry + 1, UiGoldDark);
+            image.SetPixel(rx + 1, ry + 1, UiGoldDeep);
+        }
+        return image;
+    }
+
+    /// <summary>
+    /// 16×16, slice 4: a raised wooden plate with a lit top edge and a thick dark lip below, framed in
+    /// <paramref name="rim"/>; pressed, the lip moves to the top, as if pushed in.
+    /// </summary>
+    private static Image Button(Color face, Color light, Color dark, Color rim, bool pressed)
+    {
+        const int size = 16;
+        var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                bool border = x == 0 || y == 0 || x == size - 1 || y == size - 1;
+                bool corner = (x == 0 || x == size - 1) && (y == 0 || y == size - 1);
+                if (corner)
+                    continue;
+                Color color;
+                if (border)
+                    color = UiOutline;
+                else if (x == 1 || x == size - 2 || y == 1 || y == size - 2)
+                    color = rim;
+                else if (pressed ? y <= 3 : y >= size - 4)
+                    color = dark;
+                else if (pressed ? y == size - 3 : y == 2)
+                    color = light;
+                else
+                    color = face; // plain: the middle is stretched, so any grain would smear into streaks
+                image.SetPixel(x, y, color);
+            }
+        return image;
+    }
+
+    /// <summary>16×16, slice 4: a sunken dark field, shadowed at the top-left and lit at the bottom-right.</summary>
+    private static Image Field()
+    {
+        const int size = 16;
+        var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                bool border = x == 0 || y == 0 || x == size - 1 || y == size - 1;
+                var color = border ? UiGoldDeep
+                    : x == 1 || y == 1 ? new Color("070504")
+                    : x == size - 2 || y == size - 2 ? new Color("2a2016")
+                    : new Color("120c08");
+                image.SetPixel(x, y, color);
+            }
+        return image;
+    }
+
+    /// <summary>12×12, slice 3: a thin gold-rimmed dark plate.</summary>
+    private static Image Tooltip()
+    {
+        const int size = 12;
+        var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                int edge = Math.Min(Math.Min(x, y), Math.Min(size - 1 - x, size - 1 - y));
+                var color = edge == 0 ? UiOutline : edge == 1 ? (x + y < size - 1 ? UiGold : UiGoldDark) : new Color(0.1f, 0.075f, 0.055f, 0.97f);
+                if ((x == 0 || x == size - 1) && (y == 0 || y == size - 1))
+                    color = Colors.Transparent;
+                image.SetPixel(x, y, color);
+            }
+        return image;
+    }
+
+    /// <summary>8×8, slice 2: the dark groove a bar fills.</summary>
+    private static Image BarBack()
+    {
+        const int size = 8;
+        var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                bool border = x == 0 || y == 0 || x == size - 1 || y == size - 1;
+                image.SetPixel(x, y, border ? UiGoldDeep : y == 1 ? new Color("050302") : new Color("0f0a06"));
+            }
+        return image;
+    }
+
+    /// <summary>
+    /// 64×40 (shown enlarged): a golden crown with red and blue gems, over two crossed swords — the title's emblem.
+    /// </summary>
+    private static Image Logo()
+    {
+        var c = new PixelCanvas(64, 40);
+        var ruby = new Color("d0303a");
+        var sapphire = new Color("3c6fd8");
+        // Crossed swords behind the crown, blades up, hilts in the lower corners.
+        for (int i = 0; i < 30; i++)
+        {
+            c.Px(13 + i, 33 - i, SteelLight);
+            c.Px(14 + i, 33 - i, SteelDark);
+            c.Px(50 - i, 33 - i, SteelLight);
+            c.Px(49 - i, 33 - i, SteelDark);
+        }
+        foreach (int side in new[] { 1, -1 })
+        {
+            int hx = side == 1 ? 13 : 50;
+            for (int g = -2; g <= 2; g++)
+                c.Px(hx + g * side, 33 + g, g == 0 ? Gold : GoldDark); // cross-guard
+            c.Px(hx - side, 35, Leather);
+            c.Px(hx - 2 * side, 36, Leather);
+            c.Px(hx - 3 * side, 37, Gold); // pommel
+        }
+        // The crown: a band with three points, each tipped with a ball.
+        for (int y = 0; y < 18; y++)
+        {
+            for (int x = 0; x < 34; x++)
+            {
+                int px = 15 + x, py = 8 + y;
+                bool band = y >= 11;
+                int tooth = Math.Min(Math.Min(Math.Abs(x - 2), Math.Abs(x - 17)), Math.Abs(x - 31));
+                bool point = !band && y >= tooth * 0.9f + (x is > 6 and < 27 && Math.Abs(x - 17) > 3 ? 2f : 0f);
+                if (!band && !point)
+                    continue;
+                var color = y == 11 || y == 17 ? GoldDark : x < 17 ? Gold : new Color("e8b830");
+                if (band && y > 12 && y < 16 && (x + 1) % 4 == 0)
+                    color = GoldDark;
+                c.Px(px, py, color);
+            }
+        }
+        foreach (int x in new[] { 17, 32, 46 })
+        {
+            c.Disc(x, 7, 1.6f, Gold);
+            c.Px(x - 1, 6, new Color("fff1a8"));
+        }
+        c.Rect(23, 21, 3, 3, ruby);
+        c.Rect(30, 20, 4, 4, sapphire);
+        c.Rect(38, 21, 3, 3, ruby);
+        c.Px(23, 21, new Color("ff8a8a"));
+        c.Px(30, 20, new Color("9fc0ff"));
+        c.Px(38, 21, new Color("ff8a8a"));
+        c.Outline(Outline);
+        return c.Base;
+    }
+
+    // ------------------------------------------------------------------ decor
+
+    private static readonly Color FlowerRed = new("d8433a");
+    private static readonly Color FlowerYellow = new("f2d04a");
+    private static readonly Color FlowerWhite = new("f4f1e6");
+    private static readonly Color FlowerBlue = new("7f8fe6");
+    private static readonly Color Berry = new("c42a4a");
+    private static readonly Color Bone = new("e8e2d0");
+    private static readonly Color BoneDark = new("b5ab92");
+    private static readonly Color Ice = new("bfe6f6");
+    private static readonly Color IceDark = new("7fb4d4");
+    private static readonly Color IceOutline = new("3d6a8a");
+    private static readonly Color GroundShadow = new(0f, 0f, 0f, 0.22f);
+
+    /// <summary>
+    /// One small thing lying on open ground, on a transparent 16×16 tile (see <see cref="ArtLayout.MeadowDecor"/> and the
+    /// other pools for which kinds each biome uses; the winter and desert sheets recolour them like the rest).
+    /// </summary>
+    private static void DecorTile(PixelCanvas c, int kind)
+    {
+        var cell = new Rect2I(c.Origin, new Vector2I(16, 16));
+        switch (kind)
+        {
+            case 0: Flowers(c, FlowerRed, 0); break;
+            case 1: Flowers(c, FlowerYellow, 1); break;
+            case 2: Flowers(c, FlowerWhite, 2); break;
+            case 3: Flowers(c, FlowerBlue, 3); break;
+            case 4: // tall grass
+                for (int b = 0; b < 7; b++)
+                {
+                    int x = 3 + b * 2 - (b > 3 ? 1 : 0), h = 3 + Hash(b, 4, 1) % 4, lean = b % 3 - 1;
+                    for (int i = 0; i < h; i++)
+                        c.Px(x + (i == h - 1 ? lean : 0), 13 - i, i == h - 1 ? new Color("8cc35a") : GrassDark, solid: false);
+                }
+                break;
+            case 5: Bush(c, 8, 10, 4.2f, false); c.Outline(TreeOutline, cell); break;
+            case 6: // pebbles
+                foreach (var (x, y) in new[] { (4, 6), (10, 4), (7, 11), (12, 12), (3, 13) })
+                {
+                    c.Px(x, y, RockLight, solid: false);
+                    c.Px(x + 1, y, Rock, solid: false);
+                    c.Px(x, y + 1, RockDark, solid: false);
+                }
+                break;
+            case 7: // mushrooms
+                foreach (var (x, y, w) in new[] { (5, 10, 4), (10, 12, 3) })
+                {
+                    c.Rect(x + w / 2 - 1, y, 2, 3, Bone);
+                    c.Rect(x, y - 2, w, 2, new Color("c8502e"));
+                    c.Rect(x + 1, y - 3, w - 2, 1, new Color("c8502e"));
+                    c.Px(x + 1, y - 2, FlowerWhite);
+                }
+                c.Outline(new Color("3a2418"), cell);
+                break;
+            case 8: Stump(c, false); c.Outline(Outline, cell); break;
+            case 9: // fallen log
+                Shadow(c, 3, 13, 11, 1);
+                c.Rect(2, 9, 11, 4, Bark);
+                c.Rect(2, 9, 11, 1, WoodLight);
+                c.Rect(2, 12, 11, 1, BarkDark);
+                c.Rect(12, 9, 2, 4, WoodLight);
+                c.Px(12, 10, Wood);
+                c.Px(5, 8, Leaf);
+                c.Px(6, 8, LeafLight);
+                c.Outline(Outline, cell);
+                break;
+            case 10: Rock3(c, 8, 9, 3.4f); c.Outline(Outline, cell); break;
+            case 11: // a broken column of an old ruin, a drum fallen beside it
+                Shadow(c, 4, 14, 11, 1);
+                c.Rect(5, 12, 7, 2, Stone);
+                c.Rect(6, 4, 5, 8, StoneLight);
+                c.Rect(9, 4, 2, 8, Stone);
+                c.Rect(6, 6, 1, 6, Stone);
+                c.Px(6, 3, StoneLight); c.Px(8, 3, StoneLight); c.Px(9, 2, Stone);
+                c.Rect(12, 11, 3, 3, StoneLight);
+                c.Px(14, 13, Stone);
+                c.Px(7, 9, Leaf); c.Px(6, 10, LeafLight); // ivy
+                c.Outline(Outline, cell);
+                break;
+            case 12: // berry bush
+                Bush(c, 8, 10, 4f, false);
+                foreach (var (x, y) in new[] { (6, 8), (9, 9), (7, 12), (10, 11), (5, 10) })
+                    c.Px(x, y, Berry);
+                c.Outline(TreeOutline, cell);
+                break;
+            case 13: // snowdrift
+                for (int y = 0; y < 5; y++)
+                {
+                    int half = 6 - Math.Abs(y - 1) - (y > 2 ? 1 : 0);
+                    for (int x = 8 - half; x < 8 + half; x++)
+                        c.Px(x, 8 + y, y >= 3 ? SnowShade : y == 0 ? Colors.White : Snow, solid: false);
+                }
+                c.Rect(4, 13, 8, 1, new Color("aebccb"));
+                break;
+            case 14: // ice crystals
+                Shadow(c, 4, 13, 9, 1);
+                foreach (var (x, h) in new[] { (5, 5), (8, 8), (11, 4) })
+                {
+                    c.Rect(x, 13 - h, 2, h, Ice);
+                    c.Rect(x + 1, 13 - h, 1, h, IceDark);
+                    c.Px(x, 12 - h, Ice);
+                }
+                c.Outline(IceOutline, cell);
+                break;
+            case 15: Twigs(c, BarkDark); break;
+            case 16: Stump(c, true); c.Outline(Outline, cell); break;
+            case 17: // young fir with snow on its boughs
+                Shadow(c, 5, 14, 7, 1);
+                for (int row = 0; row < 10; row++)
+                {
+                    int half = 1 + row / 2 - (row % 3 == 0 && row > 0 ? 1 : 0);
+                    for (int x = 8 - half; x <= 8 + half; x++)
+                        c.Px(x, 3 + row, row % 3 == 0 ? Snow : x < 8 ? LeafLight : LeafDark);
+                }
+                c.Rect(8, 13, 1, 2, Bark);
+                c.Outline(TreeOutline, cell);
+                break;
+            case 18: // frozen puddle
+                for (int y = 0; y < 5; y++)
+                    for (int x = 0; x < 11; x++)
+                    {
+                        float dx = (x - 5f) / 5.5f, dy = (y - 2f) / 2.5f;
+                        if (dx * dx + dy * dy <= 1f)
+                            c.Px(3 + x, 8 + y, dx * dx + dy * dy > 0.6f ? IceDark : Ice, solid: false);
+                    }
+                c.Px(6, 9, Colors.White, solid: false);
+                c.Px(7, 9, Colors.White, solid: false);
+                break;
+            case 19: Rock3(c, 8, 9, 3.4f); c.Rect(6, 6, 4, 1, Snow); c.Rect(5, 7, 3, 1, Snow); c.Outline(Outline, cell); break;
+            case 20: // tracks in the snow
+                for (int s = 0; s < 4; s++)
+                {
+                    c.Px(3 + s * 3, 12 - s * 2, SnowShade, solid: false);
+                    c.Px(4 + s * 3, 13 - s * 2, SnowShade, solid: false);
+                    c.Px(5 + s * 3, 11 - s * 2, SnowShade, solid: false);
+                }
+                break;
+            case 21: // saguaro
+                Shadow(c, 6, 14, 6, 1);
+                c.Rect(7, 3, 3, 11, Leaf);
+                c.Rect(7, 3, 1, 11, LeafLight);
+                c.Rect(9, 3, 1, 11, LeafDark);
+                c.Rect(4, 8, 3, 2, Leaf); c.Rect(4, 5, 2, 3, Leaf); c.Px(4, 5, LeafLight);
+                c.Rect(10, 6, 2, 2, Leaf); c.Rect(11, 3, 2, 3, Leaf); c.Px(12, 3, LeafDark);
+                c.Px(8, 2, FlowerRed);
+                c.Outline(TreeOutline, cell);
+                break;
+            case 22: // barrel cactus
+                Shadow(c, 5, 13, 7, 1);
+                c.Disc(8, 10, 3.2f, Leaf);
+                c.Rect(6, 8, 1, 4, LeafLight);
+                c.Rect(10, 8, 1, 4, LeafDark);
+                c.Px(8, 7, FlowerYellow);
+                c.Px(7, 6, FlowerRed);
+                c.Outline(TreeOutline, cell);
+                break;
+            case 23: // skull
+                Shadow(c, 5, 13, 7, 1);
+                c.Rect(5, 8, 6, 4, Bone);
+                c.Rect(6, 7, 4, 1, Bone);
+                c.Rect(6, 12, 4, 1, BoneDark);
+                c.Px(6, 9, Outline); c.Px(9, 9, Outline);
+                c.Px(7, 11, BoneDark); c.Px(8, 11, BoneDark);
+                c.Outline(new Color("5a4a34"), cell);
+                break;
+            case 24: // ribcage half in the sand
+                c.Rect(3, 11, 11, 1, Bone);
+                for (int r = 0; r < 4; r++)
+                {
+                    c.Rect(4 + r * 3, 7 + r % 2, 1, 4 - r % 2, Bone);
+                    c.Px(5 + r * 3, 7 + r % 2, BoneDark);
+                }
+                c.Outline(new Color("8a7a5a"), cell);
+                break;
+            case 25: Twigs(c, new Color("8a6a3a")); break; // tumbleweed
+            case 26: // cracked ground
+                foreach (var (x0, y0, x1, y1) in new[] { (2, 6, 7, 9), (7, 9, 13, 7), (7, 9, 8, 14), (10, 8, 12, 12) })
+                    LineGround(c, x0, y0, x1, y1, DirtDark);
+                break;
+            case 27: // a pile of rocks
+                Rock3(c, 6, 10, 3f);
+                Rock3(c, 11, 11, 2.2f);
+                Rock3(c, 9, 7, 2f);
+                c.Outline(Outline, cell);
+                break;
+            case 28: // ripples of wind-blown sand
+                for (int r = 0; r < 3; r++)
+                    for (int x = 2; x < 14; x++)
+                    {
+                        int y = 5 + r * 4 + (int)Mathf.Round(Mathf.Sin(x * 0.7f + r) * 0.8f);
+                        c.Px(x, y, GrassLight, solid: false);
+                        c.Px(x, y + 1, GrassDark, solid: false);
+                    }
+                break;
+            case 29: // a crumbling sandstone wall
+                Shadow(c, 2, 14, 13, 1);
+                for (int x = 2; x < 14; x++)
+                {
+                    int top = 6 + Hash(x / 2, 3, 29) % 4;
+                    for (int y = top; y < 14; y++)
+                        c.Px(x, y, (y - top) % 3 == 2 || (x + (y / 3) * 2) % 5 == 0 ? SandDark : Sand);
+                }
+                c.Outline(Outline, cell);
+                break;
+            case 30: // scattered bones
+                c.Rect(4, 9, 5, 1, Bone); c.Px(3, 8, Bone); c.Px(3, 10, Bone); c.Px(9, 8, Bone); c.Px(9, 10, Bone);
+                c.Rect(8, 12, 4, 1, BoneDark); c.Px(7, 11, Bone); c.Px(12, 13, Bone);
+                break;
+            default: // a mixed patch of flowers
+                Flowers(c, FlowerYellow, 5);
+                Flowers(c, FlowerBlue, 6);
+                break;
+        }
+    }
+
+    private static void Flowers(PixelCanvas c, Color petal, int seed)
+    {
+        for (int f = 0; f < 4; f++)
+        {
+            int x = 2 + Hash(f, seed, 3) % 12, y = 3 + Hash(seed, f, 4) % 10;
+            c.Px(x, y + 1, GrassDark, solid: false);
+            c.Px(x, y + 2, GrassDark, solid: false);
+            c.Px(x - 1, y, petal, solid: false);
+            c.Px(x + 1, y, petal, solid: false);
+            c.Px(x, y - 1, petal, solid: false);
+            c.Px(x, y, f % 2 == 0 ? FlowerYellow : petal.Darkened(0.25f), solid: false);
+        }
+    }
+
+    private static void Bush(PixelCanvas c, int cx, int cy, float r, bool snow)
+    {
+        Shadow(c, cx - (int)r + 1, cy + (int)r, (int)(2 * r), 1);
+        c.Disc(cx, cy, r, Leaf);
+        int ri = (int)Mathf.Ceil(r);
+        for (int y = -ri; y <= ri; y++)
+            for (int x = -ri; x <= ri; x++)
+            {
+                if (x * x + y * y > r * r)
+                    continue;
+                if (x + y < -r * 0.7f) c.Px(cx + x, cy + y, LeafLight);
+                else if (x + y > r * 0.6f) c.Px(cx + x, cy + y, LeafDark);
+            }
+        c.Px(cx - 2, cy - 2, snow ? Snow : LeafHighlight);
+    }
+
+    private static void Stump(PixelCanvas c, bool snow)
+    {
+        Shadow(c, 5, 13, 8, 1);
+        c.Rect(5, 8, 6, 5, Bark);
+        c.Rect(9, 8, 2, 5, BarkDark);
+        c.Rect(5, 7, 6, 2, WoodLight);
+        c.Px(7, 7, Wood); c.Px(8, 8, Wood);
+        c.Px(4, 12, Bark); c.Px(11, 12, BarkDark);
+        if (snow)
+        {
+            c.Rect(5, 6, 6, 2, Snow);
+            c.Px(4, 7, Snow);
+        }
+    }
+
+    private static void Rock3(PixelCanvas c, int cx, int cy, float r)
+    {
+        Shadow(c, cx - (int)r, cy + (int)r - 1, (int)(2 * r) + 1, 1);
+        int ri = (int)Mathf.Ceil(r);
+        for (int y = -ri; y <= ri; y++)
+            for (int x = -ri - 1; x <= ri + 1; x++)
+            {
+                float dx = x / (r + 0.8f), dy = y / r;
+                if (dx * dx + dy * dy > 1f || y > r * 0.6f)
+                    continue;
+                c.Px(cx + x, cy + y, x + y < -r * 0.5f ? RockLight : x + y > r * 0.4f ? RockDark : Rock);
+            }
+    }
+
+    /// <summary>A dry, leafless bush: twigs branching from the ground.</summary>
+    private static void Twigs(PixelCanvas c, Color color)
+    {
+        Shadow(c, 4, 13, 8, 1);
+        foreach (var (x0, y0, x1, y1) in new[] { (8, 13, 8, 7), (8, 10, 5, 6), (8, 9, 11, 5), (5, 6, 4, 4), (11, 5, 12, 3), (8, 7, 7, 4), (8, 11, 12, 9) })
+            LineGround(c, x0, y0, x1, y1, color);
+    }
+
+    private static void LineGround(PixelCanvas c, int x0, int y0, int x1, int y1, Color color)
+    {
+        int dx = Math.Abs(x1 - x0), sx = x0 < x1 ? 1 : -1, dy = -Math.Abs(y1 - y0), sy = y0 < y1 ? 1 : -1, err = dx + dy;
+        while (true)
+        {
+            c.Px(x0, y0, color, solid: false);
+            if (x0 == x1 && y0 == y1)
+                break;
+            int e2 = 2 * err;
+            if (e2 >= dy) { err += dy; x0 += sx; }
+            if (e2 <= dx) { err += dx; y0 += sy; }
+        }
+    }
+
+    /// <summary>A soft dark strip on the ground under a thing.</summary>
+    private static void Shadow(PixelCanvas c, int x, int y, int w, int h)
+    {
+        for (int j = 0; j < h; j++)
+            for (int i = 0; i < w; i++)
+                c.Px(x + i, y + j, GroundShadow, solid: false);
     }
 
     // ------------------------------------------------------------------ units
 
     /// <summary>
-    /// Cells of 16×20, feet at (8, 19), facing right. Rows: infantry, archer, heavy.
-    /// Columns: idle, walk 1, walk 2, attack. units_team.png holds the faction-colour mask.
+    /// Cells of 16×20, feet at (8, 19), facing right. Rows: infantry, archer, heavy, ram. Columns (see
+    /// <see cref="ArtLayout"/>): idle, breathing, four walking steps, wind-up and strike. units_team.png holds the
+    /// faction-colour mask.
     /// </summary>
     private static PixelCanvas Units()
     {
@@ -781,76 +1328,122 @@ public static class ArtGenerator
         {
             for (int row = 0; row < ArtLayout.UnitRows; row++)
             {
-                c.Origin = new Vector2I(frame * ArtLayout.UnitCellWidth, row * ArtLayout.UnitCellHeight);
+                var cell = new Vector2I(frame * ArtLayout.UnitCellWidth, row * ArtLayout.UnitCellHeight);
+                c.Origin = cell;
+                var pose = Pose.Of(frame);
                 switch (row)
                 {
-                    case 0: Infantry(c, frame); break;
-                    case 1: Archer(c, frame); break;
-                    case 2: Heavy(c, frame); break;
-                    default: Ram(c, frame); break;
+                    case 0: Infantry(c, pose, cell); break;
+                    case 1: Archer(c, pose, cell); break;
+                    case 2: Heavy(c, pose, cell); break;
+                    default: Ram(c, pose, frame); break;
                 }
-                c.Outline(Outline, new Rect2I(c.Origin, new Vector2I(ArtLayout.UnitCellWidth, ArtLayout.UnitCellHeight)));
+                c.Origin = cell;
+                c.Outline(Outline, new Rect2I(cell, new Vector2I(ArtLayout.UnitCellWidth, ArtLayout.UnitCellHeight)));
             }
         }
         return c;
     }
 
-    /// <summary>Two legs whose stance depends on the frame: 0 idle, 1–2 walking, 3 lunging.</summary>
-    private static void Legs(PixelCanvas c, int frame, int width, Color color)
+    /// <summary>
+    /// How a soldier stands in a frame: where the near and the far leg are (x of each, and which one is lifted), how
+    /// far the upper body bobs (down while breathing, up mid-stride) and leans (back winding up, forward striking).
+    /// </summary>
+    private readonly record struct Pose(int Near, int Far, int NearLift, int FarLift, int Bob, int Lean, bool Windup, bool Strike, int Step)
     {
-        (int back, int front, int lift) = frame switch
+        public static Pose Of(int frame) => frame switch
         {
-            1 => (4, 10, 0),
-            2 => (6, 8, 1),
-            3 => (4, 10, 0),
-            _ => (5, 9, 0),
+            ArtLayout.FrameBreath => new(9, 5, 0, 0, 1, 0, false, false, 0),
+            ArtLayout.FrameWalk1 => new(10, 4, 0, 0, 0, 0, false, false, 1),
+            ArtLayout.FrameWalk2 => new(8, 6, 1, 0, -1, 0, false, false, 2),
+            ArtLayout.FrameWalk3 => new(4, 10, 0, 0, 0, 0, false, false, 3),
+            ArtLayout.FrameWalk4 => new(6, 8, 0, 1, -1, 0, false, false, 4),
+            ArtLayout.FrameWindup => new(10, 4, 0, 0, 0, -1, true, false, 0),
+            ArtLayout.FrameStrike => new(11, 4, 0, 0, 0, 1, false, true, 0),
+            _ => new(9, 5, 0, 0, 0, 0, false, false, 0),
         };
-        c.Rect(back, 16, width, 3, color);
-        c.Rect(front, 16 - lift, width, 3, color);
-        c.Rect(back, 18, width, 1, Boots);
-        c.Rect(front, 18 - lift, width, 1, Boots);
     }
 
-    private static void Infantry(PixelCanvas c, int frame)
+    /// <summary>
+    /// Both legs (the far one darker) and, by moving the canvas origin, the upper body's bob and lean: the caller draws
+    /// the body after this with local coordinates as if standing straight.
+    /// </summary>
+    private static void Legs(PixelCanvas c, Pose pose, Vector2I cell, int width, Color near, Color far)
     {
-        int lean = frame == 3 ? 1 : 0;
-        Legs(c, frame, 2, new Color("4a3a30"));
-        c.TeamRect(5 + lean, 10, 6, 6);
-        c.Rect(5 + lean, 14, 6, 1, Bark);
-        c.Shaded(6 + lean, 6, 4, 4, Skin, Skin, SkinDark);
-        c.Rect(5 + lean, 5, 6, 2, Steel);
-        c.Rect(6 + lean, 4, 4, 1, SteelLight);
-        c.Px(9 + lean, 7, Outline); // eye
-        if (frame == 3)
-        {
-            // Spear thrust forward.
-            c.Line(6, 13, 14, 9, Leather);
-            c.Px(15, 8, SteelLight);
-            c.Px(14, 8, Steel);
-            c.Rect(11, 11, 1, 2, Skin);
-        }
-        else
-        {
-            c.Rect(12, 3, 1, 15, Leather);
-            c.Rect(12, 1, 1, 2, SteelLight);
-            c.Px(11, 0, Steel);
-            c.Rect(11, 11, 1, 2, Skin);
-        }
+        int top = 16 + Math.Min(0, pose.Bob);
+        c.Rect(pose.Far, top - pose.FarLift, width, 19 - top, far);
+        c.Rect(pose.Far, 18 - pose.FarLift, width, 1, Boots);
+        c.Rect(pose.Near, top - pose.NearLift, width, 19 - top, near);
+        c.Rect(pose.Near, 18 - pose.NearLift, width, 1, Boots);
+        c.Origin = cell + new Vector2I(pose.Lean, pose.Bob);
     }
 
-    private static void Archer(PixelCanvas c, int frame)
+    /// <summary>Spearman: a crested helmet and a round shield on his back in his colours.</summary>
+    private static void Infantry(PixelCanvas c, Pose pose, Vector2I cell)
     {
-        Legs(c, frame, 2, new Color("4a3a30"));
-        c.Rect(3, 9, 2, 6, Leather); // quiver
-        c.Px(3, 8, String);
-        c.Px(4, 7, String);
+        Legs(c, pose, cell, 2, new Color("4a3a30"), new Color("33281f"));
+        // Shield slung on the back, behind the body.
+        for (int y = 9; y < 15; y++)
+            for (int x = 2; x < 6; x++)
+                if (!((x == 2 || x == 5) && (y == 9 || y == 14)))
+                    c.Team(x, y, x == 2 ? 0.6f : 0.78f);
+        c.Px(3, 11, SteelLight); // boss
         c.TeamRect(5, 10, 6, 6);
         c.Rect(5, 14, 6, 1, Bark);
         c.Shaded(6, 6, 4, 4, Skin, Skin, SkinDark);
-        c.Rect(5, 5, 5, 2, Hood);
-        c.Rect(5, 7, 1, 3, HoodDark);
+        c.Rect(5, 5, 6, 2, Steel);
+        c.Rect(6, 4, 4, 1, SteelLight);
+        // Crest running back over the helmet.
+        c.Team(6, 3, 1f); c.Team(7, 3, 0.9f); c.Team(8, 3, 0.8f); c.Team(5, 4, 0.75f); c.Team(4, 5, 0.6f);
         c.Px(9, 7, Outline); // eye
-        if (frame == 3)
+        if (pose.Strike)
+        {
+            // Spear thrust forward.
+            c.Line(5, 13, 13, 9, Leather);
+            c.Px(14, 8, Steel);
+            c.Px(15, 8, SteelLight);
+            c.Rect(11, 11, 1, 2, Skin);
+        }
+        else if (pose.Windup)
+        {
+            // Spear drawn back level at the hip, ready to thrust.
+            c.Rect(1, 11, 11, 1, Leather);
+            c.Px(12, 11, Steel);
+            c.Px(13, 11, SteelLight);
+            c.Rect(8, 11, 1, 2, Skin);
+        }
+        else
+        {
+            // Upright spear; on the march it rocks with the stride.
+            int tilt = pose.Step is 1 or 3 ? 1 : 0;
+            c.Rect(12, 4, 1, 14, Leather);
+            c.Rect(12 + tilt, 2, 1, 2, SteelLight);
+            c.Px(11 + tilt, 1, Steel);
+            c.Rect(11, 11 + (pose.Step is 2 or 4 ? 1 : 0), 1, 2, Skin);
+        }
+    }
+
+    /// <summary>Bowman in a hood and cape of his colours, with a quiver.</summary>
+    private static void Archer(PixelCanvas c, Pose pose, Vector2I cell)
+    {
+        Legs(c, pose, cell, 2, new Color("4a3a30"), new Color("33281f"));
+        // Cape behind, swinging back a little on the march.
+        int flutter = pose.Step is 2 or 4 ? 1 : 0;
+        for (int y = 9; y < 16; y++)
+            c.Team(4 - (y > 12 ? flutter : 0), y, 0.62f);
+        c.Rect(3, 9, 2, 5, Leather); // quiver
+        c.Px(3, 8, String);
+        c.Px(4, 7, String);
+        c.Rect(5, 10, 6, 6, Hood);
+        c.Rect(5, 10, 1, 6, HoodDark);
+        c.Rect(5, 14, 6, 1, Bark);
+        c.Shaded(6, 6, 4, 4, Skin, Skin, SkinDark);
+        // Hood in the faction's colours.
+        c.Team(5, 5, 0.95f); c.Team(6, 5, 1f); c.Team(7, 5, 1f); c.Team(8, 5, 0.9f); c.Team(9, 5, 0.8f);
+        c.Team(6, 4, 0.9f); c.Team(7, 4, 0.85f); c.Team(8, 4, 0.75f);
+        c.Team(5, 6, 0.7f); c.Team(5, 7, 0.65f); c.Team(5, 8, 0.6f); c.Team(6, 9, 0.7f); c.Team(7, 9, 0.7f);
+        c.Px(9, 7, Outline); // eye
+        if (pose.Windup)
         {
             // Bow drawn: string pulled back to the cheek, arrow on the string.
             c.Line(12, 6, 13, 9, Wood);
@@ -859,6 +1452,15 @@ public static class ArtGenerator
             c.Line(9, 10, 12, 14, String);
             c.Rect(9, 10, 6, 1, WoodLight);
             c.Px(15, 10, SteelLight);
+            c.Px(10, 10, Skin);
+        }
+        else if (pose.Strike)
+        {
+            // Loosed: the arm out, the string still quivering, the arrow gone.
+            c.Line(13, 6, 14, 9, Wood);
+            c.Line(14, 10, 13, 14, Wood);
+            c.Px(12, 7, String); c.Px(13, 9, String); c.Px(12, 11, String); c.Px(13, 13, String);
+            c.Rect(10, 10, 3, 1, Skin);
         }
         else
         {
@@ -866,67 +1468,107 @@ public static class ArtGenerator
             c.Rect(13, 9, 1, 3, Wood);
             c.Line(13, 12, 12, 14, Wood);
             c.Rect(11, 7, 1, 7, String);
+            c.Rect(11, 11, 1, 1, Skin);
         }
-        c.Rect(11, 11, 1, 1, Skin);
     }
 
     /// <summary>
-    /// A covered battering ram on two wheels: the roof is in faction colours, the wheels turn while it rolls,
-    /// and on the attack frame the iron-headed log is thrust out of the front.
+    /// A covered battering ram on two wheels: the roof is in faction colours, the wheels turn while it rolls, the
+    /// iron-headed log is drawn back to wind up and thrust out of the front to strike.
     /// </summary>
-    private static void Ram(PixelCanvas c, int frame)
+    private static void Ram(PixelCanvas c, Pose pose, int frame)
     {
+        int bob = pose.Step is 2 or 4 ? -1 : 0;
         // Roof of hides over a timber frame.
         for (int row = 0; row < 5; row++)
         {
             int inset = 4 - row;
             for (int x = 1 + inset; x < 13 - inset; x++)
-                c.Team(x, 6 + row, row == 4 ? 0.6f : x < 7 ? 0.95f : 0.75f);
+                c.Team(x, 6 + row + bob, row == 4 ? 0.6f : x < 7 ? 0.95f : 0.75f);
         }
-        c.Rect(1, 11, 12, 4, Wood);
+        c.Rect(1, 11 + bob, 12, 4, Wood);
         for (int x = 2; x < 13; x += 3)
-            c.Rect(x, 11, 1, 4, WoodDark);
-        // The log runs through the frame and out of the front; its iron head strikes on the attack frame.
-        int thrust = frame == 3 ? 2 : 0;
-        c.Rect(6 + thrust, 12, 7, 2, Bark);
-        c.Rect(13 + thrust, 11, 1, 4, SteelDark);
-        // Wheels whose spoke turns as it rolls.
+            c.Rect(x, 11 + bob, 1, 4, WoodDark);
+        int thrust = pose.Strike ? 2 : pose.Windup ? -3 : 0;
+        c.Rect(6 + thrust, 12 + bob, 7, 2, Bark);
+        c.Rect(13 + thrust, 11 + bob, 1, 4, SteelDark);
+        c.Px(13 + thrust, 11 + bob, Steel);
+        // Wheels whose spoke turns a quarter each step.
+        var spokes = new[] { new Vector2I(0, -2), new Vector2I(2, 0), new Vector2I(0, 2), new Vector2I(-2, 0) };
         foreach (int wx in new[] { 4, 11 })
         {
             c.Disc(wx, 16, 2.4f, WoodDark);
             c.Px(wx, 16, Steel);
-            var spoke = (frame % 2 == 0) ? new Vector2I(wx, 14) : new Vector2I(wx + 2, 16);
-            c.Px(spoke.X, spoke.Y, WoodLight);
+            var spoke = spokes[pose.Step == 0 ? (frame == ArtLayout.FrameStrike ? 1 : 0) : pose.Step - 1];
+            c.Px(wx + spoke.X, 16 + spoke.Y, WoodLight);
+            c.Px(wx + spoke.X / 2, 16 + spoke.Y / 2, WoodLight);
         }
     }
 
-    private static void Heavy(PixelCanvas c, int frame)
+    /// <summary>Knight in plate with a plumed helm, a kite shield in his colours and a sword.</summary>
+    private static void Heavy(PixelCanvas c, Pose pose, Vector2I cell)
     {
-        int lean = frame == 3 ? 1 : 0;
-        Legs(c, frame, 3, SteelDark);
-        c.Shaded(4 + lean, 9, 8, 7, Steel, SteelLight, SteelDark);
-        c.Team(7 + lean, 9); c.Team(8 + lean, 9);
-        for (int y = 10; y < 16; y++) { c.Team(7 + lean, y, 0.85f); c.Team(8 + lean, y, 0.7f); }
-        c.Shaded(5 + lean, 3, 6, 6, Steel, SteelLight, SteelDark);
-        c.Rect(7 + lean, 5, 4, 1, Outline); // visor
-        if (frame == 3)
+        Legs(c, pose, cell, 3, SteelDark, new Color("5d616a"));
+        if (pose.Windup)
         {
-            // Sword swung forward over the shield.
-            c.Line(10, 8, 15, 2, SteelLight);
-            c.Rect(9, 8, 2, 1, Leather);
+            // Sword raised high behind the head.
+            c.Line(7, 8, 3, 1, SteelLight);
+            c.Px(2, 0, Steel);
+            c.Rect(6, 8, 2, 1, Leather);
         }
-        else
+        else if (!pose.Strike)
         {
-            c.Rect(3, 3, 1, 8, SteelLight);
-            c.Rect(2, 11, 3, 1, Leather);
+            c.Rect(3, 3 + (pose.Step is 2 or 4 ? 1 : 0), 1, 8, SteelLight);
+            c.Rect(2, 11 + (pose.Step is 2 or 4 ? 1 : 0), 3, 1, Leather);
         }
-        // Shield in faction colours with a steel rim.
+        c.Shaded(4, 9, 8, 7, Steel, SteelLight, SteelDark);
+        c.Team(7, 9); c.Team(8, 9);
+        for (int y = 10; y < 16; y++) { c.Team(7, y, 0.85f); c.Team(8, y, 0.7f); }
+        c.Shaded(5, 3, 6, 6, Steel, SteelLight, SteelDark);
+        c.Rect(7, 5, 4, 1, Outline); // visor
+        // Plume on the helm, streaming back.
+        c.Team(7, 2, 1f); c.Team(8, 2, 0.9f); c.Team(6, 2, 0.85f); c.Team(5, 2, 0.7f); c.Team(4, 3, 0.6f);
+        c.Team(7, 1, 0.9f);
+        // Kite shield in faction colours with a steel rim.
         c.TeamRect(11, 9, 4, 7);
         c.Rect(11, 9, 4, 1, SteelLight);
         c.Rect(11, 15, 4, 1, SteelDark);
+        c.Px(12, 12, SteelLight);
+        if (pose.Strike)
+        {
+            // Sword swung over and forward above the shield.
+            c.Line(10, 8, 15, 3, SteelLight);
+            c.Px(15, 2, Steel);
+            c.Rect(9, 8, 2, 1, Leather);
+        }
     }
 
     // ------------------------------------------------------------------ buildings
+
+    /// <summary>Warm light of a lit window at night.</summary>
+    private static readonly Color WindowGlow = new("ffc24a");
+    /// <summary>Light of an open fire (beacon, torch) at night.</summary>
+    private static readonly Color FireGlow = new("ff8a2a");
+    private static readonly Color Fire = new("ff7a1a");
+    private static readonly Color FireLight = new("ffd25a");
+
+    /// <summary>
+    /// A building's sheet: <see cref="ArtLayout.BuildingFrames"/> frames of <paramref name="w"/>×<paramref name="h"/>
+    /// side by side (flags waving, wheels turning, fires flickering), each drawn with local coordinates and outlined.
+    /// </summary>
+    private static PixelCanvas Sheet(int w, int h, Action<PixelCanvas, int> draw)
+    {
+        var c = new PixelCanvas(w * ArtLayout.BuildingFrames, h);
+        for (int frame = 0; frame < ArtLayout.BuildingFrames; frame++)
+        {
+            var cell = new Vector2I(frame * w, 0);
+            c.Origin = cell;
+            draw(c, frame);
+            c.Origin = Vector2I.Zero;
+            c.Outline(Outline, new Rect2I(cell, new Vector2I(w, h)));
+        }
+        return c;
+    }
 
     /// <summary>Stone wall texture: staggered bricks with mortar lines and a lit top edge.</summary>
     private static void Bricks(PixelCanvas c, int x, int y, int w, int h, Color mid)
@@ -962,17 +1604,49 @@ public static class ArtGenerator
                 c.Team(x + i, y + h, 0.62f);
     }
 
-    private static void Flag(PixelCanvas c, int x, int y)
+    /// <summary>A dark window that shines at night.</summary>
+    private static void LitWindow(PixelCanvas c, int x, int y, int w, int h)
     {
-        c.Rect(x, y, 1, 9, new Color("4a3a2a"));
-        c.TeamRect(x + 1, y, 6, 4);
-        c.Team(x + 7, y + 1, 0.82f);
+        c.Rect(x, y, w, h, Window);
+        c.Lit(x, y, w, h, WindowGlow);
     }
 
-    /// <summary>48×60, bottom-centre origin; the footprint is 3×3 tiles.</summary>
-    private static PixelCanvas Castle()
+    /// <summary>
+    /// A flag on a pole, the cloth in faction colours rippling in the wind: a wave runs out from the pole along the
+    /// cloth over the four frames, the free end flapping most; slopes turned away from the light are darker.
+    /// </summary>
+    private static void Flag(PixelCanvas c, int x, int y, int frame)
     {
-        var c = new PixelCanvas(48, 60);
+        c.Rect(x, y, 1, 9, new Color("4a3a2a"));
+        int previous = 0;
+        for (int i = 0; i <= 6; i++)
+        {
+            float amplitude = Mathf.Min(1f, i / 2.5f);
+            int dy = (int)Mathf.Round((Mathf.Sin(i * 1.2f - frame * Mathf.Pi / 2f) + 1f) / 2f * amplitude);
+            float turn = dy > previous ? 0.78f : 1f;
+            previous = dy;
+            if (i == 6)
+            {
+                c.Team(x + 1 + i, y + 1 + dy, 0.82f * turn); // the frayed tip
+                break;
+            }
+            for (int j = 0; j < 4; j++)
+                c.Team(x + 1 + i, y + dy + j, (j == 0 ? 1f : j == 3 ? 0.62f : 0.82f) * turn);
+        }
+    }
+
+    /// <summary>A torch on a wall bracket whose flame flickers through the frames.</summary>
+    private static void Torch(PixelCanvas c, int x, int y, int frame)
+    {
+        c.Rect(x, y + 2, 1, 3, WoodDark);
+        c.Px(x, y + 1, Fire);
+        c.Px(x + (frame % 2 == 0 ? 0 : frame == 1 ? -1 : 1), y, FireLight);
+        c.Lit(x - 1, y - 1, 3, 3, FireGlow);
+    }
+
+    /// <summary>48×60 frames, bottom-centre origin; the footprint is 3×3 tiles.</summary>
+    private static PixelCanvas Castle() => Sheet(48, 60, (c, frame) =>
+    {
         Bricks(c, 4, 28, 40, 30, Stone);
         Bricks(c, 14, 10, 20, 20, StoneLight);
         Crenellations(c, 14, 7, 20, StoneLight);
@@ -987,30 +1661,31 @@ public static class ArtGenerator
         for (int x = 21; x < 28; x += 2)
             c.Rect(x, 45, 1, 13, WoodDark);
         c.Rect(18, 41, 12, 1, StoneDark);
-        // Windows.
+        Torch(c, 16, 43, frame);
+        Torch(c, 31, 43, (frame + 2) % 4);
         foreach (int x in new[] { 18, 23, 28 })
-            c.Rect(x, 15, 2, 3, Window);
-        c.Rect(5, 30, 2, 3, Window);
-        c.Rect(41, 30, 2, 3, Window);
-        Banner(c, 3, 22, 6, 10);
-        Banner(c, 39, 22, 6, 10);
-        Flag(c, 23, 0);
-        c.Outline(Outline);
-        return c;
-    }
+            LitWindow(c, x, 15, 2, 3);
+        LitWindow(c, 5, 30, 2, 3);
+        LitWindow(c, 41, 30, 2, 3);
+        LitWindow(c, 5, 22, 2, 2);
+        LitWindow(c, 41, 22, 2, 2);
+        Banner(c, 3, 34, 6, 10);
+        Banner(c, 39, 34, 6, 10);
+        Flag(c, 23, 0, frame);
+    });
 
-    /// <summary>32×36, bottom-centre origin; footprint 2×2 tiles. The roof is in faction colours.</summary>
-    private static PixelCanvas Barracks()
+    /// <summary>32×36 frames, bottom-centre origin; footprint 2×2 tiles. The roof is in faction colours.</summary>
+    private static PixelCanvas Barracks() => Sheet(32, 36, (c, frame) =>
     {
-        var c = new PixelCanvas(32, 36);
+        Flag(c, 15, 0, (frame + 1) % 4);
         c.Rect(2, 20, 28, 15, Wood);
         for (int x = 2; x < 30; x += 4)
             c.Rect(x, 20, 1, 15, WoodDark);
         c.Rect(2, 33, 28, 2, StoneDark);
         c.Rect(13, 26, 6, 8, Door);
         c.Rect(15, 26, 1, 8, WoodDark);
-        c.Rect(5, 24, 3, 3, Window);
-        c.Rect(24, 24, 3, 3, Window);
+        LitWindow(c, 5, 24, 3, 3);
+        LitWindow(c, 24, 24, 3, 3);
         c.Rect(24, 7, 3, 6, StoneDark); // chimney
         for (int row = 0; row < 12; row++)
         {
@@ -1018,24 +1693,21 @@ public static class ArtGenerator
             for (int x = inset; x < 32 - inset; x++)
                 c.Team(x, 8 + row, row == 0 ? 1f : row == 11 ? 0.55f : (x - inset) % 4 == 0 ? 0.7f : 0.85f);
         }
-        c.Outline(Outline);
-        return c;
-    }
+    });
 
     /// <summary>
-    /// 32×58, bottom-centre origin; footprint 2×2 tiles. A walled plinth with a gate, a stone keep behind it,
+    /// 32×58 frames, bottom-centre origin; footprint 2×2 tiles. A walled plinth with a gate, a stone keep behind it,
     /// an archers' gallery and a conical roof in faction colours. Level 2: stone gallery, iron bands, bigger banners;
     /// level 3: gilded eaves, finial and gate.
     /// </summary>
-    private static PixelCanvas Tower(int tier = 1)
+    private static PixelCanvas Tower(int tier = 1) => Sheet(32, 58, (c, frame) =>
     {
-        var c = new PixelCanvas(32, 58);
-        Flag(c, 15, 0);
+        Flag(c, 15, 0, frame);
         // Keep, drawn first: the plinth wall stands in front of its foot. Higher levels are bound with iron.
         Bricks(c, 7, 24, 18, 20, StoneLight);
-        c.Rect(15, 28, 2, 5, Window); // arrow slits
-        c.Rect(10, 31, 1, 4, Window);
-        c.Rect(21, 31, 1, 4, Window);
+        LitWindow(c, 15, 28, 2, 5); // arrow slits
+        LitWindow(c, 10, 31, 1, 4);
+        LitWindow(c, 21, 31, 1, 4);
         if (tier >= 2)
         {
             c.Rect(7, 27, 18, 1, SteelDark);
@@ -1055,7 +1727,7 @@ public static class ArtGenerator
             c.Rect(3, 23, 26, 1, StoneDark);
         }
         for (int x = 6; x < 27; x += 8)
-            c.Rect(x, 20, 2, 2, Window);
+            LitWindow(c, x, 20, 2, 2);
         for (int row = 0; row < 13; row++)
         {
             int half = 2 + row * 12 / 12;
@@ -1095,20 +1767,15 @@ public static class ArtGenerator
             Banner(c, 4, 44, 4, 6);
             Banner(c, 24, 44, 4, 6);
         }
-        c.Outline(Outline);
-        return c;
-    }
+    });
 
     /// <summary>
-    /// 48×76, bottom-centre origin; footprint 3×3 tiles. A walled base, a slim stone shaft and an open lookout
-    /// with a beacon fire under a pointed roof in faction colours. It does not shoot, so no arrow gallery.
+    /// 48×76 frames, bottom-centre origin; footprint 3×3 tiles. A walled base, a slim stone shaft and an open lookout
+    /// with a beacon fire (flickering through the frames) under a pointed roof in faction colours.
     /// </summary>
-    private static PixelCanvas Watchtower()
+    private static PixelCanvas Watchtower() => Sheet(48, 76, (c, frame) =>
     {
-        var fire = new Color("ff7a1a");
-        var fireLight = new Color("ffd25a");
-        var c = new PixelCanvas(48, 76);
-        Flag(c, 23, 0);
+        Flag(c, 23, 0, frame);
         for (int row = 0; row < 12; row++)
         {
             int half = 2 + row;
@@ -1120,16 +1787,23 @@ public static class ArtGenerator
         c.Rect(12, 20, 2, 11, Wood);
         c.Rect(34, 20, 2, 11, Wood);
         c.Rect(20, 27, 8, 3, SteelDark);
-        c.Rect(21, 23, 6, 4, fire);
-        c.Rect(23, 21, 2, 4, fireLight);
+        c.Rect(21, 24, 6, 3, Fire);
+        switch (frame)
+        {
+            case 0: c.Rect(23, 21, 2, 3, FireLight); c.Px(22, 23, Fire); break;
+            case 1: c.Rect(22, 22, 2, 2, FireLight); c.Rect(25, 21, 1, 3, Fire); c.Px(24, 20, FireLight); break;
+            case 2: c.Rect(24, 20, 1, 4, FireLight); c.Rect(22, 22, 1, 2, Fire); c.Px(25, 22, FireLight); break;
+            default: c.Rect(23, 22, 3, 2, FireLight); c.Px(22, 21, Fire); c.Px(25, 21, Fire); break;
+        }
+        c.Lit(19, 19, 10, 8, FireGlow);
         c.Rect(9, 30, 30, 3, Wood);
         for (int x = 10; x < 38; x += 3)
             c.Rect(x, 31, 1, 2, WoodDark);
         c.Rect(8, 33, 32, 2, WoodDark);
         // Shaft with lookout windows.
         Bricks(c, 15, 35, 18, 22, StoneLight);
-        c.Rect(23, 39, 2, 5, Window);
-        c.Rect(23, 48, 2, 4, Window);
+        LitWindow(c, 23, 39, 2, 5);
+        LitWindow(c, 23, 48, 2, 4);
         // Walled base with a gate and banners.
         Crenellations(c, 3, 53, 42, Stone);
         Bricks(c, 3, 56, 42, 19, Stone);
@@ -1141,19 +1815,16 @@ public static class ArtGenerator
         c.Rect(19, 60, 10, 1, StoneDark);
         Banner(c, 7, 59, 5, 8);
         Banner(c, 36, 59, 5, 8);
-        c.Outline(Outline);
-        return c;
-    }
+    });
 
     /// <summary>
-    /// 32×40, bottom-centre origin; footprint 2×2 tiles. A stone platform with a timber frame, a throwing arm loaded
+    /// 32×40 frames, bottom-centre origin; footprint 2×2 tiles. A stone platform with a timber frame, a throwing arm loaded
     /// with a stone, a counterweight and a banner in faction colours. Level 2: merlons and iron fittings;
     /// level 3: gilded trim and banners at the sides.
     /// </summary>
-    private static PixelCanvas Catapult(int tier = 1)
+    private static PixelCanvas Catapult(int tier = 1) => Sheet(32, 40, (c, frame) =>
     {
-        var c = new PixelCanvas(32, 40);
-        Flag(c, 3, 12);
+        Flag(c, 3, 12, frame);
         // Frame: two uprights, a crossbar and the axle the arm swings on.
         var timber = tier >= 3 ? WoodLight : Wood;
         c.Rect(9, 15, 2, 12, timber);
@@ -1186,19 +1857,19 @@ public static class ArtGenerator
             Banner(c, 4, 29, 4, 6);
             Banner(c, 24, 29, 4, 6);
         }
-        c.Outline(Outline);
-        return c;
-    }
+    });
 
     /// <summary>
-    /// 32×36, bottom-centre origin; footprint 2×2 tiles on a gold deposit. Level 2: stone-framed tunnel, lantern,
-    /// braced headframe, a second cart; level 3: steel headframe with a gilded wheel, a retaining wall, a heap of gold.
+    /// 32×36 frames, bottom-centre origin; footprint 2×2 tiles on a gold deposit. Through the frames the headframe's
+    /// wheel turns and the gold in the cart glints (the view holds the first frame while the mine stands idle).
+    /// Level 2: stone-framed tunnel, lantern, braced headframe, a second cart; level 3: steel headframe with a gilded
+    /// wheel, a retaining wall, a heap of gold.
     /// </summary>
-    private static PixelCanvas Mine(int tier = 1)
+    private static PixelCanvas Mine(int tier = 1) => Sheet(32, 36, (c, frame) =>
     {
         var lamp = new Color("ffd25a");
-        var c = new PixelCanvas(32, 36);
-        // Rock mound with a tunnel mouth: timbered, then framed in stone.
+        var glint = new Color("fff6c0");
+        // Rock mound with a tunnel mouth: timbered, then framed in stone; lamplight inside at night.
         for (int y = 22; y < 35; y++)
         {
             int half = 6 + (y - 22) * 9 / 12;
@@ -1206,19 +1877,19 @@ public static class ArtGenerator
                 c.Px(x, y, Hash(x, y, 21) < 150 ? RockLight : Rock);
         }
         if (tier >= 3)
-        {
             Bricks(c, 2, 31, 28, 4, Stone); // retaining wall
-        }
         c.Rect(11, 26, 9, 9, Door);
-        var frame = tier >= 2 ? StoneLight : Wood;
-        c.Rect(10, 25, 1, 10, frame);
-        c.Rect(20, 25, 1, 10, frame);
+        c.Lit(12, 29, 7, 6, new Color("b8641e"));
+        var frameColor = tier >= 2 ? StoneLight : Wood;
+        c.Rect(10, 25, 1, 10, frameColor);
+        c.Rect(20, 25, 1, 10, frameColor);
         c.Rect(10, 25, 11, 1, tier >= 2 ? Stone : WoodLight);
         if (tier >= 2)
         {
             c.Rect(9, 24, 13, 1, StoneDark);
             c.Px(8, 27, lamp); // lantern by the entrance
             c.Px(8, 28, SteelDark);
+            c.Lit(7, 26, 3, 3, WindowGlow);
         }
         // Headframe with a pulley wheel: timber, then steel; the top level's wheel is gilded.
         var post = tier >= 3 ? SteelDark : Wood;
@@ -1231,28 +1902,36 @@ public static class ArtGenerator
             c.Line(6, 20, 26, 12, post); // cross brace
         c.Disc(16, 10, 3f, tier >= 3 ? GoldDark : StoneDark);
         c.Px(16, 10, tier >= 3 ? Gold : Steel);
+        var spoke = frame switch { 0 => new Vector2I(0, -2), 1 => new Vector2I(2, 0), 2 => new Vector2I(0, 2), _ => new Vector2I(-2, 0) };
+        c.Px(16 + spoke.X, 10 + spoke.Y, tier >= 3 ? Gold : WoodLight);
+        c.Px(16 - spoke.X, 10 - spoke.Y, tier >= 3 ? Gold : WoodLight);
+        c.Line(16, 13, 16, 22, Leather); // the rope down the shaft
         // Carts full of gold: one, then two, then a heap beside them.
         c.Rect(22, 29, 8, 4, WoodDark);
         c.Rect(23, 27, 6, 2, Gold);
         c.Px(25, 26, GoldDark);
         c.Rect(23, 33, 2, 2, Outline);
         c.Rect(27, 33, 2, 2, Outline);
+        if (frame < 3)
+            c.Px(23 + frame * 2, 27, glint);
         if (tier >= 2)
         {
             c.Rect(2, 29, 7, 4, WoodDark);
             c.Rect(3, 27, 5, 2, Gold);
             c.Rect(3, 33, 2, 2, Outline);
             c.Rect(6, 33, 2, 2, Outline);
+            if (frame == 2)
+                c.Px(5, 27, glint);
         }
         if (tier >= 3)
         {
             for (int row = 0; row < 3; row++)
                 c.Rect(12 + row, 22 - row, 7 - 2 * row, 1, row == 2 ? Gold : GoldDark);
+            if (frame == 1)
+                c.Px(15, 20, glint);
         }
-        Flag(c, 3, 0);
-        c.Outline(Outline);
-        return c;
-    }
+        Flag(c, 3, 0, frame);
+    });
 
     /// <summary>32×32 ore patch drawn on the 2×2 deposit footprint (top-left origin).</summary>
     private static PixelCanvas Deposit()
@@ -1279,19 +1958,47 @@ public static class ArtLayout
 {
     public const int Tile = 16;
     public const int TerrainVariants = 4;
-    public const int GrassRow = 0, ForestRow = 1, WaterRow = 2, MountainRow = 3, RoadRow = 4, ShoreRow = 5, BridgeRow = 6;
-    /// <summary>First of four rows each (one per cell position modulo 2 in x and y) of forest and mountain range tiles, by neighbour mask.</summary>
-    public const int ForestRangeRow = 7, MountainRangeRow = 11;
+    public const int GrassRow = 0, ForestRow = 1, MountainRow = 3, RoadRow = 4, BridgeRow = 6;
+    /// <summary>Frames of the animated terrain tiles (water, surf, woods), in the rows under each tile's first frame.</summary>
+    public const int TileFrames = 4;
+    /// <summary>Animated: water variants and shore overlays (by mask), each followed by its frames.</summary>
+    public const int WaterRow = 43, ShoreRow = 47;
+    /// <summary>
+    /// Woods (animated: four positions modulo 2 in x and y, each <see cref="TileFrames"/> rows) and mountain ranges
+    /// (sixteen positions modulo 4), by neighbour mask.
+    /// </summary>
+    public const int ForestRangeRow = 51, MountainRangeRow = 11;
     /// <summary>Tiles before the woods' and the ranges' patterns repeat (the rows per position).</summary>
     public const int ForestPeriod = 2, MountainPeriod = 4;
     /// <summary>First of 16 rows of a biome's ground blending into a neighbouring cell of another biome (8-bit neighbour mask).</summary>
     public const int BiomeBlendRow = 27;
+    /// <summary>Decor: small things lying about on open ground, one kind a column over two rows.</summary>
+    public const int DecorRow = 67, DecorKinds = 32;
+    public const int TerrainRows = 69;
+
+    /// <summary>The animated tiles: first row, how many columns, how long each frame shows, and whether neighbours
+    /// start at different moments (water glitters at random; surf and woods move together, in one wind).</summary>
+    public static System.Collections.Generic.IEnumerable<(int Row, int Columns, float[] Durations, bool RandomStart)> AnimatedTiles()
+    {
+        yield return (WaterRow, TerrainVariants, new[] { 0.5f, 0.5f, 0.5f, 0.5f }, true);
+        yield return (ShoreRow, 16, new[] { 0.7f, 0.5f, 0.6f, 0.5f }, false);
+        for (int parity = 0; parity < 4; parity++)
+            yield return (ForestRangeRow + parity * TileFrames, 16, new[] { 1.4f, 0.45f, 1.1f, 0.45f }, false);
+    }
+
+    /// <summary>Which decor kinds each biome scatters (a kind listed twice turns up twice as often).</summary>
+    public static readonly int[] MeadowDecor = { 0, 1, 2, 3, 31, 4, 4, 4, 5, 5, 6, 7, 8, 9, 10, 11, 12, 6, 4 };
+    public static readonly int[] WinterDecor = { 13, 13, 13, 14, 15, 16, 17, 17, 18, 19, 20, 20, 6, 10 };
+    public static readonly int[] DesertDecor = { 21, 21, 22, 22, 23, 24, 25, 25, 26, 26, 27, 28, 28, 29, 30, 6 };
+
+    /// <summary>Frames side by side in each building sheet (flags, wheels, fires).</summary>
+    public const int BuildingFrames = 4;
 
     public const int UnitCellWidth = 16;
     public const int UnitCellHeight = 20;
-    public const int UnitFrames = 4;
+    public const int UnitFrames = 8;
     public const int UnitRows = 4;
-    public const int FrameIdle = 0, FrameWalk1 = 1, FrameWalk2 = 2, FrameAttack = 3;
+    public const int FrameIdle = 0, FrameBreath = 1, FrameWalk1 = 2, FrameWalk2 = 3, FrameWalk3 = 4, FrameWalk4 = 5, FrameWindup = 6, FrameStrike = 7;
     /// <summary>Feet position inside a unit cell.</summary>
     public static readonly Vector2I UnitFeet = new(8, 19);
 

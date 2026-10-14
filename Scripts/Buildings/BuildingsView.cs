@@ -15,11 +15,27 @@ public partial class BuildingsView : Node2D
     private readonly List<int> _gone = new();
     private readonly HashSet<int> _seen = new();
     private MatchController _match = null!;
+    /// <summary>Night lights are added onto what lies beneath them.</summary>
+    private readonly CanvasItemMaterial _additive = new() { BlendMode = CanvasItemMaterial.BlendModeEnum.Add };
+    private GradientTexture2D _halo = null!;
 
     public void Initialize(MatchController match)
     {
         _match = match;
+        // A round glow, bright in the middle and fading to nothing at the rim.
+        var gradient = new Gradient();
+        gradient.SetColor(0, Colors.White);
+        gradient.SetColor(1, new Color(1f, 1f, 1f, 0f));
+        gradient.AddPoint(0.45f, new Color(1f, 1f, 1f, 0.35f));
+        _halo = new GradientTexture2D
+        {
+            Gradient = gradient, Width = 64, Height = 64, Fill = GradientTexture2D.FillEnum.Radial,
+            FillFrom = new Vector2(0.5f, 0.5f), FillTo = new Vector2(1f, 0.5f),
+        };
     }
+
+    /// <summary>The building views (for their shadows).</summary>
+    public IEnumerable<BuildingView> Views => _views.Values;
 
     public override void _Process(double delta)
     {
@@ -28,13 +44,13 @@ public partial class BuildingsView : Node2D
             if (!_views.TryGetValue(building.Id, out var view))
             {
                 view = new BuildingView { Name = $"Building{building.Id}" };
-                view.Initialize(building);
+                view.Initialize(building, _match, _additive, _halo);
                 _views.Add(building.Id, view);
                 AddChild(view);
             }
             bool hidden = _match.IsHidden(building);
-            if (!hidden)
-                _seen.Add(building.Id);
+            if (!hidden && _seen.Add(building.Id))
+                _match.Map.ClearDecor(building.Anchor, building.Type.Size); // no flowers growing through its walls
             view.Visible = _seen.Contains(building.Id);
             view.Ghost = hidden;
             if (hidden && _match.Selection.BuildingId == building.Id)

@@ -7,9 +7,10 @@ using Lordsio.Sim.Core;
 namespace Lordsio.World;
 
 /// <summary>
-/// Short-lived pixel effects driven by simulation events: hit sparks, dust, death puffs, collapsing
-/// buildings, construction sparkles and alert pings. Two instances run in a match: a ground layer
-/// below the actors (rubble) and an air layer above them (everything else).
+/// Short-lived pixel effects driven by simulation events: hit sparks and what flies off a struck target (blood,
+/// sparks off plate, wood chips, stone splinters), dust, death puffs, collapsing buildings, a catapult stone's flash,
+/// flying rocks and crater, construction sparkles and alert pings. Two instances run in a match: a ground layer
+/// below the actors (rubble, craters, corpses) and an air layer above them (everything else).
 /// </summary>
 public partial class EffectsView : Node2D
 {
@@ -25,6 +26,14 @@ public partial class EffectsView : Node2D
         Impact,
         /// <summary>A fallen soldier lying on the ground for a while, then fading (ground layer).</summary>
         Corpse,
+        /// <summary>Bits knocked off a target, thrown up, falling and lying a moment (Size: how hard they fly).</summary>
+        Debris,
+        /// <summary>Rocks of a shattered catapult stone flying out of the impact.</summary>
+        Chunks,
+        /// <summary>The bright burst of a stone striking home (bright even at night).</summary>
+        Flash,
+        /// <summary>A scorched pit left by a stone, fading after a while (ground layer).</summary>
+        Crater,
     }
 
     private record struct Effect(Kind Kind, Vector2 Position, float Age, float Duration, float Size, int Seed, Color Color);
@@ -35,6 +44,15 @@ public partial class EffectsView : Node2D
     private static readonly Color RubbleLight = new("858079");
     private static readonly Color SparkleColor = new("ffe066");
     private static readonly Color PingColor = new("ff5a4a");
+    private static readonly Color Blood = new("9c1f1f");
+    private static readonly Color PlateSpark = new("fff6c8");
+    private static readonly Color WoodChip = new("a87a4a");
+    private static readonly Color StoneChip = new("9d968e");
+    private static readonly Color RockChunk = new("6e6862");
+    private static readonly Color FlashColor = new("fff1b0");
+    private static readonly Color CraterColor = new("3a3128");
+    private static readonly Color CraterRim = new("8a7a5e");
+    private const float CraterSeconds = 14f;
 
     /// <summary>True for the layer drawn under units and buildings.</summary>
     [Export] public bool Ground { get; set; }
@@ -53,12 +71,19 @@ public partial class EffectsView : Node2D
         switch (e)
         {
             case SplashLanded splash when !Ground:
-                Add(Kind.Impact, SimConvert.ToWorld(splash.Position), 0.5f, splash.Radius * SimConvert.TileSize, DustColor);
+                var landed = SimConvert.ToWorld(splash.Position);
+                Add(Kind.Impact, landed, 0.5f, splash.Radius * SimConvert.TileSize, DustColor);
+                Add(Kind.Flash, landed + new Vector2(0, -3), 0.16f, 9f, FlashColor);
+                Add(Kind.Chunks, landed, 1.1f, 1f, RockChunk);
+                break;
+            case SplashLanded splash when Ground:
+                Add(Kind.Crater, SimConvert.ToWorld(splash.Position), CraterSeconds, splash.Radius * SimConvert.TileSize * 0.55f, CraterColor);
                 break;
             case AttackLanded hit when !Ground && !hit.Splash: // a stone's victims share its one impact cloud
                 bool building = _match.Sim.GetBuilding(hit.TargetId) != null;
                 var at = SimConvert.ToWorld(hit.Position) + new Vector2(0, building ? -8 : -6);
                 Add(building || hit.Ranged ? Kind.Dust : Kind.Spark, at, building ? 0.35f : 0.18f, building ? 6f : 3f, DustColor);
+                Add(Kind.Debris, at, 0.75f, building ? 1.2f : 1f, DebrisColor(hit.TargetId, building));
                 break;
             case UnitDied died when !Ground:
                 Add(Kind.Puff, SimConvert.ToWorld(died.Position) + new Vector2(0, -5), 0.6f, 6f, FactionColors.Get(died.FactionId));
@@ -86,6 +111,19 @@ public partial class EffectsView : Node2D
                 Add(Kind.Sparkle, SimConvert.ToWorld(b.Position), 0.8f, b.Type.Size * SimConvert.TileSize / 2f, SparkleColor);
                 break;
         }
+    }
+
+    /// <summary>What flies off a struck target: splinters of stone, chips of a ram's timber, sparks off plate, blood.</summary>
+    private Color DebrisColor(int targetId, bool building)
+    {
+        if (building)
+            return StoneChip;
+        return _match.Sim.GetUnit(targetId)?.Type switch
+        {
+            { IsSiege: true } => WoodChip,
+            { RangedArmor: >= 0.3f } => PlateSpark,
+            _ => Blood,
+        };
     }
 
     /// <summary>Expanding ring marking where the player is being attacked.</summary>
@@ -138,6 +176,20 @@ public partial class EffectsView : Node2D
                     break;
                 case Kind.Corpse:
                     DrawCorpse(e, t);
+                    break;
+                case Kind.Debris:
+                case Kind.Chunks:
+                    DrawDebris(e, t, rng);
+                    break;
+                case Kind.Flash:
+                    // Bright against the night too: the world's darkening is undone for it.
+                    var boost = _match.LightBoost;
+                    var flash = new Color(e.Color.R * boost.R, e.Color.G * boost.G, e.Color.B * boost.B, 1f - t);
+                    DrawCircle(e.Position, e.Size * (0.5f + 0.5f * t), flash);
+                    DrawCircle(e.Position, e.Size * 0.4f * (1f - t), new Color(boost.R, boost.G, boost.B));
+                    break;
+                case Kind.Crater:
+                    DrawCrater(e, rng);
                     break;
                 case Kind.Impact:
                     // A flattened ring of dust spreading over the splash area, with specks thrown out.
@@ -194,6 +246,51 @@ public partial class EffectsView : Node2D
                     }
                     break;
             }
+        }
+    }
+
+    /// <summary>
+    /// Bits thrown up from the hit, falling under gravity onto the ground a few pixels below (the target's feet) and
+    /// lying there a moment before fading. Chunks are a stone's rocks: more, bigger, thrown farther.
+    /// </summary>
+    private void DrawDebris(Effect e, float t, Random rng)
+    {
+        bool chunks = e.Kind == Kind.Chunks;
+        int count = chunks ? 12 : 5;
+        float ground = e.Position.Y + (chunks ? 2f : 6f);
+        float alpha = t < 0.6f ? 1f : 1f - (t - 0.6f) / 0.4f;
+        for (int s = 0; s < count; s++)
+        {
+            float vx = (rng.NextSingle() - 0.5f) * (chunks ? 110f : 50f) * e.Size;
+            float vy = -(chunks ? 50f : 25f) - rng.NextSingle() * (chunks ? 60f : 35f) * e.Size;
+            float time = e.Age;
+            var p = e.Position + new Vector2(vx * time, vy * time + 0.5f * 260f * time * time);
+            if (p.Y > ground)
+            {
+                // Landed: it stops where it hit the ground.
+                float landing = (-vy + Mathf.Sqrt(vy * vy + 2f * 260f * (ground - e.Position.Y))) / 260f;
+                p = new Vector2(e.Position.X + vx * landing, ground + (s % 3) - 1);
+            }
+            float size = chunks ? 2 + s % 2 : 1 + (s % 3 == 0 ? 1 : 0);
+            var color = s % 3 == 0 ? e.Color.Lightened(0.25f) : e.Color;
+            DrawRect(new Rect2(p.Round(), new Vector2(size, size)), color with { A = alpha });
+        }
+    }
+
+    /// <summary>A flattened scorched pit with a rim of thrown-up earth and clods around it.</summary>
+    private void DrawCrater(Effect e, Random rng)
+    {
+        float alpha = Mathf.Clamp((e.Duration - e.Age) / 3f, 0f, 1f) * 0.75f;
+        DrawSetTransform(e.Position, 0f, new Vector2(1f, 0.5f));
+        DrawCircle(Vector2.Zero, e.Size + 1.5f, CraterRim with { A = alpha * 0.8f });
+        DrawCircle(Vector2.Zero, e.Size, CraterColor with { A = alpha });
+        DrawCircle(new Vector2(-e.Size * 0.25f, -e.Size * 0.25f), e.Size * 0.45f, CraterColor.Darkened(0.3f) with { A = alpha });
+        DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+        for (int s = 0; s < 10; s++)
+        {
+            var dir = Vector2.Right.Rotated(rng.NextSingle() * Mathf.Tau);
+            var p = e.Position + new Vector2(dir.X, dir.Y * 0.5f) * e.Size * (1.2f + rng.NextSingle() * 0.8f);
+            DrawRect(new Rect2(p.Round(), new Vector2(2, 1)), CraterRim with { A = alpha });
         }
     }
 

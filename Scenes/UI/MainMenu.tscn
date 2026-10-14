@@ -3,6 +3,28 @@
 [ext_resource type="Script" path="res://Scripts/UI/MainMenu.cs" id="1_menu"]
 [ext_resource type="PackedScene" path="res://Scenes/UI/SettingsPanel.tscn" id="2_settings"]
 [ext_resource type="PackedScene" path="res://Scenes/UI/HowToPlay.tscn" id="3_help"]
+[ext_resource type="Texture2D" path="res://Assets/UI/logo.png" id="4_logo"]
+
+[sub_resource type="Gradient" id="vignette_colors"]
+offsets = PackedFloat32Array(0.45, 1)
+colors = PackedColorArray(0, 0, 0, 0, 0.02, 0.015, 0.01, 0.75)
+
+[sub_resource type="GradientTexture2D" id="vignette"]
+gradient = SubResource("vignette_colors")
+width = 128
+height = 128
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1.05, 0.5)
+
+[sub_resource type="Gradient" id="side_colors"]
+offsets = PackedFloat32Array(0, 0.42, 0.62)
+colors = PackedColorArray(0.04, 0.03, 0.02, 0.72, 0.04, 0.03, 0.02, 0.5, 0.04, 0.03, 0.02, 0)
+
+[sub_resource type="GradientTexture2D" id="side"]
+gradient = SubResource("side_colors")
+width = 256
+height = 4
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -13,21 +35,33 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_menu")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Vignette" type="TextureRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.05, 0.05, 0.04, 0.45)
+mouse_filter = 2
+texture = SubResource("vignette")
+expand_mode = 1
 
-[node name="Center" type="CenterContainer" parent="."]
+[node name="Background" type="TextureRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = SubResource("side")
+expand_mode = 1
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 9
+anchor_right = 0.42
+anchor_bottom = 1.0
 grow_vertical = 2
 
 [node name="Panel" type="PanelContainer" parent="Center"]
@@ -37,6 +71,13 @@ layout_mode = 2
 custom_minimum_size = Vector2(380, 0)
 layout_mode = 2
 theme_override_constants/separation = 12
+
+[node name="Logo" type="TextureRect" parent="Center/Panel/Rows"]
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+texture = ExtResource("4_logo")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="Title" type="Label" parent="Center/Panel/Rows"]
 theme_type_variation = &"HeaderLarge"

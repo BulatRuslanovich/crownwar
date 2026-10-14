@@ -251,6 +251,12 @@ public sealed partial class Simulation
         }
     }
 
+    /// <summary>
+    /// How far the day has come, from 0 at dawn to 1 at dusk (1 all night; 0.5 when there is no night): where the sun
+    /// stands, for the views' shadows.
+    /// </summary>
+    public float DayProgress => NightTicks <= 0 ? 0.5f : Math.Min(1f, Tick % (DayTicks + NightTicks) / (float)DayTicks);
+
     /// <summary>How far a unit sees now: by night, a share of its sight range.</summary>
     public float SightOf(Unit unit) => IsNight ? unit.Type.SightRange * Rules.NightSightFactor : unit.Type.SightRange;
 

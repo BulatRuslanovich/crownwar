@@ -9,6 +9,8 @@ namespace Lordsio.World;
 /// Draws the terrain of a <see cref="TileGrid"/>, each cell from its biome's tileset (Assets/Tilesets/terrain*.png,
 /// one atlas source per biome, so meadow, snow and sand mix on one map): random variants for open ground, roads
 /// shaped by their road neighbours, bridges over water, and a second layer with shores where water meets land.
+/// Water glitters, surf washes the shores and the woods sway (animated tiles), and open ground is strewn with decor
+/// of its biome: flowers and stumps, snowdrifts and firs, cacti and bones.
 /// </summary>
 public partial class MapView : TileMapLayer
 {
@@ -21,6 +23,11 @@ public partial class MapView : TileMapLayer
     /// <summary>Fringes of neighbouring biomes over a cell's ground (two layers: a cell can border two other biomes).</summary>
     private TileMapLayer _edges = null!;
     private TileMapLayer _edges2 = null!;
+    /// <summary>Small things lying on open ground; cleared under buildings once they are seen.</summary>
+    private TileMapLayer _decor = null!;
+
+    /// <summary>Share of open cells with decor: in a clump, and elsewhere.</summary>
+    private const int ClumpDecorPerMille = 190, SparseDecorPerMille = 45;
 
     /// <param name="biomes">The biome of every cell, row by row; null for an all-meadow map.</param>
     public void Build(TileGrid map, System.Collections.Generic.IReadOnlyList<Biome>? biomes = null)
@@ -30,6 +37,8 @@ public partial class MapView : TileMapLayer
         _edges2 = new TileMapLayer { Name = "BiomeEdges2", TileSet = TileSet };
         AddChild(_edges);
         AddChild(_edges2);
+        _decor = new TileMapLayer { Name = "Decor", TileSet = TileSet };
+        AddChild(_decor);
         _shore = new TileMapLayer { Name = "Shore", TileSet = TileSet };
         AddChild(_shore);
         _shore2 = new TileMapLayer { Name = "Shore2", TileSet = TileSet };
@@ -46,8 +55,9 @@ public partial class MapView : TileMapLayer
                 var coords = new Vector2I(x, y);
                 int source = (int)(biomes?[y * map.Width + x] ?? Biome.Meadow); // the atlas source of the cell's biome
                 SetCell(coords, source, AtlasFor(map, cell));
-                if (biomes != null && map.GetTerrain(cell) == Terrain.Grass)
-                    AddBiomeEdges(map, biomes, cell, (Biome)source);
+                bool edge = biomes != null && map.GetTerrain(cell) == Terrain.Grass && AddBiomeEdges(map, biomes, cell, (Biome)source);
+                if (!edge && map.GetTerrain(cell) == Terrain.Grass)
+                    AddDecor(cell, (Biome)source);
                 if (map.GetTerrain(cell) == Terrain.Bridge)
                     _bridges.SetCell(coords, source, new Vector2I(NeighbourMask(map, cell, IsWay), ArtLayout.BridgeRow));
                 if (map.GetTerrain(cell) is Terrain.Water or Terrain.Bridge)
@@ -73,8 +83,10 @@ public partial class MapView : TileMapLayer
     /// Open ground next to land of another biome gets that biome's ground over the part of the cell where it prevails
     /// (by all eight neighbours), so snow, sand and meadow meet along a smooth curve rather than the tile grid.
     /// </summary>
-    private void AddBiomeEdges(TileGrid map, System.Collections.Generic.IReadOnlyList<Biome> biomes, Cell cell, Biome own)
+    /// <returns>Whether the cell borders another biome (it then gets no decor: it would not match the ground around it).</returns>
+    private bool AddBiomeEdges(TileGrid map, System.Collections.Generic.IReadOnlyList<Biome> biomes, Cell cell, Biome own)
     {
+        bool any = false;
         var layer = _edges;
         foreach (var other in System.Enum.GetValues<Biome>())
         {
@@ -93,8 +105,42 @@ public partial class MapView : TileMapLayer
                 continue;
             layer.SetCell(new Vector2I(cell.X, cell.Y), (int)other, new Vector2I(mask % 16, ArtLayout.BiomeBlendRow + mask / 16));
             layer = _edges2;
+            any = true;
         }
+        return any;
     }
+
+    /// <summary>
+    /// Now and then something lies on open ground: more in clumps (a meadow of flowers, a boneyard) than elsewhere.
+    /// The pick depends only on the cell, so every player sees the same.
+    /// </summary>
+    private void AddDecor(Cell cell, Biome biome)
+    {
+        uint clump = Hash(cell.X / 5, cell.Y / 5, 17) % 1000;
+        int chance = clump < 280 ? ClumpDecorPerMille : SparseDecorPerMille;
+        if (Hash(cell.X, cell.Y, 29) % 1000 >= chance)
+            return;
+        var pool = biome switch
+        {
+            Biome.Winter => ArtLayout.WinterDecor,
+            Biome.Desert => ArtLayout.DesertDecor,
+            _ => ArtLayout.MeadowDecor,
+        };
+        // Within a clump the same few kinds repeat; elsewhere anything goes.
+        uint pick = clump < 280 ? (clump + Hash(cell.X, cell.Y, 31) % 3) : Hash(cell.X, cell.Y, 37);
+        int kind = pool[pick % (uint)pool.Length];
+        _decor.SetCell(new Vector2I(cell.X, cell.Y), (int)biome, new Vector2I(kind % 16, ArtLayout.DecorRow + kind / 16));
+    }
+
+    /// <summary>Takes the decor off a building's (or a deposit's) footprint.</summary>
+    public void ClearDecor(Cell anchor, int size)
+    {
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+                _decor.EraseCell(new Vector2I(anchor.X + x, anchor.Y + y));
+    }
+
+    private static uint Hash(int x, int y, int salt) => (uint)(x * 73856093 ^ y * 19349663 ^ salt * 83492791);
 
     /// <summary>One atlas source per biome, its id the biome's number.</summary>
     private static TileSet CreateTileSet()
@@ -114,10 +160,30 @@ public partial class MapView : TileMapLayer
             TextureRegionSize = new Vector2I(ArtLayout.Tile, ArtLayout.Tile),
         };
         int columns = texture.GetWidth() / ArtLayout.Tile, rows = texture.GetHeight() / ArtLayout.Tile;
+        // The cells under an animated tile hold its later frames: no tiles of their own.
+        var frames = new System.Collections.Generic.HashSet<Vector2I>();
+        foreach (var group in ArtLayout.AnimatedTiles())
+            for (int frame = 1; frame < ArtLayout.TileFrames; frame++)
+                for (int col = 0; col < group.Columns; col++)
+                    frames.Add(new Vector2I(col, group.Row + frame));
         for (int row = 0; row < rows; row++)
             for (int col = 0; col < columns; col++)
-                source.CreateTile(new Vector2I(col, row));
+                if (!frames.Contains(new Vector2I(col, row)))
+                    source.CreateTile(new Vector2I(col, row));
 
+        foreach (var group in ArtLayout.AnimatedTiles())
+        {
+            for (int col = 0; col < group.Columns; col++)
+            {
+                var tile = new Vector2I(col, group.Row);
+                source.SetTileAnimationColumns(tile, 1); // frames run down the sheet
+                source.SetTileAnimationFramesCount(tile, ArtLayout.TileFrames);
+                for (int frame = 0; frame < ArtLayout.TileFrames; frame++)
+                    source.SetTileAnimationFrameDuration(tile, frame, group.Durations[frame]);
+                if (group.RandomStart)
+                    source.SetTileAnimationMode(tile, TileSetAtlasSource.TileAnimationMode.RandomStartTimes);
+            }
+        }
         return source;
     }
 
@@ -131,7 +197,7 @@ public partial class MapView : TileMapLayer
             // modulo 2, so the pattern repeats only every two tiles.
             case Terrain.Forest:
                 return new Vector2I(NeighbourMask(map, cell, (m, x, y) => !m.InBounds(x, y) || m.GetTerrain(new Cell(x, y)) == Terrain.Forest),
-                    ArtLayout.ForestRangeRow + cell.X % 2 + cell.Y % 2 * 2);
+                    ArtLayout.ForestRangeRow + (cell.X % 2 + cell.Y % 2 * 2) * ArtLayout.TileFrames);
             case Terrain.Water:
             case Terrain.Bridge: // the deck is a layer of its own, over the water
                 return new Vector2I(variant, ArtLayout.WaterRow);

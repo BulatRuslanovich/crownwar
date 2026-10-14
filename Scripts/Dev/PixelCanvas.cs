@@ -17,6 +17,7 @@ public sealed class PixelCanvas
         Height = height;
         Base = Image.CreateEmpty(width, height, false, Image.Format.Rgba8);
         Mask = Image.CreateEmpty(width, height, false, Image.Format.Rgba8);
+        Glow = Image.CreateEmpty(width, height, false, Image.Format.Rgba8);
         _occupied = new bool[width * height];
     }
 
@@ -24,6 +25,11 @@ public sealed class PixelCanvas
     public int Height { get; }
     public Image Base { get; }
     public Image Mask { get; }
+    /// <summary>What shines at night (lit windows, fires): drawn over the building, additively, after dusk.</summary>
+    public Image Glow { get; }
+
+    /// <summary>Whether anything was marked with <see cref="Lit"/>.</summary>
+    public bool HasGlow { get; private set; }
 
     /// <summary>Offset added to every drawing call, so frames can be drawn in sheet cells with local coordinates.</summary>
     public Vector2I Origin { get; set; }
@@ -60,6 +66,20 @@ public sealed class PixelCanvas
         Base.SetPixel(x, y, Colors.Transparent);
         Mask.SetPixel(x, y, new Color(shade, shade, shade));
         _occupied[y * Width + x] = true;
+    }
+
+    /// <summary>Marks a rectangle as shining at night in <paramref name="color"/> (the day picture is not changed).</summary>
+    public void Lit(int x, int y, int w, int h, Color color)
+    {
+        for (int j = 0; j < h; j++)
+            for (int i = 0; i < w; i++)
+            {
+                int px = x + i + Origin.X, py = y + j + Origin.Y;
+                if (px < 0 || py < 0 || px >= Width || py >= Height)
+                    continue;
+                Glow.SetPixel(px, py, color);
+                HasGlow = true;
+            }
     }
 
     public void Rect(int x, int y, int w, int h, Color color)
@@ -146,10 +166,12 @@ public sealed class PixelCanvas
         }
     }
 
-    public void Save(string basePath, string? maskPath = null)
+    public void Save(string basePath, string? maskPath = null, string? glowPath = null)
     {
         Base.SavePng(basePath);
         if (maskPath != null)
             Mask.SavePng(maskPath);
+        if (glowPath != null && HasGlow)
+            Glow.SavePng(glowPath);
     }
 }

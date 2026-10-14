@@ -85,7 +85,8 @@ public sealed class Unit : Entity
     public IReadOnlyList<Vector2> Path => _path;
     public int PathIndex { get; private set; }
 
-    internal int AttackCooldownTicks { get; set; }
+    /// <summary>Ticks until the unit may strike again (views time the wind-up of a blow by it).</summary>
+    public int AttackCooldownTicks { get; internal set; }
     internal int ChaseRepathTicks { get; set; }
 
 

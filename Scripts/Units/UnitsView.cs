@@ -23,6 +23,9 @@ public partial class UnitsView : Node2D
         _match = match;
     }
 
+    /// <summary>The unit views (for their shadows).</summary>
+    public IEnumerable<UnitView> Views => _views.Values;
+
     public override void _Process(double delta)
     {
         float alpha = _match.InterpolationAlpha;
@@ -63,7 +66,11 @@ public partial class UnitsView : Node2D
         if (!hit.Ranged && _views.TryGetValue(hit.AttackerId, out var attacker))
             attacker.Lunge(SimConvert.ToWorld(hit.Position) - attacker.Position);
         if (_views.TryGetValue(hit.TargetId, out var target))
-            target.Flash();
+        {
+            // Staggered away from whoever dealt the blow (an archer far off, a tower, a soldier in its face).
+            var from = _match.Sim.GetUnit(hit.AttackerId)?.Position ?? _match.Sim.GetBuilding(hit.AttackerId)?.Position ?? hit.Position;
+            target.Flash(SimConvert.ToWorld(hit.Position) - SimConvert.ToWorld(from));
+        }
     }
 
     public override void _Draw()
