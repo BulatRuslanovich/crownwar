@@ -21,8 +21,6 @@ internal sealed class CombatSystem
     /// <summary>A guard further than this from its post after a fight walks back; small shoves are ignored.</summary>
     private const float ReturnToPostDistance = 1.5f;
     private const int ChaseRepathIntervalTicks = 10;
-    /// <summary>An attack-moving unit within this distance of its slot counts as arrived.</summary>
-    private const float ArrivalSlack = 1.5f;
     /// <summary>How far around a building we look for a free spot to stand and hit it from.</summary>
     private const int ApproachSearchRadius = 6;
 
@@ -66,8 +64,7 @@ internal sealed class CombatSystem
             unit.CompleteOrder();
             return;
         }
-        if (unit.Order == UnitOrder.None && unit.Target != null
-            && Vector2.Distance(unit.Position, unit.GuardPoint) > LeashRange)
+        if (ChasedTooFar(unit))
         {
             ReturnToPost(unit);
             return;
@@ -105,7 +102,7 @@ internal sealed class CombatSystem
     {
         if (unit.Order == UnitOrder.AttackMove && unit.State == UnitState.Idle && unit.Destination is { } destination)
         {
-            if (Vector2.Distance(unit.Position, destination) <= ArrivalSlack)
+            if (Vector2.Distance(unit.Position, destination) <= Simulation.ArrivalSlack)
             {
                 unit.CompleteOrder();
                 return;
@@ -132,8 +129,7 @@ internal sealed class CombatSystem
     {
         if (unit.Target is { } current && !IsWoundedFriend(unit, current, unit.Type.SightRange * LoseTargetFactor))
             unit.Target = null;
-        if (unit.Order == UnitOrder.None && unit.Target != null
-            && Vector2.Distance(unit.Position, unit.GuardPoint) > LeashRange)
+        if (ChasedTooFar(unit))
         {
             ReturnToPost(unit);
             return;
@@ -154,7 +150,7 @@ internal sealed class CombatSystem
         unit.IsAttacking = true; // standing over the patient (the view shows the blessing)
         if (unit.AttackCooldownTicks > 0)
             return;
-        unit.AttackCooldownTicks = CooldownTicks(heal.Cooldown);
+        unit.AttackCooldownTicks = Ticks.AtLeastOne(heal.Cooldown);
         int mended = Math.Min(heal.Amount, patient.MaxHealth - patient.Health);
         patient.Health += mended;
         _emit(new UnitHealed(unit.FactionId, unit.Id, patient.Id, mended, patient.Position));
@@ -198,7 +194,7 @@ internal sealed class CombatSystem
         if (tower.Target is not { } target || tower.AttackCooldownTicks > 0)
             return;
 
-        tower.AttackCooldownTicks = CooldownTicks(attack.Cooldown);
+        tower.AttackCooldownTicks = Ticks.AtLeastOne(attack.Cooldown);
         Fire(tower.Id, tower.FactionId, attack.Damage, attack.ProjectileSpeed, tower.Position, target, attack.SplashRadius);
     }
 
@@ -319,7 +315,7 @@ internal sealed class CombatSystem
 
     private void Attack(Unit attacker, Entity target)
     {
-        attacker.AttackCooldownTicks = CooldownTicks(attacker.Type.AttackCooldown);
+        attacker.AttackCooldownTicks = Ticks.AtLeastOne(attacker.Type.AttackCooldown);
         int damage = attacker.Type.DamageAgainst(target);
         if (attacker.Type.IsRanged)
         {
@@ -340,8 +336,6 @@ internal sealed class CombatSystem
         _projectiles.Add(projectile);
         _emit(new ProjectileFired(factionId, from, Splash: projectile.IsStone));
     }
-
-    private static int CooldownTicks(float seconds) => Math.Max(1, (int)MathF.Round(seconds * Simulation.TicksPerSecond));
 
     private void Chase(Unit unit, Entity target)
     {
@@ -376,6 +370,10 @@ internal sealed class CombatSystem
         unit.ReplacePath(path);
         unit.ChaseRepathTicks = ChaseRepathIntervalTicks;
     }
+
+    /// <summary>A guard (no orders) that has followed a target beyond its leash.</summary>
+    private static bool ChasedTooFar(Unit unit) =>
+        unit.Order == UnitOrder.None && unit.Target != null && Vector2.Distance(unit.Position, unit.GuardPoint) > LeashRange;
 
     private void ReturnToPost(Unit unit)
     {

@@ -9,14 +9,19 @@ public sealed record StartingUnits(string UnitTypeId, int Count);
 /// <summary>All tunable game data, loaded from Data/rules.json.</summary>
 public sealed class GameRules
 {
-    private readonly Dictionary<string, BuildingType> _buildingTypes;
+    /// <summary>How long an offer of peace stands, and the warning before a war, unless the rules say otherwise.</summary>
+    public const float DefaultPeaceOfferSeconds = 30f, DefaultWarWarningSeconds = 30f;
+
+    private readonly Dictionary<string, BuildingType> _buildingTypes = new();
+    /// <summary>The same types in the order of the rules file, so that every lookup over them is deterministic.</summary>
+    private readonly List<BuildingType> _buildingTypeOrder = new();
 
     public GameRules(int startingGold, float buildRadius, IReadOnlyList<StartingUnits> startingUnits,
         UnitCatalog units, IEnumerable<BuildingType> buildingTypes,
         float depositReserveSeconds = 0f, float depositRegenSeconds = 0f, int upkeepAllowance = 0,
         int goldCap = 0, int lootPercent = 0, int demolishRefundPercent = 0,
         float daySeconds = 0f, float nightSeconds = 0f, float nightSightFactor = 1f,
-        float peaceOfferSeconds = 30f, float warWarningSeconds = 30f)
+        float peaceOfferSeconds = DefaultPeaceOfferSeconds, float warWarningSeconds = DefaultWarWarningSeconds)
     {
         if (startingGold < 0)
             throw new ArgumentOutOfRangeException(nameof(startingGold));
@@ -56,7 +61,6 @@ public sealed class GameRules
                 throw new ArgumentException($"Starting units refer to unknown unit type '{start.UnitTypeId}'.");
         }
 
-        _buildingTypes = new Dictionary<string, BuildingType>();
         foreach (var type in buildingTypes)
         {
             foreach (string unitId in type.Recruits)
@@ -82,10 +86,10 @@ public sealed class GameRules
                 throw new ArgumentException($"Mine type '{type.Id}' must match the deposit size {Lordsio.Sim.World.GoldDeposit.Size}.");
             if (!_buildingTypes.TryAdd(type.Id, type))
                 throw new ArgumentException($"Duplicate building type id '{type.Id}'.");
+            _buildingTypeOrder.Add(type);
         }
-        Capital = _buildingTypes.Values.SingleOrDefault(t => t.IsCapital)
+        Capital = _buildingTypeOrder.SingleOrDefault(t => t.IsCapital)
                   ?? throw new ArgumentException("Exactly one building type must be the capital.");
-
     }
 
     public int StartingGold { get; }
@@ -134,7 +138,8 @@ public sealed class GameRules
     /// <summary>The building type every faction starts with; losing it eliminates the faction.</summary>
     public BuildingType Capital { get; }
 
-    public IEnumerable<BuildingType> BuildingTypes => _buildingTypes.Values;
+    /// <summary>Every building type, in the order of the rules file.</summary>
+    public IReadOnlyList<BuildingType> BuildingTypes => _buildingTypeOrder;
 
     public bool HasBuildingType(string id) => _buildingTypes.ContainsKey(id);
 
@@ -154,75 +159,14 @@ public sealed class GameRules
         using var doc = JsonDocument.Parse(json, new JsonDocumentOptions { AllowTrailingCommas = true });
         var root = doc.RootElement;
 
-        var units = new List<UnitType>();
-        foreach (var u in root.GetProperty("units").EnumerateArray())
-        {
-            units.Add(new UnitType(
-                Id: RequiredString(u, "id"),
-                Name: RequiredString(u, "name"),
-                Speed: u.GetProperty("speed").GetSingle(),
-                Radius: u.GetProperty("radius").GetSingle(),
-                Cost: u.GetProperty("cost").GetInt32(),
-                BuildTime: u.GetProperty("buildTime").GetSingle(),
-                MaxHealth: u.GetProperty("health").GetInt32(),
-                Damage: u.GetProperty("damage").GetInt32(),
-                AttackRange: u.GetProperty("attackRange").GetSingle(),
-                AttackCooldown: u.GetProperty("attackCooldown").GetSingle(),
-                SightRange: u.GetProperty("sightRange").GetSingle(),
-                ProjectileSpeed: OptionalSingle(u, "projectileSpeed"),
-                RangedArmor: OptionalSingle(u, "rangedArmor"),
-                Upkeep: OptionalInt(u, "upkeep"),
-                IsSiege: OptionalBool(u, "siege"),
-                BuildingDamageMultiplier: u.TryGetProperty("buildingMultiplier", out var multiplier) ? multiplier.GetSingle() : 1f,
-                BonusAgainst: u.TryGetProperty("bonusAgainst", out var bonus)
-                    ? bonus.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetSingle())
-                    : null,
-                ArmorPiercing: OptionalSingle(u, "armorPiercing"),
-                Heal: u.TryGetProperty("heal", out var heal)
-                    ? new HealAbility(heal.GetProperty("amount").GetInt32(), heal.GetProperty("range").GetSingle(), heal.GetProperty("cooldown").GetSingle())
-                    : null,
-                BarracksRequired: OptionalInt(u, "barracksRequired")));
-        }
-
-        var buildings = new List<BuildingType>();
-        foreach (var b in root.GetProperty("buildings").EnumerateArray())
-        {
-            BuildingAttack? attack = null;
-            if (b.TryGetProperty("attack", out var a))
-            {
-                attack = new BuildingAttack(
-                    a.GetProperty("damage").GetInt32(),
-                    a.GetProperty("range").GetSingle(),
-                    a.GetProperty("cooldown").GetSingle(),
-                    a.GetProperty("projectileSpeed").GetSingle(),
-                    OptionalSingle(a, "splash"));
-            }
-
-            var type = new BuildingType(
-                Id: RequiredString(b, "id"),
-                Name: RequiredString(b, "name"),
-                Size: b.GetProperty("size").GetInt32(),
-                Cost: b.GetProperty("cost").GetInt32(),
-                BuildTime: b.GetProperty("buildTime").GetSingle(),
-                MaxHealth: b.GetProperty("health").GetInt32(),
-                RangedArmor: OptionalSingle(b, "rangedArmor"),
-                Income: OptionalInt(b, "income"),
-                ArmyCap: OptionalInt(b, "armyCap"),
-                Recruits: b.TryGetProperty("recruits", out var r)
-                    ? r.EnumerateArray().Select(e => e.GetString() ?? "").ToArray()
-                    : Array.Empty<string>(),
-                IsCapital: OptionalBool(b, "capital"),
-                IsMine: OptionalBool(b, "mine"),
-                Attack: attack,
-                SightRange: OptionalSingle(b, "sight"),
-                MaxCount: OptionalInt(b, "maxCount"),
-                UnlocksUnits: OptionalBool(b, "unlocksUnits"));
-            buildings.Add(b.TryGetProperty("tiers", out var tiers) ? WithTiers(type, tiers.EnumerateArray().ToList()) : type);
-        }
-
+        var units = root.GetProperty("units").EnumerateArray().Select(ParseUnit).ToList();
+        var buildings = root.GetProperty("buildings").EnumerateArray().Select(ParseBuilding).ToList();
         var startingUnits = root.GetProperty("startingUnits").EnumerateArray()
             .Select(s => new StartingUnits(RequiredString(s, "unit"), s.GetProperty("count").GetInt32()))
             .ToArray();
+        // Optional sections: no "dayNight" means no night, no "diplomacy" the default timings.
+        var dayNight = root.TryGetProperty("dayNight", out var d) ? d : default;
+        var diplomacy = root.TryGetProperty("diplomacy", out var p) ? p : default;
 
         return new GameRules(
             root.GetProperty("startingGold").GetInt32(),
@@ -236,11 +180,68 @@ public sealed class GameRules
             OptionalInt(root, "goldCap"),
             OptionalInt(root, "lootPercent"),
             OptionalInt(root, "demolishRefundPercent"),
-            root.TryGetProperty("dayNight", out var dayNight) ? OptionalSingle(dayNight, "day") : 0f,
-            root.TryGetProperty("dayNight", out var night) ? OptionalSingle(night, "night") : 0f,
-            root.TryGetProperty("dayNight", out var sight) && sight.TryGetProperty("sightFactor", out var factor) ? factor.GetSingle() : 1f,
-            root.TryGetProperty("diplomacy", out var offer) && offer.TryGetProperty("offerSeconds", out var offerSeconds) ? offerSeconds.GetSingle() : 30f,
-            root.TryGetProperty("diplomacy", out var war) && war.TryGetProperty("warWarningSeconds", out var warning) ? warning.GetSingle() : 30f);
+            OptionalSingle(dayNight, "day"),
+            OptionalSingle(dayNight, "night"),
+            OptionalSingle(dayNight, "sightFactor", 1f),
+            OptionalSingle(diplomacy, "offerSeconds", DefaultPeaceOfferSeconds),
+            OptionalSingle(diplomacy, "warWarningSeconds", DefaultWarWarningSeconds));
+    }
+
+    private static UnitType ParseUnit(JsonElement u) => new(
+        Id: RequiredString(u, "id"),
+        Name: RequiredString(u, "name"),
+        Speed: u.GetProperty("speed").GetSingle(),
+        Radius: u.GetProperty("radius").GetSingle(),
+        Cost: u.GetProperty("cost").GetInt32(),
+        BuildTime: u.GetProperty("buildTime").GetSingle(),
+        MaxHealth: u.GetProperty("health").GetInt32(),
+        Damage: u.GetProperty("damage").GetInt32(),
+        AttackRange: u.GetProperty("attackRange").GetSingle(),
+        AttackCooldown: u.GetProperty("attackCooldown").GetSingle(),
+        SightRange: u.GetProperty("sightRange").GetSingle(),
+        ProjectileSpeed: OptionalSingle(u, "projectileSpeed"),
+        RangedArmor: OptionalSingle(u, "rangedArmor"),
+        Upkeep: OptionalInt(u, "upkeep"),
+        IsSiege: OptionalBool(u, "siege"),
+        BuildingDamageMultiplier: OptionalSingle(u, "buildingMultiplier", 1f),
+        BonusAgainst: u.TryGetProperty("bonusAgainst", out var bonus)
+            ? bonus.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetSingle())
+            : null,
+        ArmorPiercing: OptionalSingle(u, "armorPiercing"),
+        Heal: u.TryGetProperty("heal", out var heal)
+            ? new HealAbility(heal.GetProperty("amount").GetInt32(), heal.GetProperty("range").GetSingle(), heal.GetProperty("cooldown").GetSingle())
+            : null,
+        BarracksRequired: OptionalInt(u, "barracksRequired"));
+
+    private static BuildingType ParseBuilding(JsonElement b)
+    {
+        var type = new BuildingType(
+            Id: RequiredString(b, "id"),
+            Name: RequiredString(b, "name"),
+            Size: b.GetProperty("size").GetInt32(),
+            Cost: b.GetProperty("cost").GetInt32(),
+            BuildTime: b.GetProperty("buildTime").GetSingle(),
+            MaxHealth: b.GetProperty("health").GetInt32(),
+            RangedArmor: OptionalSingle(b, "rangedArmor"),
+            Income: OptionalInt(b, "income"),
+            ArmyCap: OptionalInt(b, "armyCap"),
+            Recruits: b.TryGetProperty("recruits", out var r)
+                ? r.EnumerateArray().Select(e => e.GetString() ?? "").ToArray()
+                : Array.Empty<string>(),
+            IsCapital: OptionalBool(b, "capital"),
+            IsMine: OptionalBool(b, "mine"),
+            Attack: b.TryGetProperty("attack", out var a)
+                ? new BuildingAttack(
+                    a.GetProperty("damage").GetInt32(),
+                    a.GetProperty("range").GetSingle(),
+                    a.GetProperty("cooldown").GetSingle(),
+                    a.GetProperty("projectileSpeed").GetSingle(),
+                    OptionalSingle(a, "splash"))
+                : null,
+            SightRange: OptionalSingle(b, "sight"),
+            MaxCount: OptionalInt(b, "maxCount"),
+            UnlocksUnits: OptionalBool(b, "unlocksUnits"));
+        return b.TryGetProperty("tiers", out var tiers) ? WithTiers(type, tiers.EnumerateArray().ToList()) : type;
     }
 
     /// <summary>
@@ -282,8 +283,9 @@ public sealed class GameRules
         return levels[0];
     }
 
-    private static float OptionalSingle(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) ? value.GetSingle() : 0f;
+    /// <summary>A number from <paramref name="element"/>, or <paramref name="fallback"/> if it (or the element itself) is missing.</summary>
+    private static float OptionalSingle(JsonElement element, string name, float fallback = 0f) =>
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) ? value.GetSingle() : fallback;
 
     private static int OptionalInt(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) ? value.GetInt32() : 0;

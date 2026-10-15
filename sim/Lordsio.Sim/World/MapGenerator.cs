@@ -40,16 +40,31 @@ public static class MapGenerator
 
     public static MapDefinition Generate(int seed)
     {
+        // One random stream for everything, drawn in a fixed order: the same seed gives the same map on every peer.
         var rng = new Random(seed);
+        var tiles = new Terrain[Width * Height];
+        var biomes = new Biome[Width * Height];
+
+        GrowLand(rng, tiles, biomes);
+        SeparateBiomes(tiles, biomes);
+        JoinDiagonalWater(tiles);
+        var starts = PlaceCastles(rng, tiles);
+        var doors = LayRoads(tiles, starts);
+        var grid = new TileGrid(Width, Height, tiles);
+        var deposits = PlaceGold(rng, grid, starts, home: grid.ComponentOf(doors[0]));
+        return new MapDefinition(grid, Array.Empty<UnitSpawn>(), starts, deposits, biomes);
+    }
+
+    // ---------------------------------------------------------------- steps
+
+    /// <summary>Climate (biomes) and land: mountains, lakes, woods and rivers, from five noise fields.</summary>
+    private static void GrowLand(Random rng, Terrain[] tiles, Biome[] biomes)
+    {
         var elevation = new Perlin(rng.Next());
         var moisture = new Perlin(rng.Next());
         var temperature = new Perlin(rng.Next());
         var humidity = new Perlin(rng.Next());
         var rivers = new Perlin(rng.Next());
-        var tiles = new Terrain[Width * Height];
-        var biomes = new Biome[Width * Height];
-
-        // 1. Climate and land.
         for (int y = 0; y < Height; y++)
         {
             for (int x = 0; x < Width; x++)
@@ -71,9 +86,14 @@ public static class MapGenerator
                 tiles[y * Width + x] = land;
             }
         }
+    }
 
-        // Woods or ranges of two biomes never touch: a narrow clearing (or a pass) runs between them, which the
-        // smooth blend of the ground then covers, instead of pines and oaks, grey and red rocks meeting on a straight line.
+    /// <summary>
+    /// Woods or ranges of two biomes never touch: a narrow clearing (or a pass) runs between them, which the smooth
+    /// blend of the ground then covers, instead of pines and oaks, grey and red rocks meeting on a straight line.
+    /// </summary>
+    private static void SeparateBiomes(Terrain[] tiles, Biome[] biomes)
+    {
         var cleared = new List<int>();
         for (int y = 0; y < Height; y++)
             for (int x = 0; x < Width; x++)
@@ -94,9 +114,14 @@ public static class MapGenerator
             }
         foreach (int i in cleared)
             tiles[i] = Terrain.Grass;
+    }
 
-        // Water that only touches diagonally (a river stepping across the grid) is joined up, so rivers run as one
-        // channel instead of a chain of ponds.
+    /// <summary>
+    /// Water that only touches diagonally (a river stepping across the grid) is joined up, so rivers run as one
+    /// channel instead of a chain of ponds.
+    /// </summary>
+    private static void JoinDiagonalWater(Terrain[] tiles)
+    {
         for (int y = 0; y < Height - 1; y++)
             for (int x = 0; x < Width - 1; x++)
             {
@@ -107,16 +132,23 @@ public static class MapGenerator
                 else if (b && c && !a && !d)
                     tiles[y * Width + x] = Terrain.Water;
             }
+    }
 
-        // 2. Castles: a good spot in each corner region, then cleared.
+    /// <summary>A good spot for a castle in each corner region, cleared for it and the first buildings.</summary>
+    private static List<Cell> PlaceCastles(Random rng, Terrain[] tiles)
+    {
         var starts = new List<Cell>();
         var regions = new[] { (Left: true, Top: true), (Left: false, Top: true), (Left: true, Top: false), (Left: false, Top: false) };
         foreach (var (left, top) in regions)
             starts.Add(PickStart(tiles, rng, left, top));
         foreach (var start in starts)
-            Clear(tiles, CenterOf(start, CastleSize), ClearRadius);
+            Clear(tiles, start.CenterOfSquare(CastleSize), ClearRadius);
+        return starts;
+    }
 
-        // 3. Roads between neighbouring castles (around the map) and from each castle to the middle.
+    /// <summary>Roads between neighbouring castles (around the map) and from each castle to the middle; returns the castle doors.</summary>
+    private static List<Cell> LayRoads(Terrain[] tiles, List<Cell> starts)
+    {
         var middle = new Cell(Width / 2, Height / 2);
         var doors = starts.Select(s => new Cell(s.X + 1, s.Y + CastleSize + 1)).ToList();
         int[] ring = { 0, 1, 3, 2 }; // top-left, top-right, bottom-right, bottom-left
@@ -124,11 +156,12 @@ public static class MapGenerator
             Road(tiles, doors[ring[i]], doors[ring[(i + 1) % ring.Length]]);
         foreach (var door in doors)
             Road(tiles, door, middle);
+        return doors;
+    }
 
-        var grid = new TileGrid(Width, Height, tiles);
-        int home = grid.ComponentOf(doors[0]);
-
-        // 4. Gold.
+    /// <summary>One certain deposit by each castle, more scattered as they fall, and rich ones far from everybody.</summary>
+    private static List<DepositSpawn> PlaceGold(Random rng, TileGrid grid, List<Cell> starts, int home)
+    {
         var taken = starts.Select(s => (Anchor: new Cell(s.X - 1, s.Y - 1), Size: CastleSize + 3)).ToList();
         var deposits = new List<DepositSpawn>();
         bool Add(Cell? anchor, int yield)
@@ -143,11 +176,11 @@ public static class MapGenerator
         // One certain deposit by each castle; whatever else lies near it is luck.
         foreach (var start in starts)
         {
-            var center = CenterOf(start, CastleSize);
+            var center = start.CenterOfSquare(CastleSize);
             Add(Place(grid, rng, taken, home, () => Around(rng, center, 6f, 10f))
                 ?? Place(grid, rng, taken, home, () => Around(rng, center, 10f, 15f)), MapLoader.DefaultDepositYield);
         }
-        var castles = starts.Select(s => CenterOf(s, CastleSize)).ToList();
+        var castles = starts.Select(s => s.CenterOfSquare(CastleSize)).ToList();
         float Nearest(Cell c) => castles.Min(k => Vector2.Distance(k, new Vector2(c.X + 1, c.Y + 1)));
         // Scattered deposits, anywhere a few tiles from the castles.
         int scattered = rng.Next(32, 44);
@@ -157,8 +190,7 @@ public static class MapGenerator
         int rich = rng.Next(6, 10);
         for (int i = 0; i < rich; i++)
             Add(Place(grid, rng, taken, home, () => RandomCell(rng), c => Nearest(c) > 30f), RichYield);
-
-        return new MapDefinition(grid, Array.Empty<UnitSpawn>(), starts, deposits, biomes);
+        return deposits;
     }
 
     // ---------------------------------------------------------------- land
@@ -253,7 +285,7 @@ public static class MapGenerator
         for (int i = 0; i < 40; i++)
         {
             var c = new Cell(rng.Next(minX, maxX + 1), rng.Next(minY, maxY + 1));
-            var center = CenterOf(c, CastleSize);
+            var center = c.CenterOfSquare(CastleSize);
             float score = 0f;
             for (int dy = -8; dy <= 8; dy++)
                 for (int dx = -8; dx <= 8; dx++)
@@ -332,8 +364,6 @@ public static class MapGenerator
     }
 
     // ---------------------------------------------------------------- gold
-
-    private static Vector2 CenterOf(Cell anchor, int size) => new(anchor.X + size / 2f, anchor.Y + size / 2f);
 
     private static Cell RandomCell(Random rng) => new(rng.Next(2, Width - 3), rng.Next(2, Height - 3));
 

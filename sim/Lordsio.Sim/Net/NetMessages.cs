@@ -111,10 +111,8 @@ public static class NetCodec
                 w.Write((byte)Tag.Frame);
                 w.Write(m.Tick);
                 WriteCommands(w, m.Commands);
-                w.Write((ushort)m.Takeovers.Count);
-                foreach (int f in m.Takeovers)
-                    w.Write(f);
-                w.Write((ushort)m.Returns.Count);
+                WriteIds(w, m.Takeovers);
+                WriteCount(w, m.Returns.Count);
                 foreach (var ret in m.Returns)
                 {
                     w.Write(ret.Faction);
@@ -190,6 +188,14 @@ public static class NetCodec
         return Encoding.UTF8.GetString(bytes);
     }
 
+    /// <summary>The length of a list that follows; the same limit as <see cref="ReadCount"/>, so nothing is sent that peers would reject.</summary>
+    private static void WriteCount(BinaryWriter w, int count)
+    {
+        if (count > MaxListLength)
+            throw new ArgumentException("List too long for the network.");
+        w.Write((ushort)count);
+    }
+
     private static int ReadCount(BinaryReader r)
     {
         int count = r.ReadUInt16();
@@ -200,7 +206,7 @@ public static class NetCodec
 
     private static void WriteSlots(BinaryWriter w, IReadOnlyList<NetSlot> slots)
     {
-        w.Write((ushort)slots.Count);
+        WriteCount(w, slots.Count);
         foreach (var s in slots)
         {
             w.Write((byte)s.Kind);
@@ -236,14 +242,14 @@ public static class NetCodec
 
     private static void WriteIds(BinaryWriter w, IReadOnlyList<int> ids)
     {
-        w.Write((ushort)ids.Count);
+        WriteCount(w, ids.Count);
         foreach (int id in ids)
             w.Write(id);
     }
 
     private static void WriteCommands(BinaryWriter w, IReadOnlyList<Command> commands)
     {
-        w.Write((ushort)commands.Count);
+        WriteCount(w, commands.Count);
         foreach (var command in commands)
         {
             switch (command)

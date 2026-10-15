@@ -84,7 +84,7 @@ public sealed class GoldDeposit
         return true;
     }
 
-    public Vector2 Center => new(Anchor.X + Size / 2f, Anchor.Y + Size / 2f);
+    public Vector2 Center => Anchor.CenterOfSquare(Size);
 
     public bool Contains(Cell cell) =>
         cell.X >= Anchor.X && cell.Y >= Anchor.Y && cell.X < Anchor.X + Size && cell.Y < Anchor.Y + Size;

@@ -17,7 +17,6 @@ public sealed class Faction
     public int Team { get; }
     public Treasury Treasury { get; }
 
-
     /// <summary>Gold per second from the capital and working mines; recomputed every tick.</summary>
     public int IncomePerSecond { get; internal set; }
 

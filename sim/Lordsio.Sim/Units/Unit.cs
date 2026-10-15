@@ -51,8 +51,8 @@ public sealed class Unit : Entity
         GuardPoint = position;
     }
 
-    /// <summary>The owner's version of the unit type: replaced when the owner researches an upgrade.</summary>
-    public UnitType Type { get; internal set; }
+    /// <summary>What kind of unit this is (its stats come from the rules).</summary>
+    public UnitType Type { get; }
     public override int MaxHealth => Type.MaxHealth;
     public override float RangedArmor => Type.RangedArmor;
 
@@ -88,7 +88,6 @@ public sealed class Unit : Entity
     /// <summary>Ticks until the unit may strike again (views time the wind-up of a blow by it).</summary>
     public int AttackCooldownTicks { get; internal set; }
     internal int ChaseRepathTicks { get; set; }
-
 
     /// <summary>Consecutive progress checks in which the unit barely moved.</summary>
     internal int StuckChecks { get; set; }

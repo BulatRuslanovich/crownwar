@@ -12,8 +12,6 @@ public static class Formation
     /// <summary>Distance between neighbouring slots, in tiles.</summary>
     public const float Spacing = 0.75f;
 
-    private const float DiagonalCost = 1.41421356f;
-
     /// <summary>
     /// Returns <paramref name="count"/> points near <paramref name="target"/>, closest first.
     /// The target must be on a walkable cell. Points keep <paramref name="clearance"/> from blocked cells
@@ -90,7 +88,7 @@ public static class Formation
                     bool diagonal = dx != 0 && dy != 0;
                     if (diagonal && (!map.IsWalkable(cell.X + dx, cell.Y) || !map.IsWalkable(cell.X, cell.Y + dy)))
                         continue;
-                    float d = dist + (diagonal ? DiagonalCost : 1f);
+                    float d = dist + (diagonal ? Pathfinder.DiagonalCost : 1f);
                     if (best.TryGetValue(next, out float known) && known <= d)
                         continue;
                     best[next] = d;

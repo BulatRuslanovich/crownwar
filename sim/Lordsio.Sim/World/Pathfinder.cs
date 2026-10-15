@@ -9,7 +9,7 @@ namespace Lordsio.Sim.World;
 /// </summary>
 public sealed class Pathfinder
 {
-    private const float DiagonalCost = 1.41421356f;
+    internal const float DiagonalCost = 1.41421356f;
 
     private static readonly (int dx, int dy)[] Directions =
     {

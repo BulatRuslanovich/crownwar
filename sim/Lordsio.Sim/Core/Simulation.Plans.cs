@@ -5,38 +5,7 @@ using Lordsio.Sim.World;
 
 namespace Lordsio.Sim.Core;
 
-/// <summary>
-/// A building ordered where none of the faction's troops stand: it is paid for at once, and the nearest free soldier
-/// walks over; once someone is in building range the site is laid out like any other. If the builder falls, is sent
-/// elsewhere or gets stuck, or the place is taken meanwhile, the order is dropped and the gold handed back.
-/// </summary>
-public sealed class BuildPlan
-{
-    internal BuildPlan(int id, int factionId, BuildingType type, Cell anchor, int builderId, int paid, Vector2? goal)
-    {
-        Id = id;
-        FactionId = factionId;
-        Type = type;
-        Anchor = anchor;
-        BuilderId = builderId;
-        Paid = paid;
-        Goal = goal;
-    }
-
-    public int Id { get; }
-    public int FactionId { get; }
-    public BuildingType Type { get; }
-    public Cell Anchor { get; }
-    /// <summary>The soldier walking over to build.</summary>
-    public int BuilderId { get; }
-    /// <summary>Gold already spent, returned if the order is dropped.</summary>
-    public int Paid { get; }
-    /// <summary>Where the builder was sent; a builder given another destination has been called off.</summary>
-    internal Vector2? Goal { get; }
-
-    public Vector2 Center => Building.CenterOf(Anchor, Type.Size);
-}
-
+/// <summary>Distant construction: buildings paid for whose builders are still walking over (see <see cref="BuildPlan"/>).</summary>
 public sealed partial class Simulation
 {
     private readonly List<BuildPlan> _plans = new();
@@ -116,10 +85,7 @@ public sealed partial class Simulation
             var error = CanBuild(plan.FactionId, plan.Type.Id, plan.Anchor, checkGold: false);
             if (error == BuildError.None)
             {
-                int ticks = Math.Max(1, (int)MathF.Round(plan.Type.BuildTime * TicksPerSecond));
-                var building = AddBuilding(plan.Type, plan.FactionId, plan.Anchor, ticks);
-                building.Invested = plan.Paid;
-                _events.Add(new BuildingPlaced(plan.FactionId, building.Id));
+                PlaceSite(plan.Type, plan.FactionId, plan.Anchor).Invested = plan.Paid;
                 // The builder's walk ends where he stands: the site needs nobody, and its middle is now walls.
                 if (builder is { IsAlive: true } && builder.Destination == plan.Goal)
                     builder.CompleteOrder();
@@ -135,8 +101,7 @@ public sealed partial class Simulation
                 continue;
             }
             GetFaction(plan.FactionId)?.Treasury.Add(plan.Paid);
-            _events.Add(new BuildPlanCancelled(plan.FactionId, plan.Id, plan.Type.Id, plan.Paid,
-                error == BuildError.NoUnitsNearby ? BuildError.NoUnitsNearby : error));
+            _events.Add(new BuildPlanCancelled(plan.FactionId, plan.Id, plan.Type.Id, plan.Paid, error));
             i--;
         }
     }

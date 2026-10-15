@@ -59,7 +59,10 @@ public sealed record BuildingType(
     /// How far the building sees (tiles from its center), for the fog of war: <see cref="SightRange"/> if set,
     /// otherwise a little beyond its walls, and always at least as far as it shoots.
     /// </summary>
-    public float EffectiveSight => MathF.Max(SightRange > 0f ? SightRange : Size / 2f + 3f, Attack is { } a ? a.Range + 1f : 0f);
+    public float EffectiveSight => MathF.Max(SightRange > 0f ? SightRange : WallSight, Attack is { } a ? a.Range + 1f : 0f);
+
+    /// <summary>Sight just beyond the walls: what a building without its own sight range (or still being built) sees.</summary>
+    public float WallSight => Size / 2f + 3f;
 }
 
 public sealed class ProductionItem
@@ -128,7 +131,7 @@ public sealed class Building : Entity
     public override float RangedArmor => Type.RangedArmor;
 
     /// <summary>How far the building sees now: a construction site only looks around itself.</summary>
-    public float SightRange => IsComplete ? Type.EffectiveSight : Type.Size / 2f + 3f;
+    public float SightRange => IsComplete ? Type.EffectiveSight : Type.WallSight;
 
     /// <summary>Units being trained; only the first one makes progress. Any length: queued units count against the army cap.</summary>
     public IReadOnlyList<ProductionItem> Queue => _queue;
@@ -150,7 +153,7 @@ public sealed class Building : Entity
         return MathF.Sqrt(dx * dx + dy * dy);
     }
 
-    public static Vector2 CenterOf(Cell anchor, int size) => new(anchor.X + size / 2f, anchor.Y + size / 2f);
+    public static Vector2 CenterOf(Cell anchor, int size) => anchor.CenterOfSquare(size);
 
     public static IEnumerable<Cell> FootprintOf(Cell anchor, int size)
     {

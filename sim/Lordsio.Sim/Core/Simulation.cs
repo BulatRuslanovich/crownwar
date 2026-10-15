@@ -9,24 +9,15 @@ namespace Lordsio.Sim.Core;
 /// <summary>
 /// Authoritative game state advanced in fixed ticks. Knows nothing about rendering or input.
 /// Players and bots change it only through <see cref="Issue"/>.
-/// This file holds the tick loop, commands and unit movement; buildings and the economy live in
-/// Simulation.Buildings.cs.
+/// The class is split by topic: this file holds the state, the tick loop and command dispatch;
+/// Simulation.Movement (marching and stuck handling), .DayNight, .Buildings (placement, construction, upgrades),
+/// .Training, .Economy, .Destruction (loot, demolition, elimination, victory), .Plans (distant construction),
+/// .Diplomacy and .Checksum hold the rest.
 /// </summary>
 public sealed partial class Simulation
 {
     public const int TicksPerSecond = 20;
     public const float TickDuration = 1f / TicksPerSecond;
-
-    /// <summary>How far from a blocked click we look for a reachable replacement point.</summary>
-    private const int MaxGoalSearchRadius = 64;
-
-    // Stuck handling: every second a marching unit must cover a fraction of its speed.
-    private const int ProgressCheckTicks = TicksPerSecond;
-    private const float MinProgressFraction = 0.25f;
-    private const int RepathAfterChecks = 2;
-    private const int GiveUpAfterChecks = 5;
-    /// <summary>A unit stuck this close to its slot (crowded by neighbours) simply counts as arrived.</summary>
-    private const float ArrivalSlack = 1.5f;
 
     private readonly List<Unit> _units = new();
     private readonly List<Building> _buildings = new();
@@ -49,7 +40,7 @@ public sealed partial class Simulation
         _pathfinder = new Pathfinder(Map);
         _combat = new CombatSystem(Map, _pathfinder, _projectiles, e => _events.Add(e), AreEnemies);
 
-        int regenTicks = (int)MathF.Round(rules.DepositRegenSeconds * TicksPerSecond);
+        int regenTicks = Ticks.FromSeconds(rules.DepositRegenSeconds);
         foreach (var deposit in map.Deposits)
         {
             int capacity = (int)MathF.Round(deposit.Yield * rules.DepositReserveSeconds);
@@ -205,218 +196,6 @@ public sealed partial class Simulation
             default:
                 throw new NotSupportedException($"Unhandled command type {command.GetType().Name}.");
         }
-    }
-
-    /// <summary>
-    /// Units that died or belong to someone else are silently skipped: the issuer's view of the world
-    /// may be a tick out of date, and foreign units are not theirs to command.
-    /// </summary>
-    private IEnumerable<Unit> OwnLivingUnits(int factionId, IReadOnlyList<int> unitIds)
-    {
-        foreach (int id in unitIds.Distinct())
-        {
-            if (GetUnit(id) is { IsAlive: true } unit && unit.FactionId == factionId)
-                yield return unit;
-        }
-    }
-
-    private void ApplyMove(MoveCommand move)
-    {
-        // Units are grouped by walkable region, since each region resolves a blocked target differently.
-        var groups = new SortedDictionary<int, List<Unit>>();
-        foreach (var unit in OwnLivingUnits(move.FactionId, move.UnitIds))
-        {
-            int component = Map.ComponentOf(Cell.FromPosition(unit.Position));
-            if (!groups.TryGetValue(component, out var list))
-                groups[component] = list = new List<Unit>();
-            list.Add(unit);
-        }
-
-        var order = move.Mode == MoveMode.AttackMove ? UnitOrder.AttackMove : UnitOrder.Move;
-        foreach (var (component, group) in groups)
-            OrderGroupMove(group, component, move.Target, order);
-    }
-
-    private int DayTicks => (int)MathF.Round(Rules.DaySeconds * TicksPerSecond);
-    private int NightTicks => (int)MathF.Round(Rules.NightSeconds * TicksPerSecond);
-
-    /// <summary>Night falls after every day; at night units see less far (the fog of war closes in).</summary>
-    public bool IsNight => NightTicks > 0 && Tick % (DayTicks + NightTicks) >= DayTicks;
-
-    /// <summary>Seconds until night falls or the day breaks; 0 if there is no night.</summary>
-    public float SecondsToDayNightChange
-    {
-        get
-        {
-            if (NightTicks <= 0)
-                return 0f;
-            int phase = Tick % (DayTicks + NightTicks);
-            int left = phase < DayTicks ? DayTicks - phase : DayTicks + NightTicks - phase;
-            return left / (float)TicksPerSecond;
-        }
-    }
-
-    /// <summary>
-    /// How far the day has come, from 0 at dawn to 1 at dusk (1 all night; 0.5 when there is no night): where the sun
-    /// stands, for the views' shadows.
-    /// </summary>
-    public float DayProgress => NightTicks <= 0 ? 0.5f : Math.Min(1f, Tick % (DayTicks + NightTicks) / (float)DayTicks);
-
-    /// <summary>How far a unit sees now: by night, a share of its sight range.</summary>
-    public float SightOf(Unit unit) => IsNight ? unit.Type.SightRange * Rules.NightSightFactor : unit.Type.SightRange;
-
-    private void ApplyAttack(AttackCommand attack)
-    {
-        // Monks do not fight: an order to attack leaves them mending.
-        attack = attack with { UnitIds = attack.UnitIds.Where(id => GetUnit(id) is not { Type.IsHealer: true }).ToArray() };
-        if (GetEntity(attack.TargetId) is not { IsAlive: true } target || !AreEnemies(attack.FactionId, target.FactionId))
-            return;
-        // A ram cannot fight soldiers: sent at one, it advances with the army and goes for the buildings it meets.
-        var rams = OwnLivingUnits(attack.FactionId, attack.UnitIds).Where(u => u.Type.IsSiege && target is not Building).Select(u => u.Id).ToList();
-        if (rams.Count > 0)
-            ApplyMove(new MoveCommand(attack.FactionId, rams, target.Position, MoveMode.AttackMove));
-        foreach (var unit in OwnLivingUnits(attack.FactionId, attack.UnitIds))
-        {
-            if (unit.Type.IsSiege && target is not Building)
-                continue;
-            unit.StartAttack(target);
-            unit.LastOrder = MoveOrderResult.Accepted;
-        }
-    }
-
-    private void ApplyRally(SetRallyCommand rally)
-    {
-        if (GetBuilding(rally.BuildingId) is not { IsAlive: true } building || building.FactionId != rally.FactionId
-            || building.Type.Recruits.Count == 0)
-            return;
-        building.RallyPoint = rally.Point is { } p
-            ? new Vector2(Math.Clamp(p.X, 0.5f, Map.Width - 0.5f), Math.Clamp(p.Y, 0.5f, Map.Height - 0.5f))
-            : null;
-    }
-
-    /// <summary>A recruit fresh out of a building with a rally point walks there.</summary>
-    private void SendToRally(Unit unit, Building building)
-    {
-        if (building.RallyPoint is not { } rally)
-            return;
-        OrderGroupMove(new List<Unit> { unit }, Map.ComponentOf(Cell.FromPosition(unit.Position)), rally, UnitOrder.Move);
-    }
-
-    private void OrderGroupMove(List<Unit> group, int component, Vector2 target, UnitOrder order)
-    {
-        Cell requested = Cell.FromPosition(target);
-        Cell? goal = Map.FindNearestInComponent(requested, component, MaxGoalSearchRadius);
-        if (goal == null)
-        {
-            foreach (var unit in group)
-            {
-                unit.CompleteOrder();
-                unit.LastOrder = MoveOrderResult.Unreachable;
-            }
-            return;
-        }
-
-        bool adjusted = goal.Value != requested;
-        Vector2 center = adjusted ? goal.Value.Center : target;
-        float clearance = group.Max(u => u.Type.Radius);
-        var slots = Formation.ComputeSlots(Map, center, group.Count, clearance);
-
-        // Closest units take the central slots; the rest fill the outer rings.
-        group.Sort((a, b) =>
-        {
-            int byDistance = Vector2.DistanceSquared(a.Position, center).CompareTo(Vector2.DistanceSquared(b.Position, center));
-            return byDistance != 0 ? byDistance : a.Id.CompareTo(b.Id);
-        });
-
-        for (int i = 0; i < group.Count; i++)
-        {
-            var unit = group[i];
-            var path = _pathfinder.FindPath(unit.Position, slots[i], unit.Type.Radius);
-            if (path == null)
-            {
-                unit.CompleteOrder();
-                unit.LastOrder = MoveOrderResult.Unreachable;
-                continue;
-            }
-            unit.StartMove(order, slots[i], path);
-            unit.LastOrder = adjusted ? MoveOrderResult.Adjusted : MoveOrderResult.Accepted;
-        }
-    }
-
-    /// <summary>Undoes pushes into walls, buildings, the map edge or another walkable region.</summary>
-    private void KeepOnWalkableGround(Unit unit)
-    {
-        Vector2 pos = Map.PushOutOfWalls(unit.Position, unit.Type.Radius);
-        var cell = Cell.FromPosition(pos);
-        var previousCell = Cell.FromPosition(unit.PreviousPosition);
-        if (!Map.IsWalkable(cell) || Map.ComponentOf(cell) != Map.ComponentOf(previousCell))
-            pos = unit.PreviousPosition;
-        unit.Position = pos;
-    }
-
-    /// <summary>A march whose path has run out (and that is not busy fighting) is done.</summary>
-    private static void CompleteFinishedOrder(Unit unit)
-    {
-        if (unit.State != UnitState.Idle || unit.Target != null)
-            return;
-        if (unit.Order == UnitOrder.Move)
-            unit.CompleteOrder();
-        else if (unit.Order == UnitOrder.AttackMove && unit.Destination is { } d
-                 && Vector2.Distance(unit.Position, d) <= ArrivalSlack)
-            unit.CompleteOrder();
-        // An attack-move that ended a chase away from its slot resumes next tick.
-    }
-
-    private void CheckProgress(Unit unit)
-    {
-        if (unit.State != UnitState.Moving || unit.Target != null || unit.Destination is not { } destination)
-            return;
-        if (++unit.TicksSinceProgressCheck < ProgressCheckTicks)
-            return;
-
-        float moved = Vector2.Distance(unit.Position, unit.ProgressAnchor);
-        float expected = unit.Type.Speed * ProgressCheckTicks * TickDuration;
-        unit.StuckChecks = moved < expected * MinProgressFraction ? unit.StuckChecks + 1 : 0;
-        unit.TicksSinceProgressCheck = 0;
-        unit.ProgressAnchor = unit.Position;
-        if (unit.StuckChecks == 0)
-            return;
-
-        bool nearSlot = Vector2.Distance(unit.Position, destination) <= ArrivalSlack;
-        if (unit.StuckChecks >= RepathAfterChecks && nearSlot)
-        {
-            unit.CompleteOrder(); // close enough: the slot is crowded, stand where we are
-            return;
-        }
-        if (unit.StuckChecks >= GiveUpAfterChecks)
-        {
-            unit.CompleteOrder();
-            unit.LastOrder = MoveOrderResult.Blocked;
-            return;
-        }
-        if (unit.StuckChecks == RepathAfterChecks)
-            Repath(unit, destination);
-    }
-
-    private void Repath(Unit unit, Vector2 destination)
-    {
-        // The slot itself may now be under a new building: aim for the nearest free spot instead.
-        int component = Map.ComponentOf(Cell.FromPosition(unit.Position));
-        if (Map.FindNearestInComponent(Cell.FromPosition(destination), component, MaxGoalSearchRadius) is not { } goal)
-        {
-            unit.CompleteOrder();
-            unit.LastOrder = MoveOrderResult.Blocked;
-            return;
-        }
-        var target = goal == Cell.FromPosition(destination) ? destination : goal.Center;
-        var path = _pathfinder.FindPath(unit.Position, target, unit.Type.Radius);
-        if (path == null)
-        {
-            unit.CompleteOrder();
-            unit.LastOrder = MoveOrderResult.Blocked;
-            return;
-        }
-        unit.ReplacePath(path);
     }
 
     private void RemoveDeadUnits()

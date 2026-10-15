@@ -1,3 +1,5 @@
+using Lordsio.Sim.Units;
+
 namespace Lordsio.Sim.Core;
 
 /// <summary>How two factions stand towards each other.</summary>
@@ -16,7 +18,7 @@ public enum Stance
 /// declared by one side alone but begins only after a warning, so neither can strike at troops standing trustingly
 /// in its lands. Peace does not end a match: only one team can win.
 /// </summary>
-public partial class Simulation
+public sealed partial class Simulation
 {
     /// <summary>Treaties in force, by the pair of faction ids (kept symmetric).</summary>
     private bool[,] _peace = new bool[0, 0];
@@ -80,7 +82,7 @@ public partial class Simulation
             _events.Add(new DiplomacyRejected(from, to, DiplomacyError.AlreadyOffered));
             return;
         }
-        _offerExpires[from, to] = Tick + SecondsToTicks(Rules.PeaceOfferSeconds);
+        _offerExpires[from, to] = Tick + Ticks.FromSeconds(Rules.PeaceOfferSeconds);
         _events.Add(new PeaceOffered(from, to, Rules.PeaceOfferSeconds));
     }
 
@@ -119,7 +121,7 @@ public partial class Simulation
             _events.Add(new DiplomacyRejected(from, to, DiplomacyError.WarComing));
             return;
         }
-        int starts = Tick + SecondsToTicks(Rules.WarWarningSeconds);
+        int starts = Tick + Ticks.FromSeconds(Rules.WarWarningSeconds);
         _warStarts[from, to] = starts;
         _events.Add(new WarDeclared(from, to, Rules.WarWarningSeconds));
         if (starts <= Tick)
@@ -151,7 +153,7 @@ public partial class Simulation
         {
             if (unit.Target is not { } target || StanceBetween(unit.FactionId, target.FactionId) != Stance.Peace)
                 continue;
-            if (unit.Order == Lordsio.Sim.Units.UnitOrder.AttackUnit)
+            if (unit.Order == UnitOrder.AttackUnit)
                 unit.CompleteOrder();
             unit.Target = null;
         }
@@ -184,8 +186,6 @@ public partial class Simulation
                     BeginWar(a, b);
             }
     }
-
-    private static int SecondsToTicks(float seconds) => (int)MathF.Round(seconds * TicksPerSecond);
 
     private void HashDiplomacy(ref Fnv hash)
     {
