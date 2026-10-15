@@ -19,7 +19,7 @@ public sealed partial class Simulation
     /// <summary>A unit stuck this close to its slot (crowded by neighbours) simply counts as arrived.</summary>
     internal const float ArrivalSlack = 1.5f;
     /// <summary>Groups at least this big share one route search (see <see cref="Pathfinder.BuildField"/>).</summary>
-    private const int SharedRouteGroupSize = 6;
+    internal const int SharedRouteGroupSize = 6;
 
     /// <summary>
     /// Units that died or belong to someone else are silently skipped: the issuer's view of the world
@@ -114,14 +114,13 @@ public sealed partial class Simulation
             return byDistance != 0 ? byDistance : a.Id.CompareTo(b.Id);
         });
 
-        bool shared = group.Count >= SharedRouteGroupSize;
-        if (shared)
-            _pathfinder.BuildField(Cell.FromPosition(center), StartCells(group));
+        Cell? shared = group.Count >= SharedRouteGroupSize ? Cell.FromPosition(center) : null;
         for (int i = 0; i < group.Count; i++)
         {
             var unit = group[i];
-            var path = shared
-                ? _pathfinder.FindPathViaField(unit.Position, slots[i], unit.Type.Radius)
+            unit.MarchGoal = shared;
+            var path = shared is { } goalCell
+                ? _pathfinder.FindPathViaField(goalCell, unit.Position, slots[i], unit.Type.Radius)
                 : _pathfinder.FindPath(unit.Position, slots[i], unit.Type.Radius);
             if (path == null)
             {
@@ -134,11 +133,6 @@ public sealed partial class Simulation
         }
     }
 
-    private static IEnumerable<Cell> StartCells(List<Unit> group)
-    {
-        foreach (var unit in group)
-            yield return Cell.FromPosition(unit.Position);
-    }
 
     /// <summary>Undoes pushes into walls, buildings, the map edge or another walkable region.</summary>
     private void KeepOnWalkableGround(Unit unit)

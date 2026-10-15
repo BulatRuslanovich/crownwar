@@ -12,15 +12,39 @@ public partial class Hud
     /// Two short lines next to the picture: the cost, then the hotkey and how many of a limited kind stand already.
     /// The name and the rest are in the tooltip.
     /// </summary>
-    private string BuildButtonText(BuildingType type)
+    private string BuildButtonText(BuildingType type, int standing)
     {
         string hotkey = BuildHotkeys.TryGetValue(type.Id, out var key) ? $"[{key}]" : "";
-        string count = type.MaxCount > 0 ? $"{_match.Sim.CountBuildings(_match.LocalFactionId, type.Id)}/{type.MaxCount}" : "";
-        return $"{type.Cost}{Tr("HUD_GOLD_SHORT")}\n{string.Join(" ", new[] { hotkey, count }.Where(p => p.Length > 0))}";
+        string count = type.MaxCount > 0 ? $"{standing}/{type.MaxCount}" : "";
+        string second = hotkey.Length > 0 && count.Length > 0 ? hotkey + " " + count : hotkey + count;
+        return $"{type.Cost}{Tr("HUD_GOLD_SHORT")}\n{second}";
     }
 
-    private bool AtLimit(BuildingType type) =>
-        type.MaxCount > 0 && _match.Sim.CountBuildings(_match.LocalFactionId, type.Id) >= type.MaxCount;
+    /// <summary>What each build button last showed: how many stand, whether it is affordable, pressed, in which language.</summary>
+    private (int Standing, bool Available, bool Pressed, int Text)[] _buildShown = System.Array.Empty<(int, bool, bool, int)>();
+
+    private void UpdateBuildButtons()
+    {
+        if (_match.Sim.GetFaction(_match.LocalFactionId) is not { } faction)
+            return;
+        if (_buildShown.Length != _buildButtons.Count)
+        {
+            _buildShown = new (int, bool, bool, int)[_buildButtons.Count];
+            System.Array.Fill(_buildShown, (-1, false, false, -1));
+        }
+        for (int i = 0; i < _buildButtons.Count; i++)
+        {
+            var (button, type) = _buildButtons[i];
+            int standing = type.MaxCount > 0 ? _match.Sim.CountBuildings(_match.LocalFactionId, type.Id) : 0;
+            bool available = faction.Treasury.CanAfford(type.Cost) && (type.MaxCount == 0 || standing < type.MaxCount);
+            bool pressed = _placement.ActiveType == type;
+            if (!Changed(ref _buildShown[i], (standing, available, pressed, _textVersion)))
+                continue;
+            button.Text = BuildButtonText(type, standing);
+            MarkAvailable(button, available);
+            button.ButtonPressed = pressed;
+        }
+    }
 
     private void CreateBuildButtons(HBoxContainer row)
     {
@@ -28,7 +52,7 @@ public partial class Hud
         {
             var button = new Button
             {
-                Text = BuildButtonText(type),
+                Text = BuildButtonText(type, 0),
                 Icon = Icons.Building(type.Id, FactionColors.Get(_match.LocalFactionId)),
                 IconAlignment = HorizontalAlignment.Left,
                 ToggleMode = true,

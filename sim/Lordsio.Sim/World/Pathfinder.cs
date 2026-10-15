@@ -11,7 +11,7 @@ public sealed class Pathfinder
 {
     internal const float DiagonalCost = 1.41421356f;
 
-    private static readonly (int dx, int dy)[] Directions =
+    internal static readonly (int dx, int dy)[] Directions =
     {
         (1, 0), (-1, 0), (0, 1), (0, -1),
         (1, 1), (1, -1), (-1, 1), (-1, -1),
@@ -25,17 +25,11 @@ public sealed class Pathfinder
     private readonly PriorityQueue<int, float> _open = new();
     private readonly List<Cell> _cells = new();
     private readonly List<Cell> _tail = new();
+    /// <summary>Route fields of recent group orders, most recently used first (see <see cref="FindPathViaField"/>).</summary>
+    private readonly List<RouteField> _fields = new();
+    private const int KeptFields = 4;
     private readonly List<Vector2> _waypoints = new();
 
-    // The route field of a group order (see BuildField): distance to its goal and the next cell towards it.
-    private readonly float[] _fieldDistance;
-    private readonly int[] _fieldNext;
-    private readonly int[] _fieldSeenStamp;
-    private readonly int[] _fieldSettledStamp;
-    private readonly int[] _fieldStartStamp;
-    private readonly PriorityQueue<int, float> _fieldOpen = new();
-    private int _fieldStamp;
-    private Cell _fieldGoal;
     private int _stamp;
 
     public Pathfinder(TileGrid map)
@@ -46,110 +40,67 @@ public sealed class Pathfinder
         _parent = new int[n];
         _seenStamp = new int[n];
         _closedStamp = new int[n];
-        _fieldDistance = new float[n];
-        _fieldNext = new int[n];
-        _fieldSeenStamp = new int[n];
-        _fieldSettledStamp = new int[n];
-        _fieldStartStamp = new int[n];
     }
 
     /// <summary>
-    /// Prepares the routes of a group order: one search outwards from <paramref name="goal"/> (the same moves and
-    /// costs as <see cref="FindCellPath"/>) until every cell in <paramref name="starts"/> is reached. Every unit then
-    /// follows the shortest way to the goal from where it stands (<see cref="FindPathViaField"/>), for the price of a
-    /// single search instead of one per unit.
+    /// Waypoints like <see cref="FindPath"/> for a unit of a group sent to <paramref name="goal"/>: the shortest way
+    /// towards it along the goal's <see cref="RouteField"/> (shared by the whole group, and kept for when they march on
+    /// after a fight), then the few steps to <paramref name="to"/>, the unit's slot around the goal. Falls back to a search
+    /// of its own when the field cannot lead there.
     /// </summary>
-    public void BuildField(Cell goal, IEnumerable<Cell> starts)
-    {
-        if (++_fieldStamp == int.MaxValue)
-        {
-            Array.Clear(_fieldSeenStamp);
-            Array.Clear(_fieldSettledStamp);
-            Array.Clear(_fieldStartStamp);
-            _fieldStamp = 1;
-        }
-        _fieldGoal = goal;
-        _fieldOpen.Clear();
-        int width = _map.Width, height = _map.Height;
-        int waiting = 0;
-        foreach (var start in starts)
-        {
-            if (!_map.AreConnected(start, goal))
-                continue;
-            int s = _map.Index(start.X, start.Y);
-            if (_fieldStartStamp[s] == _fieldStamp)
-                continue;
-            _fieldStartStamp[s] = _fieldStamp;
-            waiting++;
-        }
-
-        int goalIndex = _map.Index(goal.X, goal.Y);
-        _fieldDistance[goalIndex] = 0f;
-        _fieldNext[goalIndex] = -1;
-        _fieldSeenStamp[goalIndex] = _fieldStamp;
-        _fieldOpen.Enqueue(goalIndex, 0f);
-        while (waiting > 0 && _fieldOpen.TryDequeue(out int current, out _))
-        {
-            if (_fieldSettledStamp[current] == _fieldStamp)
-                continue;
-            _fieldSettledStamp[current] = _fieldStamp;
-            if (_fieldStartStamp[current] == _fieldStamp)
-                waiting--;
-
-            int cx = current % width, cy = current / width;
-            float dCurrent = _fieldDistance[current];
-            foreach (var (dx, dy) in Directions)
-            {
-                int nx = cx + dx, ny = cy + dy;
-                if ((uint)nx >= (uint)width || (uint)ny >= (uint)height)
-                    continue;
-                int next = current + dy * width + dx;
-                if (!_map.IsWalkableAt(next) || _fieldSettledStamp[next] == _fieldStamp)
-                    continue;
-                bool diagonal = dx != 0 && dy != 0;
-                if (diagonal && (!_map.IsWalkableAt(current + dx) || !_map.IsWalkableAt(current + dy * width)))
-                    continue;
-                float d = dCurrent + (diagonal ? DiagonalCost : 1f);
-                if (_fieldSeenStamp[next] == _fieldStamp && d >= _fieldDistance[next])
-                    continue;
-                _fieldSeenStamp[next] = _fieldStamp;
-                _fieldDistance[next] = d;
-                _fieldNext[next] = current;
-                _fieldOpen.Enqueue(next, d);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Waypoints like <see cref="FindPath"/>, along the field of the last <see cref="BuildField"/>: the shortest way
-    /// towards its goal, then the few steps to <paramref name="to"/> (a slot of the formation around the goal).
-    /// Falls back to a search of its own when the start was not part of the field.
-    /// </summary>
-    public List<Vector2>? FindPathViaField(Vector2 from, Vector2 to, float radius)
+    public List<Vector2>? FindPathViaField(Cell goal, Vector2 from, Vector2 to, float radius)
     {
         var start = Cell.FromPosition(from);
         var slot = Cell.FromPosition(to);
-        int s = _map.InBounds(start) ? _map.Index(start.X, start.Y) : -1;
-        if (s < 0 || _fieldSettledStamp[s] != _fieldStamp)
+        if (!_map.AreConnected(start, goal))
+            return FindPath(from, to, radius);
+        var field = FieldTowards(goal);
+        int s = _map.Index(start.X, start.Y);
+        if (!field.Reaches(s))
             return FindPath(from, to, radius);
 
         var cells = _cells;
         cells.Clear();
-        for (int i = s; i != -1; i = _fieldNext[i])
+        for (int i = s; i != -1; i = field.Next(i))
         {
             var cell = new Cell(i % _map.Width, i / _map.Width);
             cells.Add(cell);
             if (cell == slot)
                 return Smooth(cells, from, to, radius); // the slot lies on the way: stop there
         }
-        if (slot != _fieldGoal)
+        if (slot != goal)
         {
-            if (!SearchCells(_fieldGoal, slot, _tail))
+            if (!SearchCells(goal, slot, _tail))
                 return FindPath(from, to, radius);
             for (int i = 1; i < _tail.Count; i++)
                 cells.Add(_tail[i]);
         }
         return Smooth(cells, from, to, radius);
+    }
+
+    /// <summary>The field towards <paramref name="goal"/>: a kept one if it is still valid, else the least recently used, started anew.</summary>
+    private RouteField FieldTowards(Cell goal)
+    {
+        int found = _fields.FindIndex(f => f.Goal == goal && f.MapVersion == _map.Version);
+        RouteField field;
+        if (found >= 0)
+        {
+            field = _fields[found];
+            _fields.RemoveAt(found);
+        }
+        else if (_fields.Count < KeptFields)
+        {
+            field = new RouteField(_map);
+            field.Reset(goal);
+        }
+        else
+        {
+            field = _fields[^1];
+            _fields.RemoveAt(_fields.Count - 1);
+            field.Reset(goal);
+        }
+        _fields.Insert(0, field); // most recently used first
+        return field;
     }
 
     /// <summary>Cell path from start to goal inclusive, or null when the goal cannot be reached.</summary>
@@ -237,14 +188,34 @@ public sealed class Pathfinder
         waypoints.Clear();
         Vector2 anchor = from;
         int i = 1;
-        while (i < cells.Count)
+        int last = cells.Count - 1;
+        while (i <= last)
         {
-            int j = i;
-            while (j + 1 < cells.Count && _map.IsCorridorClear(anchor, PointOf(j + 1), radius))
-                j++;
-            anchor = PointOf(j);
+            // The farthest cell ahead the body can walk to in a straight line: gallop out (1, 2, 4, ... cells) while the
+            // corridor is clear, then narrow down between the last clear and the first blocked look. Every waypoint
+            // taken has had its corridor checked, so the straight walk to it is sound even past a blocked look between.
+            int clear = i, blocked = -1;
+            for (int step = 1; clear < last; step *= 2)
+            {
+                int probe = Math.Min(last, i + step);
+                if (!_map.IsCorridorClear(anchor, PointOf(probe), radius))
+                {
+                    blocked = probe;
+                    break;
+                }
+                clear = probe;
+            }
+            while (blocked > clear + 1)
+            {
+                int mid = (clear + blocked) / 2;
+                if (_map.IsCorridorClear(anchor, PointOf(mid), radius))
+                    clear = mid;
+                else
+                    blocked = mid;
+            }
+            anchor = PointOf(clear);
             waypoints.Add(anchor);
-            i = j + 1;
+            i = clear + 1;
         }
 
         // Same-cell move: the loop adds nothing, but we still want to reach the exact point.

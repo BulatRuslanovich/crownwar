@@ -29,6 +29,8 @@ internal sealed class CombatSystem
     private readonly List<Projectile> _projectiles;
     private readonly Action<SimEvent> _emit;
     private readonly Func<int, int, bool> _areEnemies;
+    /// <summary>Units to march on this tick (see <see cref="ResumeMarches"/>).</summary>
+    private readonly List<Unit> _resuming = new();
 
     public CombatSystem(TileGrid map, Pathfinder pathfinder, List<Projectile> projectiles, Action<SimEvent> emit,
         Func<int, int, bool> areEnemies)
@@ -109,11 +111,7 @@ internal sealed class CombatSystem
                 unit.CompleteOrder();
                 return;
             }
-            var path = _pathfinder.FindPath(unit.Position, destination, unit.Type.Radius);
-            if (path == null)
-                unit.CompleteOrder();
-            else
-                unit.ReplacePath(path);
+            _resuming.Add(unit); // the way on is found for all of them at once, after everyone has acted
         }
         else if (unit.Order == UnitOrder.None
                  && (unit.State == UnitState.Moving
@@ -121,6 +119,27 @@ internal sealed class CombatSystem
         {
             ReturnToPost(unit); // the intruder is dead or gone
         }
+    }
+
+    /// <summary>
+    /// Attack-moving units that have nothing to fight any more march on towards their slots. Units of a group order
+    /// follow its route field again (kept from the order, see <see cref="Pathfinder.FindPathViaField"/>) instead of each
+    /// searching the way, often a long way round, on its own when a fight ends and the whole army resumes.
+    /// </summary>
+    public void ResumeMarches()
+    {
+        foreach (var unit in _resuming)
+        {
+            var destination = unit.Destination!.Value;
+            var path = unit.MarchGoal is { } goal
+                ? _pathfinder.FindPathViaField(goal, unit.Position, destination, unit.Type.Radius)
+                : _pathfinder.FindPath(unit.Position, destination, unit.Type.Radius);
+            if (path == null)
+                unit.CompleteOrder();
+            else
+                unit.ReplacePath(path);
+        }
+        _resuming.Clear();
     }
 
     /// <summary>

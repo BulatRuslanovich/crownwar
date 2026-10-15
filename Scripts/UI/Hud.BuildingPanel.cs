@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Lordsio.Core;
@@ -26,6 +27,23 @@ public partial class Hud
         }
 
         bool own = building.FactionId == _match.LocalFactionId;
+        UpdateBuildingInfo(building, own);
+        UpdateRecruitButtons(building, own);
+        UpdateUpgrade(building, own);
+        UpdateDemolish(building, own);
+        UpdateQueue(building, own);
+    }
+
+    private (int Id, int Health, int Tier, int Built, int Slots, int Reserve, int Regen, int Text) _infoShown;
+
+    /// <summary>The title (kind, level, owner) and what the building does, with its health.</summary>
+    private void UpdateBuildingInfo(Building building, bool own)
+    {
+        int built = building.IsComplete ? 101 : (int)(building.ConstructionProgress * 100f);
+        int slots = building.Type.Recruits.Count > 0 ? _match.Sim.TrainingSlots(building) : 0;
+        if (!Changed(ref _infoShown, (building.Id, building.Health, building.Type.Tier, built, slots, building.Deposit?.Reserve ?? 0,
+                building.Deposit?.RegenTicksLeft / Simulation.TicksPerSecond ?? 0, _textVersion)))
+            return;
         string level = building.Type.MaxTier > 1 ? " " + string.Format(Tr("HUD_TIER"), building.Type.Tier) : "";
         // Own buildings need no owner in the title (and the short title keeps the panel clear of the build bar).
         _title.Text = $"{Names.Of(building.Type)}{level}" + (own ? "" : $" ({Names.Faction(building.FactionId)})");
@@ -33,13 +51,26 @@ public partial class Hud
             ? HudText.DescribeBuildingType(_match.Sim, building.Type, building)
             : string.Format(Tr("HUD_UNDER_CONSTRUCTION"), building.ConstructionProgress * 100f);
         _info.Text = string.Format(Tr("HUD_HEALTH"), building.Health, building.MaxHealth) + "\n" + status;
+    }
 
+    /// <summary>What each recruit button last showed: why it is refused (if it is), in which language.</summary>
+    private readonly List<(RecruitError Error, int Text)> _recruitShown = new();
+
+    private void UpdateRecruitButtons(Building building, bool own)
+    {
         _recruitRow.Visible = own && building.IsComplete && _recruitButtons.Count > 0;
-        foreach (var (button, typeId) in _recruitButtons)
+        if (!_recruitRow.Visible)
+            return;
+        for (int i = 0; i < _recruitButtons.Count; i++)
         {
-            var type = _match.Sim.Rules.Units.Get(typeId);
+            var (button, typeId) = _recruitButtons[i];
             // Buttons stay clickable: the simulation is the judge and explains a refusal with a message.
             var error = _match.Sim.CanRecruit(_match.LocalFactionId, building.Id, typeId);
+            var shown = _recruitShown[i];
+            if (!Changed(ref shown, (error, _textVersion)))
+                continue;
+            _recruitShown[i] = shown;
+            var type = _match.Sim.Rules.Units.Get(typeId);
             // A kind not opened yet (too few barracks) is not shown at all.
             button.Visible = error != RecruitError.Locked;
             button.Text = $"{type.Cost}{Tr("HUD_GOLD_SHORT")}";
@@ -47,29 +78,33 @@ public partial class Hud
             string about = HudText.DescribeUnitType(_match.Sim, type);
             button.TooltipText = error == RecruitError.None ? about : HudText.Describe(error) + "\n" + about;
         }
+    }
 
-        UpdateUpgrade(building, own);
-        UpdateDemolish(building, own);
+    private (int Count, int Active, string? First, int Text) _queueShown;
 
+    /// <summary>Who is training (several side by side, a place per barracks) and how many wait.</summary>
+    private void UpdateQueue(Building building, bool own)
+    {
         bool training = own && building.Queue.Count > 0;
         _queue.Visible = training;
         _progress.Visible = training;
-        if (training)
-        {
-            // Several recruits train side by side (a place per barracks); the rest wait.
-            int active = Mathf.Min(_match.Sim.TrainingSlots(building), building.Queue.Count);
-            var current = building.Queue[0];
-            string names = string.Join(", ", building.Queue.Take(active).Select(item => Names.Of(item.Type)));
-            _queue.Text = string.Format(Tr("HUD_TRAINING"), names) +
-                (building.Queue.Count > active ? "  " + string.Format(Tr("HUD_QUEUED"), building.Queue.Count - active) : "");
-            _progress.Value = current.Progress * 100f;
-        }
+        if (!training)
+            return;
+        _progress.Value = building.Queue[0].Progress * 100f;
+        int active = Mathf.Min(_match.Sim.TrainingSlots(building), building.Queue.Count);
+        if (!Changed(ref _queueShown, (building.Queue.Count, active, building.Queue[0].Type.Id, _textVersion)))
+            return;
+        string names = string.Join(", ", building.Queue.Take(active).Select(item => Names.Of(item.Type)));
+        _queue.Text = string.Format(Tr("HUD_TRAINING"), names) +
+            (building.Queue.Count > active ? "  " + string.Format(Tr("HUD_QUEUED"), building.Queue.Count - active) : "");
     }
 
     /// <summary>
     /// The level section of a tower's or mine's panel: its level, the button for the next one (cost, hotkey U, and
     /// what changes in the tooltip), or the progress of the upgrade under way.
     /// </summary>
+    private (int Id, int Tier, int Progress, UpgradeError Error, int Text) _upgradeShown;
+
     private void UpdateUpgrade(Building building, bool own)
     {
         var type = building.Type;
@@ -80,6 +115,10 @@ public partial class Hud
         if (!visible)
             return;
 
+        var error = _match.Sim.CanUpgrade(_match.LocalFactionId, building.Id);
+        int progress = building.IsUpgrading ? (int)(building.UpgradeProgress * 100f) : -1;
+        if (!Changed(ref _upgradeShown, (building.Id, type.Tier, progress, error, _textVersion)))
+            return;
         if (building.IsUpgrading)
         {
             _upgradeTitle.Text = string.Format(Tr("HUD_UPGRADING"), type.Tier + 1, building.UpgradeProgress * 100f);
@@ -90,13 +129,14 @@ public partial class Hud
         if (type.NextTier is not { } next)
             return;
         _upgradeButton.Text = string.Format(Tr("HUD_UPGRADE_BUTTON"), next.Tier, type.UpgradeCost);
-        var error = _match.Sim.CanUpgrade(_match.LocalFactionId, building.Id);
         MarkAvailable(_upgradeButton, error == UpgradeError.None);
         string changes = HudText.DescribeUpgrade(type, next);
         _upgradeButton.TooltipText = error == UpgradeError.None ? changes : HudText.Describe(error) + "\n" + changes;
     }
 
     /// <summary>The demolish button: what pulling the building down gives back; a second press within seconds does it.</summary>
+    private (int Id, bool Armed, int Refund, int Text) _demolishShown;
+
     private void UpdateDemolish(Building building, bool own)
     {
         var error = _match.Sim.CanDemolish(_match.LocalFactionId, building.Id, out int refund);
@@ -104,6 +144,8 @@ public partial class Hud
         if (!_demolishButton.Visible)
             return;
         bool armed = _demolishArmed is { } a && a.BuildingId == building.Id && Time.GetTicksMsec() < a.UntilMs;
+        if (!Changed(ref _demolishShown, (building.Id, armed, refund, _textVersion)))
+            return;
         _demolishButton.Text = string.Format(Tr(armed ? "HUD_DEMOLISH_CONFIRM" : "HUD_DEMOLISH"), refund);
         _demolishButton.Modulate = armed ? ProblemColor : Colors.White;
         _demolishButton.TooltipText = string.Format(Tr("HUD_DEMOLISH_TOOLTIP"), _match.Sim.Rules.DemolishRefundPercent);
@@ -134,8 +176,12 @@ public partial class Hud
     private void RebuildRecruitButtons(Building building)
     {
         foreach (var (button, _) in _recruitButtons)
+        {
+            _shownAvailable.Remove(button);
             button.QueueFree();
+        }
         _recruitButtons.Clear();
+        _recruitShown.Clear();
 
         foreach (string typeId in building.Type.Recruits)
         {
@@ -154,6 +200,7 @@ public partial class Hud
             };
             _recruitRow.AddChild(button);
             _recruitButtons.Add((button, typeId));
+            _recruitShown.Add(((RecruitError)(-1), -1));
         }
     }
 }

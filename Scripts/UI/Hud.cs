@@ -67,6 +67,11 @@ public partial class Hud : CanvasLayer
     private float _messageTimeLeft;
     private Button _diplomacyButton = null!;
 
+    /// <summary>Bumped when the language changes, so every cached text is rebuilt.</summary>
+    private int _textVersion;
+    /// <summary>The colouring each button last got from <see cref="MarkAvailable"/>.</summary>
+    private readonly Dictionary<Button, bool> _shownAvailable = new();
+
     /// <summary>Peace and war with the other players (P).</summary>
     public DiplomacyPanel Diplomacy { get; private set; } = null!;
 
@@ -126,26 +131,46 @@ public partial class Hud : CanvasLayer
     public override void _Process(double delta)
     {
         UpdateResourceBar();
-        if (_match.Sim.GetFaction(_match.LocalFactionId) is { } faction)
-        {
-            foreach (var (button, type) in _buildButtons)
-            {
-                button.Text = BuildButtonText(type); // follows a language change
-                MarkAvailable(button, faction.Treasury.CanAfford(type.Cost) && !AtLimit(type));
-                button.ButtonPressed = _placement.ActiveType == type;
-            }
-        }
+        UpdateBuildButtons();
         UpdateRest(delta);
     }
 
-    /// <summary>An unaffordable button keeps its picture (dimmed) and shows its price in red.</summary>
-    private static void MarkAvailable(Button button, bool available)
+    /// <summary>The language changed: every text shown is built again.</summary>
+    public override void _Notification(int what)
     {
+        if (what == NotificationTranslationChanged)
+            _textVersion++;
+    }
+
+    /// <summary>
+    /// Whether what a part of the HUD shows has changed since it was last drawn (and remembers the new state).
+    /// The HUD runs every frame; its texts are formatted, translated and handed to the engine only when this says so.
+    /// </summary>
+    private static bool Changed<T>(ref T shown, T now)
+    {
+        if (EqualityComparer<T>.Default.Equals(shown, now))
+            return false;
+        shown = now;
+        return true;
+    }
+
+    private static readonly StringName[] TextColorSlots =
+        { "font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color" };
+    private static readonly StringName[] IconColorSlots =
+        { "icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color" };
+    private static readonly Color DimmedIcon = new(1f, 1f, 1f, 0.55f);
+
+    /// <summary>An unaffordable button keeps its picture (dimmed) and shows its price in red.</summary>
+    private void MarkAvailable(Button button, bool available)
+    {
+        if (_shownAvailable.TryGetValue(button, out bool shown) && shown == available)
+            return;
+        _shownAvailable[button] = available;
         var text = available ? DefaultTextColor : ProblemColor;
-        foreach (string slot in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color" })
+        foreach (var slot in TextColorSlots)
             button.AddThemeColorOverride(slot, text);
-        var icon = available ? Colors.White : new Color(1f, 1f, 1f, 0.55f);
-        foreach (string slot in new[] { "icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color" })
+        var icon = available ? Colors.White : DimmedIcon;
+        foreach (var slot in IconColorSlots)
             button.AddThemeColorOverride(slot, icon);
     }
 

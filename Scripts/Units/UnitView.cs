@@ -38,8 +38,8 @@ public partial class UnitView : Node2D
     private static readonly Color BarBack = new(0f, 0f, 0f, 0.7f);
 
     private Unit _unit = null!;
-    private Sprite2D _body = null!;
-    private Sprite2D _team = null!;
+    /// <summary>The soldier in his faction's colour (see <see cref="UnitSheets"/>).</summary>
+    private Sprite2D _sprite = null!;
     private Node2D _overlay = null!;
     private int _row;
     private bool _selected;
@@ -60,15 +60,14 @@ public partial class UnitView : Node2D
     public Vector2 SpriteOffset { get; private set; }
     public int Row => _row;
 
-    public void Initialize(Unit unit)
+    public void Initialize(Unit unit, Texture2D sheet)
     {
         _unit = unit;
         _row = ArtLayout.UnitRow(unit.Type.Id);
         _drawnHealth = unit.Health;
         // Every soldier breathes in his own time.
         _idleTime = unit.Id * 0.73f % BreathPeriod;
-        _body = MakeSprite(Sprites.Units, Colors.White);
-        _team = MakeSprite(Sprites.UnitsTeam, FactionColors.Get(unit.FactionId));
+        _sprite = MakeSprite(sheet);
         _overlay = new Node2D { Name = "Overlay" };
         _overlay.Draw += DrawOverlay;
         AddChild(_overlay);
@@ -132,12 +131,9 @@ public partial class UnitView : Node2D
         if (_knockTime > 0f)
             offset += _knockDirection * KnockDistance * (_knockTime / KnockDuration);
         SpriteOffset = offset.Round();
-        foreach (var sprite in new[] { _body, _team })
-        {
-            sprite.Frame = _row * ArtLayout.UnitFrames + Frame;
-            sprite.FlipH = _facingLeft;
-            sprite.Position = SpriteOffset;
-        }
+        _sprite.Frame = _row * ArtLayout.UnitFrames + Frame;
+        _sprite.FlipH = _facingLeft;
+        _sprite.Position = SpriteOffset;
 
         if (_unit.Health != _drawnHealth)
         {
@@ -197,16 +193,15 @@ public partial class UnitView : Node2D
         _overlay.DrawRect(new Rect2(-5, y + 1, 10 * fraction, 1), fill);
     }
 
-    private Sprite2D MakeSprite(string path, Color modulate)
+    private Sprite2D MakeSprite(Texture2D sheet)
     {
         var sprite = new Sprite2D
         {
-            Texture = GD.Load<Texture2D>(path),
+            Texture = sheet,
             Hframes = ArtLayout.UnitFrames,
             Vframes = ArtLayout.UnitRows,
             Centered = false,
             Offset = -new Vector2(ArtLayout.UnitFeet.X, ArtLayout.UnitFeet.Y),
-            Modulate = modulate,
         };
         AddChild(sprite);
         return sprite;

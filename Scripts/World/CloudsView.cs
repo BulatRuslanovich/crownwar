@@ -84,8 +84,13 @@ public partial class CloudsView : Node2D
                 Mathf.PosMod(position.Y + margin.Y, size.Y) - margin.Y);
             _clouds[i] = (position, shape, speed);
         }
-        QueueRedraw();
+        // At night the clouds are gone (the last faint draw already cleared): nothing to draw again.
+        if (_alpha >= 0.005f || _drawnAlpha >= 0.005f)
+            QueueRedraw();
+        _drawnAlpha = _alpha;
     }
+
+    private float _drawnAlpha = 1f;
 
     public override void _Draw()
     {

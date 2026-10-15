@@ -17,6 +17,9 @@ public sealed class TileGrid
     private readonly bool[] _walkable;
     private readonly int[] _component;
 
+    /// <summary>Goes up whenever a building footprint changes walkability, so kept routes know they are stale.</summary>
+    public int Version { get; private set; }
+
     public int Width { get; }
     public int Height { get; }
 
@@ -71,6 +74,7 @@ public sealed class TileGrid
                 _walkable[i] = !occupied && TerrainInfo.IsWalkable(_tiles[i]);
             }
         }
+        Version++;
         if (relabel)
             LabelComponents();
     }

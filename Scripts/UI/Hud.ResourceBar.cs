@@ -6,11 +6,19 @@ namespace Lordsio.UI;
 /// <summary>The top bar: gold (and the treasury limit), net income, army size, the day/night clock.</summary>
 public partial class Hud
 {
+    /// <summary>The numbers the bar last showed (see <see cref="Changed{T}"/>).</summary>
+    private (int Gold, int Capacity, int Net, int Income, int Upkeep, int ArmyUpkeep, int Population, int Cap, bool Night, int Left, int Text) _barShown;
+
     private void UpdateResourceBar()
     {
         if (_match.Sim.GetFaction(_match.LocalFactionId) is { } faction)
         {
             var treasury = faction.Treasury;
+            int secondsLeft = Mathf.CeilToInt(_match.Sim.SecondsToDayNightChange);
+            if (!Changed(ref _barShown, (treasury.Gold, treasury.Capacity, faction.NetPerMinute, faction.IncomePerSecond,
+                    faction.UpkeepPerMinute, faction.ArmyUpkeepPerMinute, faction.Population, faction.ArmyCap, _match.Sim.IsNight,
+                    secondsLeft, _textVersion)))
+                return;
             _gold.Text = treasury.Capacity > 0
                 ? string.Format(Tr("HUD_GOLD_CAPPED"), treasury.Gold, treasury.Capacity)
                 : string.Format(Tr("HUD_GOLD"), treasury.Gold);
@@ -26,7 +34,7 @@ public partial class Hud
 
             var sim = _match.Sim;
             _dayNight.Visible = sim.Rules.NightSeconds > 0f;
-            int left = Mathf.CeilToInt(sim.SecondsToDayNightChange);
+            int left = secondsLeft;
             _dayNight.Text = string.Format(Tr(sim.IsNight ? "HUD_NIGHT" : "HUD_DAY"), left / 60, left % 60);
             _dayNight.Modulate = sim.IsNight ? NightColor : Colors.White;
             _dayNight.TooltipText = Tr("HUD_NIGHT_TOOLTIP");

@@ -57,6 +57,8 @@ public partial class EffectsView : Node2D
     private static readonly Color CraterColor = new("3a3128");
     private static readonly Color CraterRim = new("8a7a5e");
     private const float CraterSeconds = 14f;
+    /// <summary>The last seconds in which rubble and craters fade; the share of its time a body lies before it does.</summary>
+    private const float RubbleFadeSeconds = 5f, CraterFadeSeconds = 3f, CorpseFadeFrom = 0.75f;
 
     /// <summary>True for the layer drawn under units and buildings.</summary>
     [Export] public bool Ground { get; set; }
@@ -64,6 +66,8 @@ public partial class EffectsView : Node2D
     private readonly List<Effect> _effects = new();
     private MatchController _match = null!;
     private int _seed;
+    /// <summary>An effect began since the last frame: the layer must be drawn again.</summary>
+    private bool _added;
 
     public void Initialize(MatchController match)
     {
@@ -141,24 +145,42 @@ public partial class EffectsView : Node2D
     {
         if (_effects.Count == 0)
             return;
+        bool changed = _added;
+        _added = false;
         for (int i = _effects.Count - 1; i >= 0; i--)
         {
             var effect = _effects[i];
             effect.Age += (float)delta;
             if (effect.Age >= effect.Duration)
+            {
                 _effects.RemoveAt(i);
-            else
-                _effects[i] = effect;
+                changed = true;
+                continue;
+            }
+            _effects[i] = effect;
+            changed |= !IsStill(effect);
         }
-        QueueRedraw();
+        // Lying rubble, craters and the fallen look the same frame after frame: the layer is drawn again only
+        // when something moves, fades, comes or goes.
+        if (changed)
+            QueueRedraw();
     }
+
+    /// <summary>Drawn the same as last frame: rubble, a crater or a body that has not started to fade yet.</summary>
+    private static bool IsStill(Effect e) => e.Kind switch
+    {
+        Kind.Rubble => e.Duration - e.Age > RubbleFadeSeconds,
+        Kind.Crater => e.Duration - e.Age > CraterFadeSeconds,
+        Kind.Corpse => e.Age < e.Duration * CorpseFadeFrom,
+        _ => false,
+    };
 
     public override void _Draw()
     {
         foreach (var e in _effects)
         {
             float t = e.Age / e.Duration;
-            var rng = new Random(e.Seed);
+            var rng = new EffectRandom(e.Seed);
             switch (e.Kind)
             {
                 case Kind.Spark: DrawSpark(e, t, rng); break;
@@ -180,7 +202,7 @@ public partial class EffectsView : Node2D
     }
 
     /// <summary>A star of short rays that shrinks.</summary>
-    private void DrawSpark(Effect e, float t, Random rng)
+    private void DrawSpark(Effect e, float t, EffectRandom rng)
     {
         float ray = e.Size * (1f - t) + 1f;
         for (int r = 0; r < 4; r++)
@@ -191,7 +213,7 @@ public partial class EffectsView : Node2D
     }
 
     /// <summary>Dust kicked up by a blow (or a puff where a unit fell, some specks in the colour of its blood).</summary>
-    private void DrawSpecks(Effect e, float t, Random rng, int count)
+    private void DrawSpecks(Effect e, float t, EffectRandom rng, int count)
     {
         bool puff = e.Kind == Kind.Puff;
         for (int s = 0; s < count; s++)
@@ -211,7 +233,7 @@ public partial class EffectsView : Node2D
     }
 
     /// <summary>Three small crosses drifting up and fading, bright even at night.</summary>
-    private void DrawHeal(Effect e, float t, Random rng)
+    private void DrawHeal(Effect e, float t, EffectRandom rng)
     {
         var cross = _match.Lit(e.Color) with { A = 1f - t };
         for (int s = 0; s < 3; s++)
@@ -223,7 +245,7 @@ public partial class EffectsView : Node2D
     }
 
     /// <summary>A flattened ring of dust spreading over the splash area, with specks thrown out.</summary>
-    private void DrawImpact(Effect e, float t, Random rng)
+    private void DrawImpact(Effect e, float t, EffectRandom rng)
     {
         DrawSetTransform(e.Position, 0f, new Vector2(1f, 0.5f));
         DrawArc(Vector2.Zero, e.Size * (0.3f + 0.7f * t), 0f, Mathf.Tau, 24, DustColor with { A = 0.7f * (1f - t) }, 2f);
@@ -237,7 +259,7 @@ public partial class EffectsView : Node2D
     }
 
     /// <summary>A dust cloud billowing out of the footprint, with debris thrown up and falling.</summary>
-    private void DrawCollapse(Effect e, float t, Random rng)
+    private void DrawCollapse(Effect e, float t, EffectRandom rng)
     {
         for (int s = 0; s < 40; s++)
         {
@@ -256,9 +278,9 @@ public partial class EffectsView : Node2D
     }
 
     /// <summary>Ruins on the ground, fading away over the last few seconds.</summary>
-    private void DrawRubble(Effect e, Random rng)
+    private void DrawRubble(Effect e, EffectRandom rng)
     {
-        float alpha = Mathf.Clamp((e.Duration - e.Age) / 5f, 0f, 1f);
+        float alpha = Mathf.Clamp((e.Duration - e.Age) / RubbleFadeSeconds, 0f, 1f);
         for (int s = 0; s < (int)(e.Size * 1.5f); s++)
         {
             var p = e.Position + new Vector2((rng.NextSingle() - 0.5f) * e.Size * 2f, (rng.NextSingle() - 0.5f) * e.Size * 1.6f);
@@ -292,7 +314,7 @@ public partial class EffectsView : Node2D
     /// Bits thrown up from the hit, falling under gravity onto the ground a few pixels below (the target's feet) and
     /// lying there a moment before fading. Chunks are a stone's rocks: more, bigger, thrown farther.
     /// </summary>
-    private void DrawDebris(Effect e, float t, Random rng)
+    private void DrawDebris(Effect e, float t, EffectRandom rng)
     {
         bool chunks = e.Kind == Kind.Chunks;
         int count = chunks ? 12 : 5;
@@ -317,9 +339,9 @@ public partial class EffectsView : Node2D
     }
 
     /// <summary>A flattened scorched pit with a rim of thrown-up earth and clods around it.</summary>
-    private void DrawCrater(Effect e, Random rng)
+    private void DrawCrater(Effect e, EffectRandom rng)
     {
-        float alpha = Mathf.Clamp((e.Duration - e.Age) / 3f, 0f, 1f) * 0.75f;
+        float alpha = Mathf.Clamp((e.Duration - e.Age) / CraterFadeSeconds, 0f, 1f) * 0.75f;
         DrawSetTransform(e.Position, 0f, new Vector2(1f, 0.5f));
         DrawCircle(Vector2.Zero, e.Size + 1.5f, CraterRim with { A = alpha * 0.8f });
         DrawCircle(Vector2.Zero, e.Size, CraterColor with { A = alpha });
@@ -334,8 +356,6 @@ public partial class EffectsView : Node2D
     }
 
     private const float CorpseSeconds = 8f;
-    private Texture2D? _units;
-    private Texture2D? _unitsTeam;
 
     /// <summary>
     /// The unit's standing picture tipped onto its side (left or right at random), darkened; it lies still, then
@@ -343,20 +363,45 @@ public partial class EffectsView : Node2D
     /// </summary>
     private void DrawCorpse(Effect e, float t)
     {
-        _units ??= GD.Load<Texture2D>(Sprites.Units);
-        _unitsTeam ??= GD.Load<Texture2D>(Sprites.UnitsTeam);
         int w = ArtLayout.UnitCellWidth, h = ArtLayout.UnitCellHeight;
         var region = new Rect2(ArtLayout.FrameIdle * w, (int)e.Size * h, w, h);
-        float alpha = t < 0.75f ? 1f : 1f - (t - 0.75f) / 0.25f;
+        float alpha = t < CorpseFadeFrom ? 1f : 1f - (t - CorpseFadeFrom) / (1f - CorpseFadeFrom);
         float side = e.Seed % 2 == 0 ? 1f : -1f;
         DrawSetTransform(e.Position + new Vector2(0, -3), side * Mathf.Pi / 2f, Vector2.One);
         var rect = new Rect2(-w / 2f, -h + 2f, w, h);
         var shade = new Color(0.62f, 0.62f, 0.62f, alpha);
-        DrawTextureRectRegion(_units, rect, region, shade);
-        DrawTextureRectRegion(_unitsTeam, rect, region, e.Color * shade);
+        DrawTextureRectRegion(_match.UnitSheets.For(e.Color), rect, region, shade);
         DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
     }
 
-    private void Add(Kind kind, Vector2 position, float duration, float size, Color color) =>
+    private void Add(Kind kind, Vector2 position, float duration, float size, Color color)
+    {
         _effects.Add(new Effect(kind, position, 0f, duration, size, ++_seed, color));
+        _added = true;
+    }
+
+    /// <summary>
+    /// The same scatter for an effect every frame, without allocating: a small generator (SplitMix32) restarted from
+    /// the effect's seed each time it is drawn.
+    /// </summary>
+    private struct EffectRandom
+    {
+        private uint _state;
+
+        public EffectRandom(int seed) => _state = (uint)seed * 0x9E3779B9u + 0x7F4A7C15u;
+
+        private uint NextUInt()
+        {
+            uint z = _state += 0x9E3779B9u;
+            z = (z ^ (z >> 16)) * 0x85EBCA6Bu;
+            z = (z ^ (z >> 13)) * 0xC2B2AE35u;
+            return z ^ (z >> 16);
+        }
+
+        /// <summary>A number in [0, 1).</summary>
+        public float NextSingle() => (NextUInt() >> 8) * (1f / (1 << 24));
+
+        /// <summary>An integer in [0, <paramref name="max"/>).</summary>
+        public int Next(int max) => (int)(NextUInt() % (uint)max);
+    }
 }

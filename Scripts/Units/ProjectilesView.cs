@@ -27,7 +27,16 @@ public partial class ProjectilesView : Node2D
         _match = match;
     }
 
-    public override void _Process(double delta) => QueueRedraw();
+    /// <summary>Whether the last frame drew anything (then one more draw clears it once all have landed).</summary>
+    private bool _drewAny;
+
+    public override void _Process(double delta)
+    {
+        bool any = _match.Sim.Projectiles.Count > 0;
+        if (any || _drewAny)
+            QueueRedraw();
+        _drewAny = any;
+    }
 
     public override void _Draw()
     {

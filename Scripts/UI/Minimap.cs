@@ -28,6 +28,7 @@ public partial class Minimap : Control
     /// <summary>Enemy buildings as last seen: (owner, top-left cell, size), kept while they are in the fog.</summary>
     private readonly Dictionary<int, (int Faction, Cell Anchor, int Size)> _scouted = new();
     private readonly List<(System.Numerics.Vector2 Position, float Age)> _alerts = new();
+    private readonly List<int> _forgotten = new();
 
     private MatchController _match = null!;
     private ImageTexture _terrain = null!;
@@ -51,8 +52,10 @@ public partial class Minimap : Control
 
     public override void _Process(double delta)
     {
-        _fog.Refresh(_match.Fog);
-        UpdateScouted();
+        bool fogChanged = _fog.Refresh(_match.Fog);
+        bool ticked = _match.Sim.Tick != _drawnTick;
+        if (ticked)
+            UpdateScouted();
         for (int i = _alerts.Count - 1; i >= 0; i--)
         {
             var (position, age) = _alerts[i];
@@ -61,8 +64,18 @@ public partial class Minimap : Control
             else
                 _alerts[i] = (position, age + (float)delta);
         }
-        QueueRedraw(); // units move every tick
+        // Units move once a tick, not every frame; the view frame moves with the camera; alerts blink.
+        var view = _match.Camera.VisibleRect;
+        if (ticked || fogChanged || _alerts.Count > 0 || view != _drawnView)
+        {
+            QueueRedraw();
+            _drawnTick = _match.Sim.Tick;
+            _drawnView = view;
+        }
     }
+
+    private int _drawnTick = -1;
+    private Rect2 _drawnView;
 
     /// <summary>
     /// Remembers enemy buildings while in sight; forgets one once its ground is in sight again and it is gone
@@ -76,12 +89,15 @@ public partial class Minimap : Control
             if (!_match.IsFriendly(building.FactionId) && !_match.IsHidden(building))
                 _scouted[building.Id] = (building.FactionId, building.Anchor, building.Type.Size);
         }
-        foreach (var (id, seen) in _scouted.ToList())
+        _forgotten.Clear();
+        foreach (var (id, seen) in _scouted)
         {
             bool visibleNow = sim.GetBuilding(id) is { } b && !_match.IsHidden(b);
             if (!visibleNow && _match.Fog.IsAnyVisible(seen.Anchor, seen.Size))
-                _scouted.Remove(id);
+                _forgotten.Add(id);
         }
+        foreach (int id in _forgotten)
+            _scouted.Remove(id);
     }
 
     /// <summary>Pixels per tile, keeping the map's proportions inside the control.</summary>

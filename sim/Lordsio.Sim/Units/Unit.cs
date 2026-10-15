@@ -1,4 +1,5 @@
 using System.Numerics;
+using Lordsio.Sim.World;
 using Lordsio.Sim.Core;
 
 namespace Lordsio.Sim.Units;
@@ -88,6 +89,9 @@ public sealed class Unit : Entity
     /// <summary>Ticks until the unit may strike again (views time the wind-up of a blow by it).</summary>
     public int AttackCooldownTicks { get; internal set; }
     internal int ChaseRepathTicks { get; set; }
+
+    /// <summary>The target cell of the group order the unit marches under, whose route field it may reuse; null alone.</summary>
+    internal Cell? MarchGoal { get; set; }
 
     /// <summary>Consecutive progress checks in which the unit barely moved.</summary>
     internal int StuckChecks { get; set; }

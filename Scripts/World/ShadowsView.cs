@@ -22,8 +22,6 @@ public partial class ShadowsView : CanvasGroup
     private UnitsView _units = null!;
     private BuildingsView _buildings = null!;
     private Node2D _drawer = null!;
-    private Texture2D _unitBody = null!;
-    private Texture2D _unitTeam = null!;
     private float _lean = -0.6f;
     private float _length = 0.55f;
     private float _alpha = DayAlpha;
@@ -33,8 +31,6 @@ public partial class ShadowsView : CanvasGroup
         _match = match;
         _units = units;
         _buildings = buildings;
-        _unitBody = GD.Load<Texture2D>(Sprites.Units);
-        _unitTeam = GD.Load<Texture2D>(Sprites.UnitsTeam);
         _drawer = new Node2D { Name = "Silhouettes" };
         _drawer.Draw += DrawShadows;
         AddChild(_drawer);
@@ -83,19 +79,26 @@ public partial class ShadowsView : CanvasGroup
             _drawer.DrawTextureRectRegion(body, rect, region, Colors.Black);
             _drawer.DrawTextureRectRegion(team, rect, region, Colors.Black);
         }
+        // All the footings, then all the silhouettes (from one sheet): black on black in one group, the order does not
+        // show, and the renderer batches each pass instead of switching for every soldier.
+        foreach (var view in _units.Views)
+        {
+            if (!view.Visible)
+                continue;
+            _drawer.DrawSetTransform(view.Position + view.SpriteOffset + new Vector2(0, 0.5f), 0f, new Vector2(1f, 0.45f));
+            _drawer.DrawCircle(Vector2.Zero, 4f, Colors.Black);
+        }
         int w = ArtLayout.UnitCellWidth, h = ArtLayout.UnitCellHeight;
+        var silhouettes = _match.UnitSheets.For(Colors.White);
         foreach (var view in _units.Views)
         {
             if (!view.Visible)
                 continue;
             var feet = view.Position + view.SpriteOffset;
-            _drawer.DrawSetTransform(feet + new Vector2(0, 0.5f), 0f, new Vector2(1f, 0.45f));
-            _drawer.DrawCircle(Vector2.Zero, 4f, Colors.Black);
             var region = new Rect2(view.Frame * w, view.Row * h, w, h);
             var rect = new Rect2(-ArtLayout.UnitFeet.X, -ArtLayout.UnitFeet.Y, w, h);
             _drawer.DrawSetTransformMatrix(new Transform2D(view.FacingLeft ? Vector2.Left : Vector2.Right, shear, feet));
-            _drawer.DrawTextureRectRegion(_unitBody, rect, region, Colors.Black);
-            _drawer.DrawTextureRectRegion(_unitTeam, rect, region, Colors.Black);
+            _drawer.DrawTextureRectRegion(silhouettes, rect, region, Colors.Black);
         }
         _drawer.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
     }

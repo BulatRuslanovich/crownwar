@@ -78,6 +78,9 @@ public partial class MatchController : Node2D
 
     public Simulation Sim { get; private set; } = null!;
 
+    /// <summary>The unit sheets in each faction's colour, shared by the unit, shadow and effect views.</summary>
+    public Units.UnitSheets UnitSheets { get; } = new();
+
     /// <summary>What the local team sees; enemies outside it are not drawn, heard or clickable.</summary>
     public Visibility Fog { get; private set; } = null!;
     private int _fogTick = -1;
@@ -225,7 +228,11 @@ public partial class MatchController : Node2D
     }
 
     /// <summary>Leaving the match (menu, restart, quit): the host's save keeps everything played so far.</summary>
-    public override void _ExitTree() => Net?.Dispose();
+    public override void _ExitTree()
+    {
+        Net?.Dispose();
+        UnitSheets.Dispose();
+    }
 
     public override void _Process(double delta)
     {

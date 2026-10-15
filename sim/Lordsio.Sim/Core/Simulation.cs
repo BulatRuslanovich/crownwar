@@ -134,6 +134,7 @@ public sealed partial class Simulation
 
         foreach (var unit in _units)
             _combat.UpdateBehaviour(unit, _units, _buildings, Tick);
+        _combat.ResumeMarches();
         foreach (var building in _buildings)
             _combat.UpdateTower(building, _units, Tick);
         foreach (var unit in _units)

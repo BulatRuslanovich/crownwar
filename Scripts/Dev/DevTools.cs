@@ -35,6 +35,7 @@ namespace Lordsio.Dev;
 ///   --demo-scoreboard        keep the players table (Tab) open
 ///   --demo-diplomacy         open the diplomacy panel (P)
 ///   --demo-far-build         order a barracks far from the player's troops (a soldier walks over to build it)
+///   --perf-log=&lt;s&gt;           measure s seconds of frames (vsync off, after a warm-up), print the numbers and quit
 /// </summary>
 public static class DevTools
 {
@@ -102,6 +103,8 @@ public static class DevTools
         }
         if (args.Contains("--debug-hud"))
             match.GetNode<Godot.CanvasLayer>("DebugHud").Visible = true;
+        if (Arg(args, "--perf-log") is { } perf)
+            PerfProbe.Start(match, double.Parse(perf, CultureInfo.InvariantCulture));
     }
 
     /// <summary>--demo-select=TYPE: shows a building's panel in a screenshot.</summary>

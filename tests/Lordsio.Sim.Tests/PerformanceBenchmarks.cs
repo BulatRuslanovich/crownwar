@@ -56,6 +56,37 @@ public class PerformanceBenchmarks
         Assert.That(ticks.Average(), Is.LessThan(Simulation.TickDuration * 1000), "a tick must fit its real-time budget");
     }
 
+    /// <summary>
+    /// The --demo-army stress scene on a generated map: two armies clash by a castle with a lake beside it, so chases
+    /// and marches after a fight go a long way round. Reports the worst ticks, where hitches come from.
+    /// </summary>
+    [TestCase(150)]
+    public void ArmiesClashOnAGeneratedMap(int perSide)
+    {
+        var sim = new Simulation(MapGenerator.Generate(5), TestSim.RealRules(), new MatchSetup(4, 5));
+        var bots = Enumerable.Range(1, 3).Select(i => new AI.BotBrain(sim, i, AI.BotDifficulty.Normal, 5 + i)).ToList();
+        var center = TestSim.CapitalOf(sim, 0).Position;
+        var types = sim.Rules.Units.All.SelectMany(t => t.Id == "infantry" ? new[] { t.Id, t.Id } : new[] { t.Id }).ToArray();
+        var west = sim.Map.FindNearestInComponent(Cell.FromPosition(center + new Vector2(-8f, 0f)), TileGrid.AnyComponent, 12)!.Value.Center;
+        var east = sim.Map.FindNearestInComponent(Cell.FromPosition(center + new Vector2(8f, 0f)), TileGrid.AnyComponent, 12)!.Value.Center;
+        var a = Formation.ComputeSlots(sim.Map, west, perSide, 0.36f).Select((p, i) => sim.SpawnUnit(types[i % types.Length], 0, p).Id).ToList();
+        var b = Formation.ComputeSlots(sim.Map, east, perSide, 0.36f).Select((p, i) => sim.SpawnUnit(types[i % types.Length], 1, p).Id).ToList();
+        sim.Issue(new MoveCommand(0, a, east, MoveMode.AttackMove));
+        sim.Issue(new MoveCommand(1, b, west, MoveMode.AttackMove));
+
+        var ticks = new List<(double Ms, int Tick)>();
+        for (int i = 0; i < 40 * Simulation.TicksPerSecond; i++)
+        {
+            long start = Stopwatch.GetTimestamp();
+            sim.Step();
+            ticks.Add((Stopwatch.GetElapsedTime(start).TotalMilliseconds, sim.Tick));
+            foreach (var bot in bots)
+                bot.Update();
+        }
+        var worst = ticks.OrderByDescending(t => t.Ms).Take(6).Select(t => $"t{t.Tick} {t.Ms:0.0}");
+        TestContext.Out.WriteLine($"{perSide * 2} units by a lake: avg {ticks.Average(t => t.Ms):0.00} ms; worst ticks (ms): {string.Join(", ", worst)}");
+    }
+
     /// <summary>A realistic load: four bots playing a whole match, ticks timed together with bot decisions.</summary>
     [TestCase(1)]
     [TestCase(2)]

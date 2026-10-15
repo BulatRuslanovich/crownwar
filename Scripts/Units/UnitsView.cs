@@ -34,7 +34,7 @@ public partial class UnitsView : Node2D
             if (!_views.TryGetValue(unit.Id, out var view))
             {
                 view = new UnitView { Name = $"Unit{unit.Id}" };
-                view.Initialize(unit);
+                view.Initialize(unit, _match.UnitSheets.For(FactionColors.Get(unit.FactionId)));
                 _views.Add(unit.Id, view);
                 AddChild(view);
             }
@@ -55,7 +55,23 @@ public partial class UnitsView : Node2D
         foreach (int id in _gone)
             _views.Remove(id);
 
-        QueueRedraw(); // route overlay follows the units every frame
+        // The routes of selected marching units follow them every frame; once none marches, one more draw clears them.
+        bool routes = AnySelectedMarching();
+        if (routes || _drewRoutes)
+            QueueRedraw();
+        _drewRoutes = routes;
+    }
+
+    private bool _drewRoutes;
+
+    private bool AnySelectedMarching()
+    {
+        foreach (int id in _match.Selection.Ids)
+        {
+            if (_match.Sim.GetUnit(id) is { State: UnitState.Moving, Target: null })
+                return true;
+        }
+        return false;
     }
 
     /// <summary>Strike and hit animations; the damage itself was already dealt by the simulation.</summary>
