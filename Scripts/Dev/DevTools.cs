@@ -2,12 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using Lordsio.Core;
 using Lordsio.Sim.Buildings;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.World;
 using SimVector2 = System.Numerics.Vector2;
 
-namespace Lordsio.Core;
+namespace Lordsio.Dev;
 
 /// <summary>
 /// Developer command-line options (passed after "--"), used for automated screenshots and smoke runs.
@@ -37,6 +38,9 @@ namespace Lordsio.Core;
 /// </summary>
 public static class DevTools
 {
+    /// <summary>Whether a flag (an option without a value) was given.</summary>
+    public static bool Has(string[] args, string flag) => args.Contains(flag);
+
     public static bool WantsDirectStart(string[] args) =>
         args.Any(a => a == "--skip-menu" || a.StartsWith("--demo-", StringComparison.Ordinal)
                       || a.StartsWith("--seed=", StringComparison.Ordinal)
@@ -144,7 +148,7 @@ public static class DevTools
                                          && !Building.FootprintOf(c, size).Any(taken.Contains));
                 if (anchor == default)
                     continue;
-                sim.Issue(new BuildCommand(match.LocalFactionId, type, anchor));
+                match.Issue(new BuildCommand(match.LocalFactionId, type, anchor));
                 // Keep a one-tile gap so the second building does not clip the first one's footprint.
                 for (int y = -1; y <= size; y++)
                     for (int x = -1; x <= size; x++)
@@ -201,8 +205,8 @@ public static class DevTools
         int enemy = sim.Factions.First(f => f.Id != match.LocalFactionId).Id;
         var b = Sim.Units.Formation.ComputeSlots(sim.Map, east, perSide, 0.36f)
             .Select((p, i) => sim.SpawnUnit(types[i % types.Length], enemy, p).Id).ToList();
-        sim.Issue(new MoveCommand(match.LocalFactionId, a, east, MoveMode.AttackMove));
-        sim.Issue(new MoveCommand(enemy, b, west, MoveMode.AttackMove));
+        match.Issue(new MoveCommand(match.LocalFactionId, a, east, MoveMode.AttackMove));
+        match.Issue(new MoveCommand(enemy, b, west, MoveMode.AttackMove));
     }
 
     private static void DemoMove(MatchController match, string value)

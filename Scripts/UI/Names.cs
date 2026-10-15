@@ -25,12 +25,7 @@ public static class Names
         var slot = slots[faction];
         if (slot.Kind == SlotKind.Bot)
         {
-            return TranslationServer.Translate(slot.Difficulty switch
-            {
-                BotDifficulty.Easy => "NET_SLOT_BOT_EASY",
-                BotDifficulty.Hard => "NET_SLOT_BOT_HARD",
-                _ => "NET_SLOT_BOT_NORMAL",
-            });
+            return TranslationServer.Translate(Difficulties.SlotKey(slot.Difficulty));
         }
         string name = slot.Name.Length > 0 ? slot.Name : GameSettings.Instance?.PlayerName ?? "";
         return faction == match.LocalFactionId ? $"{name} {TranslationServer.Translate("NET_YOU")}".Trim() : name;

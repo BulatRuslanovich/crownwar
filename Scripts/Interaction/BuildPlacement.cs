@@ -3,6 +3,7 @@ using Lordsio.Core;
 using Lordsio.Sim.Buildings;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.World;
+using Lordsio.World;
 
 namespace Lordsio.Interaction;
 
@@ -131,8 +132,8 @@ public partial class BuildPlacement : Node2D
             if (plan.FactionId != _match.LocalFactionId)
                 continue;
             var rect = new Rect2(plan.Anchor.X * t, plan.Anchor.Y * t, plan.Type.Size * t, plan.Type.Size * t);
-            var picture = GD.Load<Texture2D>($"res://Assets/Sprites/{plan.Type.Id}.png");
-            var size = new Vector2(picture.GetWidth() / (float)Dev.ArtLayout.BuildingFrames, picture.GetHeight());
+            var picture = GD.Load<Texture2D>(Sprites.Path(plan.Type.Id));
+            var size = new Vector2(picture.GetWidth() / (float)ArtLayout.BuildingFrames, picture.GetHeight());
             var bottom = new Vector2(rect.GetCenter().X, rect.End.Y);
             DrawTextureRectRegion(picture, new Rect2(bottom - new Vector2(size.X / 2f, size.Y), size), new Rect2(Vector2.Zero, size),
                 new Color(1f, 1f, 1f, 0.4f));

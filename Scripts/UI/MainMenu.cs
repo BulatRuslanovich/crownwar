@@ -9,7 +9,7 @@ namespace Lordsio.UI;
 /// <summary>Title screen with match setup (opponents, difficulty, seed), settings and quit.</summary>
 public partial class MainMenu : Control
 {
-    private static readonly BotDifficulty[] Difficulties = { BotDifficulty.Easy, BotDifficulty.Normal, BotDifficulty.Hard };
+    private Button _startButton = null!;
 
     private MatchConfig _initial = MatchConfig.Default;
     private SpinBox _bots = null!;
@@ -48,15 +48,14 @@ public partial class MainMenu : Control
         _help = GetNode<HowToPlay>("HowToPlay");
         GetNode<Label>("Version").Text = "v" + Net.GameVersion.Number;
 
-        _difficulty.AddItem("DIFFICULTY_EASY");
-        _difficulty.AddItem("DIFFICULTY_NORMAL");
-        _difficulty.AddItem("DIFFICULTY_HARD");
+        foreach (var difficulty in Difficulties.All)
+            _difficulty.AddItem(Difficulties.MenuKey(difficulty));
 
         _bots.Value = _initial.BotCount;
-        _difficulty.Selected = Math.Max(0, Array.IndexOf(Difficulties, _initial.Difficulty));
+        _difficulty.Selected = Math.Max(0, Array.IndexOf(Difficulties.All, _initial.Difficulty));
         _seed.Text = _initial.Seed?.ToString(CultureInfo.InvariantCulture) ?? "";
 
-        GetNode<Button>("Center/Panel/Rows/Start").Pressed += Start;
+        (_startButton = GetNode<Button>("Center/Panel/Rows/Start")).Pressed += Start;
         GetNode<Button>("Center/Panel/Rows/Network").Pressed += () => NetworkRequested?.Invoke();
         GetNode<Button>("Center/Panel/Rows/Help").Pressed += () =>
         {
@@ -72,12 +71,12 @@ public partial class MainMenu : Control
         GetNode<Button>("Center/Panel/Rows/Quit").Pressed += () => QuitRequested?.Invoke();
         _settings.Closed += () => _menuPanel.Visible = true;
         _settings.Visible = false;
-        GetNode<Button>("Center/Panel/Rows/Start").GrabFocus();
+        _startButton.GrabFocus();
     }
 
     private void Start()
     {
         int? seed = int.TryParse(_seed.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int s) ? s : null;
-        StartRequested?.Invoke(MatchConfig.Single((int)_bots.Value, Difficulties[Math.Max(0, _difficulty.Selected)], seed));
+        StartRequested?.Invoke(MatchConfig.Single((int)_bots.Value, Difficulties.All[Math.Max(0, _difficulty.Selected)], seed));
     }
 }

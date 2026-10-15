@@ -48,7 +48,7 @@ public partial class NetMenu : Control
         _host = GetNode<Button>("Center/Panel/Rows/Host");
         _join = GetNode<Button>("Center/Panel/Rows/AddressRow/Join");
 
-        _name.Text = GameSettings.Instance?.PlayerName ?? "Player";
+        _name.Text = GameSettings.Instance?.PlayerName ?? PlayerNames.Fallback;
         _status.Text = _problemKey != null ? Tr(_problemKey) : "";
 
         _host.Pressed += Host;

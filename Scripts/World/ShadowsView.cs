@@ -1,7 +1,6 @@
 using Godot;
 using Lordsio.Buildings;
 using Lordsio.Core;
-using Lordsio.Dev;
 using Lordsio.Units;
 
 namespace Lordsio.World;
@@ -34,8 +33,8 @@ public partial class ShadowsView : CanvasGroup
         _match = match;
         _units = units;
         _buildings = buildings;
-        _unitBody = GD.Load<Texture2D>("res://Assets/Sprites/units.png");
-        _unitTeam = GD.Load<Texture2D>("res://Assets/Sprites/units_team.png");
+        _unitBody = GD.Load<Texture2D>(Sprites.Units);
+        _unitTeam = GD.Load<Texture2D>(Sprites.UnitsTeam);
         _drawer = new Node2D { Name = "Silhouettes" };
         _drawer.Draw += DrawShadows;
         AddChild(_drawer);
@@ -57,7 +56,7 @@ public partial class ShadowsView : CanvasGroup
         float lean = (day - 0.5f) * 1.8f;
         float length = 0.35f + 0.4f * Mathf.Abs(2f * day - 1f);
         float alpha = sim.IsNight ? NightAlpha : DayAlpha;
-        float k = 1f - Mathf.Exp(-Follow * delta);
+        float k = Smoothing.Factor(Follow, delta);
         if (!sim.IsNight)
         {
             _lean = Mathf.Lerp(_lean, lean, k);

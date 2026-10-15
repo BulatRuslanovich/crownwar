@@ -66,8 +66,8 @@ public partial class MatchSounds : Node
                 bool building = _match.Sim.GetBuilding(hit.TargetId) != null;
                 PlayAt(building ? Sound.BuildingHit : hit.Ranged ? Sound.ArrowHit : Sound.SwordHit, hit.Position, -4f);
                 break;
-            case ProjectileFired { Splash: true } throw_:
-                PlayAt(Sound.CatapultShot, throw_.Position, -4f);
+            case ProjectileFired { Splash: true } stone:
+                PlayAt(Sound.CatapultShot, stone.Position, -4f);
                 break;
             case ProjectileFired shot:
                 PlayAt(Sound.ArrowShot, shot.Position, -8f);
@@ -169,9 +169,7 @@ public partial class MatchSounds : Node
 
     private bool IsNearScreen(Vector2 world, float margin)
     {
-        var camera = _match.Camera;
-        var half = camera.GetViewportRect().Size / (2f * camera.ZoomLevel);
-        var center = camera.GetScreenCenterPosition();
-        return Mathf.Abs(world.X - center.X) <= half.X + margin && Mathf.Abs(world.Y - center.Y) <= half.Y + margin;
+        var view = _match.Camera.VisibleRect.Grow(margin);
+        return world.X >= view.Position.X && world.X <= view.End.X && world.Y >= view.Position.Y && world.Y <= view.End.Y;
     }
 }

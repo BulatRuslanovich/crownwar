@@ -66,8 +66,7 @@ public partial class ProjectilesView : Node2D
         if (night <= 0.01f)
             return;
         // Burning pitch: a glow and a trail of embers along the arc, undoing the night's darkening.
-        var boost = _match.LightBoost;
-        Color Lit(Color c, float a) => new(c.R * boost.R, c.G * boost.G, c.B * boost.B, a * night);
+        Color Lit(Color c, float a) => _match.Lit(c) with { A = a * night };
         var direction = SimConvert.ToWorld(p.Target.Position) - SimConvert.ToWorld(p.Origin);
         for (int i = 1; i <= 4; i++)
         {

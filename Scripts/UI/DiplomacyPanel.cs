@@ -15,10 +15,10 @@ namespace Lordsio.UI;
 /// </summary>
 public partial class DiplomacyPanel : PanelContainer
 {
-    private static readonly Color WarColor = new("ff8a80");
+    private static readonly Color WarColor = UiPalette.Problem;
     private static readonly Color PeaceColor = new("9be38a");
     private static readonly Color AllyColor = new("8fc8ff");
-    private static readonly Color PendingColor = new("ffe066");
+    private static readonly Color PendingColor = UiPalette.Highlight;
 
     private MatchController _match = null!;
     private readonly List<Row> _rows = new();
@@ -93,13 +93,13 @@ public partial class DiplomacyPanel : PanelContainer
         if (stance == Stance.Ally)
             return (TranslationServer.Translate("DIPLO_ALLY"), AllyColor);
         if (sim.SecondsToWar(me, faction) is { } war)
-            return (string.Format(TranslationServer.Translate("DIPLO_WAR_IN"), Clock(war)), PendingColor);
+            return (string.Format(TranslationServer.Translate("DIPLO_WAR_IN"), TimeFormat.MinSecLeft(war)), PendingColor);
         if (stance == Stance.Peace)
             return (TranslationServer.Translate("DIPLO_PEACE"), PeaceColor);
         if (sim.HasPeaceOffer(faction, me))
-            return (string.Format(TranslationServer.Translate("DIPLO_THEY_OFFER"), Clock(sim.PeaceOfferSecondsLeft(faction, me))), PendingColor);
+            return (string.Format(TranslationServer.Translate("DIPLO_THEY_OFFER"), TimeFormat.MinSecLeft(sim.PeaceOfferSecondsLeft(faction, me))), PendingColor);
         if (sim.HasPeaceOffer(me, faction))
-            return (string.Format(TranslationServer.Translate("DIPLO_YOU_OFFERED"), Clock(sim.PeaceOfferSecondsLeft(me, faction))), PendingColor);
+            return (string.Format(TranslationServer.Translate("DIPLO_YOU_OFFERED"), TimeFormat.MinSecLeft(sim.PeaceOfferSecondsLeft(me, faction))), PendingColor);
         return (TranslationServer.Translate("DIPLO_WAR"), WarColor);
     }
 
@@ -194,7 +194,7 @@ public partial class DiplomacyPanel : PanelContainer
         _popupFaction = Visible ? -1 : _rows.Select(r => r.Faction).FirstOrDefault(f => sim.HasPeaceOffer(f, me), -1);
         _popup.Visible = _popupFaction >= 0 && !_match.IsShowcase;
         if (_popup.Visible)
-            _popupText.Text = string.Format(Tr("DIPLO_POPUP"), Names.Player(_match, _popupFaction), Clock(sim.PeaceOfferSecondsLeft(_popupFaction, me)));
+            _popupText.Text = string.Format(Tr("DIPLO_POPUP"), Names.Player(_match, _popupFaction), TimeFormat.MinSecLeft(sim.PeaceOfferSecondsLeft(_popupFaction, me)));
     }
 
     private void Answer(bool accept)
@@ -210,10 +210,4 @@ public partial class DiplomacyPanel : PanelContainer
         return button;
     }
 
-    /// <summary>Seconds as m:ss, rounded up (so "0:00" never shows while time is left).</summary>
-    private static string Clock(float seconds)
-    {
-        int s = Mathf.CeilToInt(seconds);
-        return $"{s / 60}:{s % 60:00}";
-    }
 }

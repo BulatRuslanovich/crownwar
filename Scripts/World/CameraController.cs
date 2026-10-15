@@ -84,6 +84,16 @@ public partial class CameraController : Camera2D
         Offset = new Vector2(GD.Randf() * 2f - 1f, GD.Randf() * 2f - 1f) * strength;
     }
 
+    /// <summary>The part of the world on screen now (at the current zoom), in world pixels.</summary>
+    public Rect2 VisibleRect
+    {
+        get
+        {
+            var size = GetViewportRect().Size / ZoomLevel;
+            return new Rect2(GetScreenCenterPosition() - size / 2f, size);
+        }
+    }
+
     public void CenterOn(Vector2 worldPosition)
     {
         Position = worldPosition;

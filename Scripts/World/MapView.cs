@@ -1,6 +1,5 @@
 using Godot;
 using Lordsio.Core;
-using Lordsio.Dev;
 using Lordsio.Sim.World;
 
 namespace Lordsio.World;
@@ -95,7 +94,7 @@ public partial class MapView : TileMapLayer
             int mask = 0;
             for (int i = 0; i < 8; i++)
             {
-                var (dx, dy) = ArtGenerator.BlendNeighbours[i];
+                var (dx, dy) = ArtLayout.BlendNeighbours[i];
                 int x = cell.X + dx, y = cell.Y + dy;
                 if (map.InBounds(x, y) && biomes[y * map.Width + x] == other
                     && map.GetTerrain(new Cell(x, y)) is Terrain.Grass or Terrain.Forest or Terrain.Road)
@@ -197,7 +196,7 @@ public partial class MapView : TileMapLayer
             // modulo 2, so the pattern repeats only every two tiles.
             case Terrain.Forest:
                 return new Vector2I(NeighbourMask(map, cell, (m, x, y) => !m.InBounds(x, y) || m.GetTerrain(new Cell(x, y)) == Terrain.Forest),
-                    ArtLayout.ForestRangeRow + (cell.X % 2 + cell.Y % 2 * 2) * ArtLayout.TileFrames);
+                    ArtLayout.ForestRangeRow + (cell.X % ArtLayout.ForestPeriod + cell.Y % ArtLayout.ForestPeriod * ArtLayout.ForestPeriod) * ArtLayout.TileFrames);
             case Terrain.Water:
             case Terrain.Bridge: // the deck is a layer of its own, over the water
                 return new Vector2I(variant, ArtLayout.WaterRow);

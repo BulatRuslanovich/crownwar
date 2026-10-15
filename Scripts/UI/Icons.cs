@@ -1,5 +1,5 @@
 using Godot;
-using Lordsio.Dev;
+using Lordsio.World;
 
 namespace Lordsio.UI;
 
@@ -15,19 +15,19 @@ public static class Icons
     {
         var region = new Rect2I(ArtLayout.FrameIdle * ArtLayout.UnitCellWidth, ArtLayout.UnitRow(unitTypeId) * ArtLayout.UnitCellHeight,
             ArtLayout.UnitCellWidth, ArtLayout.UnitCellHeight);
-        return Compose("res://Assets/Sprites/units.png", "res://Assets/Sprites/units_team.png", region, team, scale);
+        return Compose(Sprites.Units, Sprites.UnitsTeam, region, team, scale);
     }
 
     /// <summary>The building sprite (its sheet's first frame) at its natural size (or scaled), tinted for its owner.</summary>
     public static Texture2D Building(string buildingTypeId, Color team, int scale = 1) =>
-        Compose($"res://Assets/Sprites/{buildingTypeId}.png", $"res://Assets/Sprites/{buildingTypeId}_team.png", null, team, scale,
+        Compose(Sprites.Path(buildingTypeId), Sprites.Path(buildingTypeId, "_team"), null, team, scale,
             frames: ArtLayout.BuildingFrames);
 
     /// <summary>A 12×12 gold coin, enlarged <paramref name="scale"/> times.</summary>
     public static Texture2D Coin(int scale = 2)
     {
         var rim = new Color("8a5a14");
-        var face = new Color("f2c230");
+        var face = UiPalette.Gold;
         var shine = new Color("fff1a8");
         var shade = new Color("c99418");
         var image = Image.CreateEmpty(12, 12, false, Image.Format.Rgba8);

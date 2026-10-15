@@ -14,10 +14,11 @@ namespace Lordsio.UI;
 /// </summary>
 public partial class EndScreen : CanvasLayer
 {
-    private static readonly Color VictoryColor = new("ffe066");
-    private static readonly Color DefeatColor = new("ff8a80");
-    private static readonly Color LocalColor = new("ffe066");
-    private static readonly Color Muted = new(0.95f, 0.9f, 0.8f, 0.7f);
+    private Button _menuButton = null!;
+    private static readonly Color VictoryColor = UiPalette.Highlight;
+    private static readonly Color DefeatColor = UiPalette.Problem;
+    private static readonly Color LocalColor = UiPalette.Highlight;
+    private static readonly Color Muted = UiPalette.TextMuted;
 
     private MatchController _match = null!;
     private Label _title = null!;
@@ -42,7 +43,7 @@ public partial class EndScreen : CanvasLayer
         _restart = GetNode<Button>("Dim/Center/Panel/Rows/Buttons/Restart");
         _restart.Pressed += () => _match.RequestRestart();
         _restart.Visible = _match.Net == null; // a network match cannot be replayed alone
-        GetNode<Button>("Dim/Center/Panel/Rows/Buttons/Menu").Pressed += () => _match.RequestMenu();
+        (_menuButton = GetNode<Button>("Dim/Center/Panel/Rows/Buttons/Menu")).Pressed += () => _match.RequestMenu();
         _watch.Pressed += () => Visible = false;
         BuildDetails(GetNode<VBoxContainer>("Dim/Center/Panel/Rows"));
         Visible = false;
@@ -213,9 +214,9 @@ public partial class EndScreen : CanvasLayer
         _watch.Visible = false;
         _restart.Visible = false;
         Visible = true;
-        GetNode<Button>("Dim/Center/Panel/Rows/Buttons/Menu").GrabFocus();
+        _menuButton.GrabFocus();
     }
 
     private void FocusFirstButton() =>
-        (_restart.Visible ? _restart : GetNode<Button>("Dim/Center/Panel/Rows/Buttons/Menu")).GrabFocus();
+        (_restart.Visible ? _restart : _menuButton).GrabFocus();
 }

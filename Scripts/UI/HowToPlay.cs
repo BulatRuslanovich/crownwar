@@ -6,6 +6,7 @@ namespace Lordsio.UI;
 /// <summary>Rules in brief and the controls, reachable from the main menu and the pause menu.</summary>
 public partial class HowToPlay : Control
 {
+    private Button _backButton = null!;
     private RichTextLabel _text = null!;
 
     /// <summary>Raised when the player closes the panel.</summary>
@@ -14,14 +15,14 @@ public partial class HowToPlay : Control
     public override void _Ready()
     {
         _text = GetNode<RichTextLabel>("Center/Panel/Rows/Text");
-        GetNode<Button>("Center/Panel/Rows/Back").Pressed += Close;
+        (_backButton = GetNode<Button>("Center/Panel/Rows/Back")).Pressed += Close;
         VisibilityChanged += () =>
         {
             if (!Visible)
                 return;
             _text.Text = Tr("HELP_TEXT"); // follows a language change
             _text.ScrollToLine(0);
-            GetNode<Button>("Center/Panel/Rows/Back").GrabFocus();
+            _backButton.GrabFocus();
         };
         _text.Text = Tr("HELP_TEXT");
     }

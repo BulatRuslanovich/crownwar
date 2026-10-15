@@ -10,6 +10,7 @@ namespace Lordsio.UI;
 /// </summary>
 public partial class PauseMenu : CanvasLayer
 {
+    private Button _resumeButton = null!;
     private MatchController _match = null!;
     private Label _pausedBy = null!;
 
@@ -38,7 +39,7 @@ public partial class PauseMenu : CanvasLayer
             _help.Visible = true;
         };
         _help.Closed += () => _menu.Visible = true;
-        GetNode<Button>("Dim/Center/Panel/Rows/Resume").Pressed += () => _match.SetPaused(false);
+        (_resumeButton = GetNode<Button>("Dim/Center/Panel/Rows/Resume")).Pressed += () => _match.SetPaused(false);
         _pausedBy = new Label { HorizontalAlignment = HorizontalAlignment.Center, Visible = false };
         var rows = GetNode<Control>("Dim/Center/Panel/Rows");
         rows.AddChild(_pausedBy);
@@ -67,7 +68,7 @@ public partial class PauseMenu : CanvasLayer
             return; // Esc cancels building placement first
         _match.SetPaused(!_match.IsPaused);
         if (_match.IsPaused)
-            GetNode<Button>("Dim/Center/Panel/Rows/Resume").GrabFocus();
+            _resumeButton.GrabFocus();
         GetViewport().SetInputAsHandled();
     }
 }

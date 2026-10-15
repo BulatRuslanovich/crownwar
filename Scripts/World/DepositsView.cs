@@ -21,7 +21,7 @@ public partial class DepositsView : Node2D
     public void Initialize(MatchController match)
     {
         _match = match;
-        _ore = GD.Load<Texture2D>("res://Assets/Sprites/gold.png");
+        _ore = GD.Load<Texture2D>(Sprites.Path("gold"));
         QueueRedraw();
     }
 

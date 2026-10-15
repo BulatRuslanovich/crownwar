@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using Godot;
 
@@ -133,14 +134,17 @@ public partial class LanDiscovery : Node
     private static IEnumerable<string> BroadcastTargets()
     {
         var targets = new HashSet<string> { "255.255.255.255" };
-        foreach (string address in IP.GetLocalAddresses())
+        foreach (string address in LocalAddresses())
         {
             var parts = address.Split('.');
-            if (parts.Length == 4 && parts[0] != "127" && !(parts[0] == "169" && parts[1] == "254"))
-                targets.Add($"{parts[0]}.{parts[1]}.{parts[2]}.255");
+            targets.Add($"{parts[0]}.{parts[1]}.{parts[2]}.255");
         }
         return targets;
     }
+
+    /// <summary>This PC's IPv4 addresses on the local network (no loopback, no self-assigned 169.254.x.x).</summary>
+    public static IEnumerable<string> LocalAddresses() =>
+        IP.GetLocalAddresses().Where(a => a.Split('.').Length == 4 && !a.StartsWith("127.") && !a.StartsWith("169.254."));
 
     private static string Sanitize(string name) => name.Replace('|', '/');
 }

@@ -67,13 +67,7 @@ public partial class MusicPlayer : Node
     /// <summary>Interleaved stereo samples (left, right, …) as a looping 16-bit stream.</summary>
     private static AudioStreamWav ToStream(float[] samples)
     {
-        var data = new byte[samples.Length * 2];
-        for (int i = 0; i < samples.Length; i++)
-        {
-            short s = (short)Math.Clamp(samples[i] * short.MaxValue, short.MinValue, short.MaxValue);
-            data[i * 2] = (byte)s;
-            data[i * 2 + 1] = (byte)(s >> 8);
-        }
+        var data = Pcm.Encode16(samples, samples.Length);
         return new AudioStreamWav
         {
             Format = AudioStreamWav.FormatEnum.Format16Bits,
@@ -101,24 +95,25 @@ public partial class MusicPlayer : Node
     /// <summary>Silences the music at once (before quitting).</summary>
     public void StopAll()
     {
-        foreach (var player in new[] { _current, _previous })
-        {
-            player.Stop();
-            player.Stream = null;
-        }
+        StopPlayers();
         _playing = null;
         Track = MusicTrack.Menu;
         SetProcess(false);
     }
 
-    /// <summary>Releases the streams with the music (engine objects must not outlive the tree).</summary>
-    public override void _ExitTree()
+    private void StopPlayers()
     {
         foreach (var player in new[] { _current, _previous })
         {
             player.Stop();
             player.Stream = null;
         }
+    }
+
+    /// <summary>Releases the streams with the music (engine objects must not outlive the tree).</summary>
+    public override void _ExitTree()
+    {
+        StopPlayers();
         foreach (var stream in _streams.Values)
             stream.Dispose();
         _streams.Clear();

@@ -1,8 +1,9 @@
 using Godot;
 using Lordsio.Core;
-using Lordsio.Dev;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.Units;
+using Lordsio.UI;
+using Lordsio.World;
 
 namespace Lordsio.Units;
 
@@ -33,7 +34,7 @@ public partial class UnitView : Node2D
     private const float BreathPeriod = 2.6f;
     private const float BreathHold = 0.7f;
 
-    private static readonly Color SelectionColor = new("7cff6b");
+    private static readonly Color SelectionColor = UiPalette.Friendly;
     private static readonly Color BarBack = new(0f, 0f, 0f, 0.7f);
 
     private Unit _unit = null!;
@@ -66,8 +67,8 @@ public partial class UnitView : Node2D
         _drawnHealth = unit.Health;
         // Every soldier breathes in his own time.
         _idleTime = unit.Id * 0.73f % BreathPeriod;
-        _body = MakeSprite("res://Assets/Sprites/units.png", Colors.White);
-        _team = MakeSprite("res://Assets/Sprites/units_team.png", FactionColors.Get(unit.FactionId));
+        _body = MakeSprite(Sprites.Units, Colors.White);
+        _team = MakeSprite(Sprites.UnitsTeam, FactionColors.Get(unit.FactionId));
         _overlay = new Node2D { Name = "Overlay" };
         _overlay.Draw += DrawOverlay;
         AddChild(_overlay);

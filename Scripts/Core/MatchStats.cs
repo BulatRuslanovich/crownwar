@@ -30,15 +30,9 @@ public sealed class MatchStats
     /// <summary>One point of the graph: match time and, per faction id, what the side had.</summary>
     public sealed record Sample(int Seconds, IReadOnlyDictionary<int, (int ArmyValue, int Income, int Buildings)> Sides);
 
-    private readonly int _player;
     private readonly Dictionary<int, Side> _sides = new();
     private readonly List<Sample> _samples = new();
     private int _countedSecond;
-
-    public MatchStats(int playerFactionId)
-    {
-        _player = playerFactionId;
-    }
 
     public IReadOnlyList<Sample> Samples => _samples;
 
@@ -48,14 +42,6 @@ public sealed class MatchStats
             _sides[factionId] = side = new Side();
         return side;
     }
-
-    // The local player's numbers, as before.
-    public int UnitsTrained => Of(_player).Trained;
-    public int UnitsLost => Of(_player).Lost;
-    public int EnemiesKilled => Of(_player).Killed;
-    public int BuildingsBuilt => Of(_player).Built;
-    public int BuildingsLost => Of(_player).BuildingsLost;
-    public int BuildingsDestroyed => Of(_player).Razed;
 
     public void OnSimEvent(SimEvent e)
     {

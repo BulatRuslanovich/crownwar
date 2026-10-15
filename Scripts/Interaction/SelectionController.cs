@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Lordsio.Core;
-using Lordsio.Sim.Core;
 using Lordsio.Sim.Buildings;
+using Lordsio.Sim.Core;
 using Lordsio.Sim.Units;
+using Lordsio.UI;
 
 namespace Lordsio.Interaction;
 
@@ -24,8 +25,8 @@ public partial class SelectionController : Node2D
     private const float DragThreshold = 5f;
     private const float MarkerDuration = 0.45f;
 
-    private static readonly Color MarkerColor = new("7cff6b");
-    private static readonly Color AttackMarkerColor = new("ff5a4a");
+    private static readonly Color MarkerColor = UiPalette.Friendly;
+    private static readonly Color AttackMarkerColor = UiPalette.Hostile;
     private static readonly Color RallyColor = new("ffd84a");
     private static readonly Color BoxFill = new(0.48f, 1f, 0.42f, 0.12f);
     private static readonly Color BoxOutline = new(0.48f, 1f, 0.42f, 0.9f);
@@ -82,7 +83,7 @@ public partial class SelectionController : Node2D
                     QueueRedraw();
                 break;
 
-            case InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } when RallyBuilding() is { } producer:
+            case InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } when _match.SelectedRallyBuilding() is { } producer:
                 SetRally(producer, GetGlobalMousePosition());
                 GetViewport().SetInputAsHandled();
                 break;
@@ -154,7 +155,7 @@ public partial class SelectionController : Node2D
         var clicked = PickUnit(GetGlobalMousePosition());
         if (clicked == null)
             return;
-        var visible = VisibleWorldRect();
+        var visible = _match.Camera.VisibleRect;
         _match.Selection.Select(OwnUnits()
             .Where(u => u.Type.Id == clicked.Type.Id && visible.HasPoint(SimConvert.ToWorld(u.Position)))
             .Select(u => u.Id), additive);
@@ -193,13 +194,6 @@ public partial class SelectionController : Node2D
         _markerTimeLeft = MarkerDuration;
     }
 
-    /// <summary>The selected building, if it is ours and trains troops (so a right click sets its rally point).</summary>
-    private Building? RallyBuilding() =>
-        _match.Selection.BuildingId is { } id && _match.Sim.GetBuilding(id) is { } building
-        && building.FactionId == _match.LocalFactionId && building.Type.Recruits.Count > 0
-            ? building
-            : null;
-
     /// <summary>Right click with a castle or barracks selected: new recruits walk there; on the building itself, they stay put.</summary>
     private void SetRally(Building producer, Vector2 world)
     {
@@ -213,7 +207,7 @@ public partial class SelectionController : Node2D
     public override void _Process(double delta)
     {
         UpdateCursor();
-        if (RallyBuilding() != null)
+        if (_match.SelectedRallyBuilding() != null)
             QueueRedraw(); // the rally flag follows the selection
         // The box is anchored in the world, so it must follow the camera even without mouse motion.
         if (_boxActive)
@@ -227,7 +221,7 @@ public partial class SelectionController : Node2D
     public override void _Draw()
     {
         // The selected castle's or barracks' rally point: a dashed line from the door and a small flag.
-        if (RallyBuilding() is { RallyPoint: { } rally } producer)
+        if (_match.SelectedRallyBuilding() is { RallyPoint: { } rally } producer)
         {
             var from = SimConvert.ToWorld(producer.Position);
             var to = SimConvert.ToWorld(rally);
@@ -258,12 +252,6 @@ public partial class SelectionController : Node2D
 
     private IEnumerable<Unit> EnemyUnits() =>
         _match.Sim.Units.Where(u => _match.Sim.AreEnemies(_match.LocalFactionId, u.FactionId) && !_match.IsHidden(u));
-
-    private Rect2 VisibleWorldRect()
-    {
-        var inverse = GetCanvasTransform().AffineInverse();
-        return new Rect2(inverse * Vector2.Zero, Vector2.Zero).Expand(inverse * GetViewportRect().Size);
-    }
 
     /// <summary>
     /// Building under the point: its footprint, plus the part of the drawing that rises above it

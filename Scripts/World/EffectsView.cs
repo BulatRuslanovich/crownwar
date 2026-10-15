@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Godot;
 using Lordsio.Core;
 using Lordsio.Sim.Core;
+using Lordsio.UI;
 
 namespace Lordsio.World;
 
@@ -44,8 +45,8 @@ public partial class EffectsView : Node2D
     private static readonly Color DustColor = new("b8a789");
     private static readonly Color RubbleColor = new("5f5a54");
     private static readonly Color RubbleLight = new("858079");
-    private static readonly Color SparkleColor = new("ffe066");
-    private static readonly Color PingColor = new("ff5a4a");
+    private static readonly Color SparkleColor = UiPalette.Highlight;
+    private static readonly Color PingColor = UiPalette.Hostile;
     private static readonly Color Blood = new("9c1f1f");
     private static readonly Color HealColor = new("8dff7a");
     private static readonly Color PlateSpark = new("fff6c8");
@@ -95,7 +96,7 @@ public partial class EffectsView : Node2D
                 Add(Kind.Puff, SimConvert.ToWorld(died.Position) + new Vector2(0, -5), 0.6f, 6f, FactionColors.Get(died.FactionId));
                 break;
             case UnitDied died when Ground && died.UnitTypeId.Length > 0:
-                Add(Kind.Corpse, SimConvert.ToWorld(died.Position), CorpseSeconds, Dev.ArtLayout.UnitRow(died.UnitTypeId),
+                Add(Kind.Corpse, SimConvert.ToWorld(died.Position), CorpseSeconds, ArtLayout.UnitRow(died.UnitTypeId),
                     FactionColors.Get(died.FactionId));
                 break;
             case BuildingDestroyed or BuildingDemolished:
@@ -160,109 +161,130 @@ public partial class EffectsView : Node2D
             var rng = new Random(e.Seed);
             switch (e.Kind)
             {
-                case Kind.Spark:
-                    // A star of short rays that shrinks.
-                    float ray = e.Size * (1f - t) + 1f;
-                    for (int r = 0; r < 4; r++)
-                    {
-                        var dir = Vector2.Right.Rotated(Mathf.Pi / 4f * r + rng.NextSingle());
-                        DrawLine(e.Position - dir * ray, e.Position + dir * ray, SparkColor with { A = 1f - t }, 1f);
-                    }
-                    break;
-                case Kind.Dust:
-                case Kind.Puff:
-                    int specks = e.Kind == Kind.Puff ? 9 : 5;
-                    for (int s = 0; s < specks; s++)
-                    {
-                        var dir = Vector2.Right.Rotated(rng.NextSingle() * Mathf.Tau);
-                        var p = e.Position + dir * e.Size * t * (0.5f + rng.NextSingle()) + new Vector2(0, -4f * t);
-                        var color = (s % 3 == 0 && e.Kind == Kind.Puff ? e.Color : DustColor) with { A = 0.8f * (1f - t) };
-                        DrawRect(new Rect2(p, Vector2.One * 2), color);
-                    }
-                    break;
-                case Kind.Corpse:
-                    DrawCorpse(e, t);
-                    break;
+                case Kind.Spark: DrawSpark(e, t, rng); break;
+                case Kind.Dust: DrawSpecks(e, t, rng, count: 5); break;
+                case Kind.Puff: DrawSpecks(e, t, rng, count: 9); break;
+                case Kind.Corpse: DrawCorpse(e, t); break;
                 case Kind.Debris:
-                case Kind.Chunks:
-                    DrawDebris(e, t, rng);
-                    break;
-                case Kind.Flash:
-                    // Bright against the night too: the world's darkening is undone for it.
-                    var boost = _match.LightBoost;
-                    var flash = new Color(e.Color.R * boost.R, e.Color.G * boost.G, e.Color.B * boost.B, 1f - t);
-                    DrawCircle(e.Position, e.Size * (0.5f + 0.5f * t), flash);
-                    DrawCircle(e.Position, e.Size * 0.4f * (1f - t), new Color(boost.R, boost.G, boost.B));
-                    break;
-                case Kind.Crater:
-                    DrawCrater(e, rng);
-                    break;
-                case Kind.Heal:
-                    // Three small crosses drifting up and fading, bright even at night.
-                    var glow = _match.LightBoost;
-                    var cross = new Color(e.Color.R * glow.R, e.Color.G * glow.G, e.Color.B * glow.B, 1f - t);
-                    for (int s = 0; s < 3; s++)
-                    {
-                        var p = (e.Position + new Vector2((rng.NextSingle() - 0.5f) * 10f, -10f * t - s * 3f)).Round();
-                        DrawRect(new Rect2(p + new Vector2(-1, 0), new Vector2(3, 1)), cross);
-                        DrawRect(new Rect2(p + new Vector2(0, -1), new Vector2(1, 3)), cross);
-                    }
-                    break;
-                case Kind.Impact:
-                    // A flattened ring of dust spreading over the splash area, with specks thrown out.
-                    DrawSetTransform(e.Position, 0f, new Vector2(1f, 0.5f));
-                    DrawArc(Vector2.Zero, e.Size * (0.3f + 0.7f * t), 0f, Mathf.Tau, 24, DustColor with { A = 0.7f * (1f - t) }, 2f);
-                    DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
-                    for (int s = 0; s < 10; s++)
-                    {
-                        var dir = Vector2.Right.Rotated(rng.NextSingle() * Mathf.Tau);
-                        var p = e.Position + new Vector2(dir.X, dir.Y * 0.5f) * e.Size * t * (0.4f + rng.NextSingle()) + new Vector2(0, -8f * t);
-                        DrawRect(new Rect2(p, Vector2.One * 2), DustColor with { A = 0.8f * (1f - t) });
-                    }
-                    break;
-                case Kind.Collapse:
-                    // A dust cloud billowing out of the footprint, with debris thrown up and falling.
-                    for (int s = 0; s < 40; s++)
-                    {
-                        var dir = Vector2.Right.Rotated(rng.NextSingle() * Mathf.Tau);
-                        float dist = e.Size * (0.3f + 1.2f * t) * rng.NextSingle();
-                        var p = e.Position + dir * dist + new Vector2(0, -6f * t);
-                        DrawRect(new Rect2(p, Vector2.One * (2 + rng.Next(3))), DustColor with { A = 0.7f * (1f - t) });
-                    }
-                    for (int s = 0; s < 10; s++)
-                    {
-                        float vx = (rng.NextSingle() - 0.5f) * 60f, vy = -40f - rng.NextSingle() * 40f;
-                        float time = e.Age;
-                        var p = e.Position + new Vector2(vx * time, vy * time + 90f * time * time);
-                        DrawRect(new Rect2(p, Vector2.One * 2), RubbleColor with { A = 1f - t });
-                    }
-                    break;
-                case Kind.Rubble:
-                    // Ruins fade away over the last few seconds.
-                    float alpha = Mathf.Clamp((e.Duration - e.Age) / 5f, 0f, 1f);
-                    for (int s = 0; s < (int)(e.Size * 1.5f); s++)
-                    {
-                        var p = e.Position + new Vector2((rng.NextSingle() - 0.5f) * e.Size * 2f, (rng.NextSingle() - 0.5f) * e.Size * 1.6f);
-                        var color = (s % 4 == 0 ? RubbleLight : RubbleColor) with { A = alpha };
-                        DrawRect(new Rect2(p, new Vector2(2 + rng.Next(4), 2 + rng.Next(2))), color);
-                    }
-                    break;
-                case Kind.Sparkle:
-                    for (int s = 0; s < 12; s++)
-                    {
-                        float angle = s / 12f * Mathf.Tau;
-                        var p = e.Position + Vector2.Right.Rotated(angle) * e.Size * (0.6f + 0.8f * t) + new Vector2(0, -e.Size * 0.6f);
-                        DrawRect(new Rect2(p, Vector2.One * 2), e.Color with { A = 1f - t });
-                    }
-                    break;
-                case Kind.Ping:
-                    for (int ring = 0; ring < 2; ring++)
-                    {
-                        float k = (t * 2f + ring * 0.5f) % 1f;
-                        DrawArc(e.Position, 4f + e.Size * k, 0f, Mathf.Tau, 32, e.Color with { A = 1f - k }, 2f / _match.Camera.ZoomLevel);
-                    }
-                    break;
+                case Kind.Chunks: DrawDebris(e, t, rng); break;
+                case Kind.Flash: DrawFlash(e, t); break;
+                case Kind.Crater: DrawCrater(e, rng); break;
+                case Kind.Heal: DrawHeal(e, t, rng); break;
+                case Kind.Impact: DrawImpact(e, t, rng); break;
+                case Kind.Collapse: DrawCollapse(e, t, rng); break;
+                case Kind.Rubble: DrawRubble(e, rng); break;
+                case Kind.Sparkle: DrawSparkle(e, t); break;
+                case Kind.Ping: DrawPing(e, t); break;
             }
+        }
+    }
+
+    /// <summary>A star of short rays that shrinks.</summary>
+    private void DrawSpark(Effect e, float t, Random rng)
+    {
+        float ray = e.Size * (1f - t) + 1f;
+        for (int r = 0; r < 4; r++)
+        {
+            var dir = Vector2.Right.Rotated(Mathf.Pi / 4f * r + rng.NextSingle());
+            DrawLine(e.Position - dir * ray, e.Position + dir * ray, SparkColor with { A = 1f - t }, 1f);
+        }
+    }
+
+    /// <summary>Dust kicked up by a blow (or a puff where a unit fell, some specks in the colour of its blood).</summary>
+    private void DrawSpecks(Effect e, float t, Random rng, int count)
+    {
+        bool puff = e.Kind == Kind.Puff;
+        for (int s = 0; s < count; s++)
+        {
+            var dir = Vector2.Right.Rotated(rng.NextSingle() * Mathf.Tau);
+            var p = e.Position + dir * e.Size * t * (0.5f + rng.NextSingle()) + new Vector2(0, -4f * t);
+            var color = (s % 3 == 0 && puff ? e.Color : DustColor) with { A = 0.8f * (1f - t) };
+            DrawRect(new Rect2(p, Vector2.One * 2), color);
+        }
+    }
+
+    /// <summary>A stone's flash, bright against the night too: the world's darkening is undone for it.</summary>
+    private void DrawFlash(Effect e, float t)
+    {
+        DrawCircle(e.Position, e.Size * (0.5f + 0.5f * t), _match.Lit(e.Color) with { A = 1f - t });
+        DrawCircle(e.Position, e.Size * 0.4f * (1f - t), _match.Lit(Colors.White));
+    }
+
+    /// <summary>Three small crosses drifting up and fading, bright even at night.</summary>
+    private void DrawHeal(Effect e, float t, Random rng)
+    {
+        var cross = _match.Lit(e.Color) with { A = 1f - t };
+        for (int s = 0; s < 3; s++)
+        {
+            var p = (e.Position + new Vector2((rng.NextSingle() - 0.5f) * 10f, -10f * t - s * 3f)).Round();
+            DrawRect(new Rect2(p + new Vector2(-1, 0), new Vector2(3, 1)), cross);
+            DrawRect(new Rect2(p + new Vector2(0, -1), new Vector2(1, 3)), cross);
+        }
+    }
+
+    /// <summary>A flattened ring of dust spreading over the splash area, with specks thrown out.</summary>
+    private void DrawImpact(Effect e, float t, Random rng)
+    {
+        DrawSetTransform(e.Position, 0f, new Vector2(1f, 0.5f));
+        DrawArc(Vector2.Zero, e.Size * (0.3f + 0.7f * t), 0f, Mathf.Tau, 24, DustColor with { A = 0.7f * (1f - t) }, 2f);
+        DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+        for (int s = 0; s < 10; s++)
+        {
+            var dir = Vector2.Right.Rotated(rng.NextSingle() * Mathf.Tau);
+            var p = e.Position + new Vector2(dir.X, dir.Y * 0.5f) * e.Size * t * (0.4f + rng.NextSingle()) + new Vector2(0, -8f * t);
+            DrawRect(new Rect2(p, Vector2.One * 2), DustColor with { A = 0.8f * (1f - t) });
+        }
+    }
+
+    /// <summary>A dust cloud billowing out of the footprint, with debris thrown up and falling.</summary>
+    private void DrawCollapse(Effect e, float t, Random rng)
+    {
+        for (int s = 0; s < 40; s++)
+        {
+            var dir = Vector2.Right.Rotated(rng.NextSingle() * Mathf.Tau);
+            float dist = e.Size * (0.3f + 1.2f * t) * rng.NextSingle();
+            var p = e.Position + dir * dist + new Vector2(0, -6f * t);
+            DrawRect(new Rect2(p, Vector2.One * (2 + rng.Next(3))), DustColor with { A = 0.7f * (1f - t) });
+        }
+        for (int s = 0; s < 10; s++)
+        {
+            float vx = (rng.NextSingle() - 0.5f) * 60f, vy = -40f - rng.NextSingle() * 40f;
+            float time = e.Age;
+            var p = e.Position + new Vector2(vx * time, vy * time + 90f * time * time);
+            DrawRect(new Rect2(p, Vector2.One * 2), RubbleColor with { A = 1f - t });
+        }
+    }
+
+    /// <summary>Ruins on the ground, fading away over the last few seconds.</summary>
+    private void DrawRubble(Effect e, Random rng)
+    {
+        float alpha = Mathf.Clamp((e.Duration - e.Age) / 5f, 0f, 1f);
+        for (int s = 0; s < (int)(e.Size * 1.5f); s++)
+        {
+            var p = e.Position + new Vector2((rng.NextSingle() - 0.5f) * e.Size * 2f, (rng.NextSingle() - 0.5f) * e.Size * 1.6f);
+            var color = (s % 4 == 0 ? RubbleLight : RubbleColor) with { A = alpha };
+            DrawRect(new Rect2(p, new Vector2(2 + rng.Next(4), 2 + rng.Next(2))), color);
+        }
+    }
+
+    /// <summary>A ring of sparkles rising over a finished building.</summary>
+    private void DrawSparkle(Effect e, float t)
+    {
+        for (int s = 0; s < 12; s++)
+        {
+            float angle = s / 12f * Mathf.Tau;
+            var p = e.Position + Vector2.Right.Rotated(angle) * e.Size * (0.6f + 0.8f * t) + new Vector2(0, -e.Size * 0.6f);
+            DrawRect(new Rect2(p, Vector2.One * 2), e.Color with { A = 1f - t });
+        }
+    }
+
+    /// <summary>Two rings pulsing out where the player is attacked, as thick on screen at every zoom.</summary>
+    private void DrawPing(Effect e, float t)
+    {
+        for (int ring = 0; ring < 2; ring++)
+        {
+            float k = (t * 2f + ring * 0.5f) % 1f;
+            DrawArc(e.Position, 4f + e.Size * k, 0f, Mathf.Tau, 32, e.Color with { A = 1f - k }, 2f / _match.Camera.ZoomLevel);
         }
     }
 
@@ -321,10 +343,10 @@ public partial class EffectsView : Node2D
     /// </summary>
     private void DrawCorpse(Effect e, float t)
     {
-        _units ??= GD.Load<Texture2D>("res://Assets/Sprites/units.png");
-        _unitsTeam ??= GD.Load<Texture2D>("res://Assets/Sprites/units_team.png");
-        int w = Dev.ArtLayout.UnitCellWidth, h = Dev.ArtLayout.UnitCellHeight;
-        var region = new Rect2(Dev.ArtLayout.FrameIdle * w, (int)e.Size * h, w, h);
+        _units ??= GD.Load<Texture2D>(Sprites.Units);
+        _unitsTeam ??= GD.Load<Texture2D>(Sprites.UnitsTeam);
+        int w = ArtLayout.UnitCellWidth, h = ArtLayout.UnitCellHeight;
+        var region = new Rect2(ArtLayout.FrameIdle * w, (int)e.Size * h, w, h);
         float alpha = t < 0.75f ? 1f : 1f - (t - 0.75f) / 0.25f;
         float side = e.Seed % 2 == 0 ? 1f : -1f;
         DrawSetTransform(e.Position + new Vector2(0, -3), side * Mathf.Pi / 2f, Vector2.One);

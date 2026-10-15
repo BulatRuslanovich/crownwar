@@ -61,10 +61,10 @@ public partial class Scoreboard : PanelContainer
             bool known = faction.Team == localTeam || _match.Fog.RevealedAll;
             name.Text = Names.Player(_match, id);
             (stance.Text, stance.Modulate) = id == _match.LocalFactionId ? ("", Colors.White) : DiplomacyPanel.Describe(_match, id);
-            name.Modulate = id == _match.LocalFactionId ? new Color("ffe066") : Colors.White;
+            name.Modulate = id == _match.LocalFactionId ? UiPalette.Highlight : Colors.White;
             team.Text = string.Format(Tr("NET_TEAM_N"), faction.Team + 1);
             status.Text = Tr(faction.IsEliminated ? "SCORE_FALLEN" : "SCORE_ALIVE");
-            status.Modulate = faction.IsEliminated ? new Color("ff8a80") : Colors.White;
+            status.Modulate = faction.IsEliminated ? UiPalette.Problem : Colors.White;
             army.Text = known ? faction.Population.ToString() : "?";
             buildings.Text = known ? _match.Sim.Buildings.Count(b => b.FactionId == id && b.IsAlive).ToString() : "?";
         }

@@ -14,10 +14,10 @@ namespace Lordsio.UI;
 /// </summary>
 public partial class Lobby : Control
 {
+    private Button _leaveButton = null!;
     private const int KindOpen = 0;
     private const int KindPlayer = 4;
     /// <summary>Bot difficulties in the order of the slot menu items after "open".</summary>
-    private static readonly BotDifficulty[] Difficulties = { BotDifficulty.Easy, BotDifficulty.Normal, BotDifficulty.Hard };
 
     private NetSession _session = null!;
     private Label _info = null!;
@@ -36,7 +36,7 @@ public partial class Lobby : Control
         _hint = GetNode<Label>("Center/Panel/Rows/Hint");
         _start = GetNode<Button>("Center/Panel/Rows/Buttons/Start");
         _start.Pressed += _session.StartMatch;
-        GetNode<Button>("Center/Panel/Rows/Buttons/Leave").Pressed += () => LeaveRequested?.Invoke();
+        (_leaveButton = GetNode<Button>("Center/Panel/Rows/Buttons/Leave")).Pressed += () => LeaveRequested?.Invoke();
 
         var grid = GetNode<GridContainer>("Center/Panel/Rows/Slots");
         for (int i = 0; i < NetSession.MaxSlots; i++)
@@ -48,7 +48,7 @@ public partial class Lobby : Control
 
         _session.LobbyUpdated += Refresh;
         Refresh();
-        (_session.IsHost ? _start : GetNode<Button>("Center/Panel/Rows/Buttons/Leave")).GrabFocus();
+        (_session.IsHost ? _start : _leaveButton).GrabFocus();
     }
 
     public override void _ExitTree() => _session.LobbyUpdated -= Refresh;
@@ -58,14 +58,13 @@ public partial class Lobby : Control
         var name = new Label { CustomMinimumSize = new Vector2(200, 0), ClipText = true };
         var kind = new OptionButton { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         kind.AddItem("NET_SLOT_OPEN");
-        kind.AddItem("NET_SLOT_BOT_EASY");
-        kind.AddItem("NET_SLOT_BOT_NORMAL");
-        kind.AddItem("NET_SLOT_BOT_HARD");
+        foreach (var difficulty in Difficulties.All)
+            kind.AddItem(Difficulties.SlotKey(difficulty));
         kind.AddItem("NET_SLOT_PLAYER");
         kind.SetItemDisabled(KindPlayer, true); // players take slots by joining, not from this menu
         kind.ItemSelected += item => _session.SetSlot(index,
             item == KindOpen ? NetSlotKind.Empty : NetSlotKind.Bot,
-            item == KindOpen ? BotDifficulty.Normal : Difficulties[item - 1]);
+            item == KindOpen ? BotDifficulty.Normal : Difficulties.All[item - 1]);
 
         var team = new OptionButton();
         for (int t = 0; t < NetSession.MaxSlots; t++)
@@ -107,7 +106,7 @@ public partial class Lobby : Control
             kind.Selected = slot.Kind switch
             {
                 NetSlotKind.Human => KindPlayer,
-                NetSlotKind.Bot => 1 + Math.Max(0, Array.IndexOf(Difficulties, (BotDifficulty)slot.Difficulty)),
+                NetSlotKind.Bot => 1 + Math.Max(0, Array.IndexOf(Difficulties.All, (BotDifficulty)slot.Difficulty)),
                 _ => KindOpen,
             };
             kind.Disabled = !_session.IsHost || slot.Kind == NetSlotKind.Human;
@@ -129,9 +128,7 @@ public partial class Lobby : Control
     /// <summary>This PC's IPv4 addresses on the local network, for players who cannot find the game by themselves.</summary>
     private static IEnumerable<string> LocalAddresses()
     {
-        var addresses = IP.GetLocalAddresses()
-            .Where(a => a.Contains('.') && !a.StartsWith("127.") && !a.StartsWith("169.254."))
-            .ToList();
+        var addresses = Net.LanDiscovery.LocalAddresses().ToList();
         return addresses.Count > 0 ? addresses : new List<string> { "127.0.0.1" };
     }
 }

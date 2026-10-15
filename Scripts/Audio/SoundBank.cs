@@ -105,13 +105,7 @@ public static class SoundBank
 
         // Normalise every sound to the same peak: no clipping, and loudness is set where it is played.
         float gain = TargetPeak / peak;
-        var bytes = new byte[count * 2];
-        for (int i = 0; i < count; i++)
-        {
-            short s = (short)(samples[i] * gain * short.MaxValue);
-            bytes[i * 2] = (byte)(s & 0xFF);
-            bytes[i * 2 + 1] = (byte)((s >> 8) & 0xFF);
-        }
+        var bytes = Pcm.Encode16(samples, count, gain);
         return new AudioStreamWav
         {
             Data = bytes,

@@ -49,7 +49,7 @@ public partial class WeatherView : Node2D
     {
         float dt = (float)delta;
         _time += dt;
-        var view = VisibleRect();
+        var view = _match.Camera.VisibleRect;
         Spawn(view, dt);
         var wind = _match.Wind;
         for (int i = _particles.Count - 1; i >= 0; i--)
@@ -79,13 +79,6 @@ public partial class WeatherView : Node2D
             _particles[i] = p;
         }
         QueueRedraw();
-    }
-
-    /// <summary>The part of the world on screen (with the camera's zoom).</summary>
-    private Rect2 VisibleRect()
-    {
-        var size = GetViewportRect().Size / _match.Camera.ZoomLevel;
-        return new Rect2(_match.Camera.GetScreenCenterPosition() - size / 2f, size);
     }
 
     /// <summary>How strong a biome's weather is now (0..1): each swells and calms on its own slow cycle.</summary>
@@ -157,7 +150,6 @@ public partial class WeatherView : Node2D
 
     public override void _Draw()
     {
-        var boost = _match.LightBoost;
         foreach (var p in _particles)
         {
             // Fade in and out at the ends of a particle's life.
@@ -180,7 +172,7 @@ public partial class WeatherView : Node2D
                 case Kind.Firefly:
                     // Blinks on and off, glowing through the dark.
                     float blink = Mathf.Max(0f, Mathf.Sin(p.Age * 2.4f + p.Phase));
-                    var glow = new Color(p.Color.R * boost.R, p.Color.G * boost.G, p.Color.B * boost.B, blink * alpha);
+                    var glow = _match.Lit(p.Color) with { A = blink * alpha };
                     DrawRect(new Rect2(at - Vector2.One, new Vector2(3, 3)), glow with { A = glow.A * 0.25f });
                     DrawRect(new Rect2(at, Vector2.One), glow);
                     break;

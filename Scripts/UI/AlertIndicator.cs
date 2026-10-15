@@ -13,7 +13,7 @@ public partial class AlertIndicator : Control
     private const float ShowSeconds = 4f;
     private const float EdgeMargin = 36f;
 
-    private static readonly Color AlertColor = new("ff5a4a");
+    private static readonly Color AlertColor = UiPalette.Hostile;
 
     private MatchController _match = null!;
     private Vector2 _world;

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Lordsio.Core;
 using Lordsio.Sim.AI;
 using Lordsio.Sim.Net;
 
@@ -70,42 +71,6 @@ public partial class NetSession : Node
         : _factionOfPeer.TryGetValue(peerId, out int faction) && _players.TryGetValue(faction, out var p) ? p.Name
         : "?";
 
-    /// <summary>
-    /// Hosts a saved match again after a crash: the server starts already in the match, every other player counts as
-    /// departed (a bot plays them) and can rejoin with their key as usual; the host replays the save and plays on.
-    /// </summary>
-    public Error HostResume(string playerName, SavedMatch save)
-    {
-        var error = Host(playerName);
-        if (error != Error.Ok)
-            return error;
-        Resumed = save;
-        int own = save.Start.YourFaction;
-        foreach (var player in save.Players)
-        {
-            _players[player.Faction] = (player.Token, player.Name);
-            if (player.Faction != own)
-                _departed.Add(player.Faction);
-        }
-        _factionOfPeer[1] = own;
-        InMatch = true;
-        StartedWith = save.Start;
-        MatchStarting?.Invoke(save.Start with { Rejoin = true });
-        return Error.Ok;
-    }
-
-    /// <summary>Host: a faction's rejoin key.</summary>
-    public string TokenOf(int faction) => _players.TryGetValue(faction, out var p) ? p.Token : "";
-
-    /// <summary>Delivers lockstep messages that arrived before anyone listened (the match was still being built).</summary>
-    public void FlushEarlyMessages()
-    {
-        var early = _early.ToList();
-        _early.Clear();
-        foreach (var message in early)
-            MessageReceived?.Invoke(1, message);
-    }
-
     public Error Host(string playerName)
     {
         Close();
@@ -166,140 +131,18 @@ public partial class NetSession : Node
         _players.Clear();
         _departed.Clear();
         _early.Clear();
+        _delayed.Clear();
+        _lastDueMs = 0;
+        _connectingFor = 0;
         StartedWith = null;
+        Resumed = null;
+        Slots = new List<NetSlot>();
         _helloSent = false;
+        IsHost = false;
         InMatch = false;
     }
 
     public override void _ExitTree() => Close();
-
-    // ---------------------------------------------------------------- lobby (host)
-
-    /// <summary>Host: turn a non-player slot into a bot of the given difficulty, or empty it.</summary>
-    public void SetSlot(int index, NetSlotKind kind, BotDifficulty difficulty)
-    {
-        if (!IsHost || InMatch || index <= 0 || index >= Slots.Count || Slots[index].Kind == NetSlotKind.Human || kind == NetSlotKind.Human)
-            return;
-        Slots[index] = Slots[index] with { Kind = kind, Difficulty = (byte)difficulty, Name = "" };
-        BroadcastLobby();
-    }
-
-    /// <summary>Host: move any slot to a team. Clients use <see cref="RequestTeam"/> for their own slot.</summary>
-    public void SetTeam(int index, int team)
-    {
-        if (!IsHost || InMatch || index < 0 || index >= Slots.Count)
-            return;
-        Slots[index] = Slots[index] with { Team = (byte)Math.Clamp(team, 0, MaxSlots - 1) };
-        BroadcastLobby();
-    }
-
-    public void RequestTeam(int team)
-    {
-        if (IsHost)
-            SetTeam(0, team);
-        else
-            Send(1, new SetTeamMessage((byte)Math.Clamp(team, 0, MaxSlots - 1)));
-    }
-
-    /// <summary>At least two occupied slots on at least two different teams.</summary>
-    public bool CanStart
-    {
-        get
-        {
-            var used = Slots.Where(s => s.Kind != NetSlotKind.Empty).ToList();
-            return used.Count >= 2 && used.Select(s => s.Team).Distinct().Count() >= 2;
-        }
-    }
-
-    /// <summary>Host: start the match. Empty slots are dropped; slot order becomes faction order.</summary>
-    public void StartMatch()
-    {
-        if (!IsHost || InMatch || !CanStart)
-            return;
-        var factions = Slots.Where(s => s.Kind != NetSlotKind.Empty).ToList();
-        int seed = (int)(GD.Randi() & int.MaxValue);
-        InMatch = true;
-        for (int faction = 0; faction < factions.Count; faction++)
-        {
-            var slot = factions[faction];
-            if (slot.Kind != NetSlotKind.Human)
-                continue;
-            _factionOfPeer[slot.PeerId] = faction;
-            string token = GD.Randi().ToString("x8") + GD.Randi().ToString("x8");
-            _players[faction] = (token, slot.Name);
-            if (slot.PeerId != 1)
-                Send(slot.PeerId, new StartMessage(seed, factions, faction, token));
-        }
-        StartedWith = new StartMessage(seed, factions, _factionOfPeer[1], TokenOf(_factionOfPeer[1]));
-        MatchStarting?.Invoke(StartedWith);
-    }
-
-    // ---------------------------------------------------------------- messaging
-
-    /// <summary>Dev (--net-lag): outgoing packets are held back this long, plus up to <see cref="DevJitterMs"/>, to test a poor link on one PC.</summary>
-    public int DevLagMs { get; set; }
-    public int DevJitterMs { get; set; }
-    private readonly Queue<(ulong DueMs, int PeerId, byte[] Data)> _delayed = new();
-    private ulong _lastDueMs;
-    private readonly Random _devRandom = new();
-
-    public void Send(int peerId, NetMessage message)
-    {
-        if (_peer == null)
-            return;
-        byte[] data = NetCodec.Encode(message);
-        if (DevLagMs > 0 || DevJitterMs > 0)
-        {
-            // Never before an earlier packet: the channel is ordered anyway.
-            _lastDueMs = Math.Max(_lastDueMs, Time.GetTicksMsec() + (ulong)(DevLagMs + _devRandom.Next(DevJitterMs + 1)));
-            _delayed.Enqueue((_lastDueMs, peerId, data));
-            return;
-        }
-        Put(peerId, data);
-    }
-
-    private void Put(int peerId, byte[] data)
-    {
-        _peer!.TransferMode = MultiplayerPeer.TransferModeEnum.Reliable;
-        _peer.SetTargetPeer(peerId);
-        _peer.PutPacket(data);
-    }
-
-    private void SendDue()
-    {
-        while (_peer != null && _delayed.TryPeek(out var next) && next.DueMs <= Time.GetTicksMsec())
-        {
-            _delayed.Dequeue();
-            Put(next.PeerId, next.Data);
-        }
-    }
-
-    public void Broadcast(NetMessage message) => Send((int)MultiplayerPeer.TargetPeerBroadcast, message);
-
-    /// <summary>Host: the faction a connected player controls in the match.</summary>
-    public int? FactionOf(int peerId) => _factionOfPeer.TryGetValue(peerId, out int f) ? f : null;
-
-    /// <summary>
-    /// Sends what was queued right away instead of on the next frame's poll: in lockstep every hop of the
-    /// round trip counts against the input delay.
-    /// </summary>
-    public void Flush()
-    {
-        SendDue();
-        _peer?.Host?.Flush();
-    }
-
-    /// <summary>Round-trip time and its variance (ms) to a connected peer, as ENet measures them.</summary>
-    public (double RoundTrip, double Variance)? LinkTo(int peerId)
-    {
-        if (_peer?.GetPeer(peerId) is not { } link || !link.IsActive())
-            return null;
-        return (link.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime),
-            link.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTimeVariance));
-    }
-
-    /// <summary>Host: the other players' peers in the match (the host itself, peer 1, is not a link).</summary>
-    public IEnumerable<int> MatchPeers => _factionOfPeer.Keys.Where(id => id != 1);
 
     /// <summary>
     /// Receives and handles what has arrived. Runs every frame, and once more right before the match steps,
@@ -307,21 +150,25 @@ public partial class NetSession : Node
     /// </summary>
     public void Receive()
     {
+        if (PollPeer())
+            ReadPackets();
+    }
+
+    /// <summary>Sends what is due and lets ENet take in what has arrived; false when there is (no longer) a session.</summary>
+    [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, nameof(_peer))]
+    private bool PollPeer()
+    {
         if (_peer == null)
-            return;
+            return false;
         SendDue();
         _peer.Poll();
-        ReadPackets();
+        return _peer != null; // a handler may have closed the session
     }
 
     public override void _Process(double delta)
     {
-        if (_peer == null)
+        if (!PollPeer())
             return;
-        SendDue();
-        _peer.Poll();
-        if (_peer == null)
-            return; // a handler closed the session
 
         if (!IsHost && !_helloSent)
         {
@@ -356,40 +203,6 @@ public partial class NetSession : Node
                 HandleAsHost(from, message);
             else
                 HandleAsClient(message);
-        }
-    }
-
-    private void HandleAsHost(int from, NetMessage message)
-    {
-        switch (message)
-        {
-            case HelloMessage hello:
-                if (hello.Version != GameVersion.Current)
-                    Reject(from, "NET_REJECT_VERSION");
-                else if (InMatch && ReturningFaction(hello) is { } back)
-                {
-                    _greeted.Add(from);
-                    _factionOfPeer[from] = back;
-                    _departed.Remove(back);
-                    PlayerRejoining?.Invoke(from, back);
-                }
-                else if (InMatch)
-                    Reject(from, "NET_REJECT_STARTED");
-                else if (Slots.FindIndex(s => s.Kind == NetSlotKind.Empty) is var free and >= 0)
-                {
-                    _greeted.Add(from);
-                    Slots[free] = Slots[free] with { Kind = NetSlotKind.Human, Name = Trim(hello.Name), PeerId = from };
-                    BroadcastLobby();
-                }
-                else
-                    Reject(from, "NET_REJECT_FULL");
-                break;
-            case SetTeamMessage team when !InMatch && Slots.FindIndex(s => s.PeerId == from) is var own and >= 0:
-                SetTeam(own, team.Team);
-                break;
-            case InputMessage or ChecksumMessage or CaughtUpMessage or PauseMessage when InMatch && _greeted.Contains(from):
-                MessageReceived?.Invoke(from, message);
-                break;
         }
     }
 
@@ -464,43 +277,11 @@ public partial class NetSession : Node
         }
     }
 
-    /// <summary>
-    /// The faction a connecting player may take back: the one whose rejoin key they bring, or else the
-    /// only departed player with their name (if the key file was lost).
-    /// </summary>
-    private int? ReturningFaction(HelloMessage hello)
-    {
-        foreach (int faction in _departed)
-            if (hello.RejoinToken.Length > 0 && _players[faction].Token == hello.RejoinToken)
-                return faction;
-        var byName = _departed.Where(f => _players[f].Name == Trim(hello.Name)).ToList();
-        return byName.Count == 1 ? byName[0] : null;
-    }
-
-    private void BroadcastLobby()
-    {
-        Broadcast(new LobbyMessage(Slots));
-        LobbyUpdated?.Invoke();
-    }
-
-    private void Reject(int peer, string reason)
-    {
-        Send(peer, new RejectMessage(reason));
-        // Let the message leave before dropping the connection.
-        _peer?.DisconnectPeer(peer, force: false);
-    }
-
     private void Fail(string reasonKey)
     {
         Close();
         Failed?.Invoke(reasonKey);
     }
 
-    private static string Trim(string name)
-    {
-        name = name.Trim();
-        if (name.Length == 0)
-            name = "Player";
-        return name.Length > 16 ? name[..16] : name;
-    }
+    private static string Trim(string name) => PlayerNames.Sanitize(name);
 }

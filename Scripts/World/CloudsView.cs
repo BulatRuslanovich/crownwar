@@ -70,7 +70,7 @@ public partial class CloudsView : Node2D
     {
         float dt = (float)delta;
         float target = _match.Sim.IsNight ? 0f : DayAlpha;
-        _alpha = Mathf.Lerp(_alpha, target, 1f - Mathf.Exp(-0.5f * dt));
+        _alpha = Mathf.Lerp(_alpha, target, Smoothing.Factor(0.5f, dt));
         var wind = _match.Wind;
         var margin = new Vector2(400f, 200f);
         for (int i = 0; i < _clouds.Count; i++)
@@ -92,8 +92,7 @@ public partial class CloudsView : Node2D
         if (_alpha < 0.005f)
             return;
         var color = Shade with { A = _alpha };
-        var size = GetViewportRect().Size / _match.Camera.ZoomLevel;
-        var view = new Rect2(_match.Camera.GetScreenCenterPosition() - size / 2f, size);
+        var view = _match.Camera.VisibleRect;
         foreach (var (position, shape, _) in _clouds)
         {
             var texture = _shapes[shape];

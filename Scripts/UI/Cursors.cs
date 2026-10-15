@@ -66,7 +66,7 @@ public static class Cursors
 
     private static Texture2D Draw(string[] rows, int scale)
     {
-        var outline = new Color("1c1a17");
+        var outline = UiPalette.Outline;
         int w = rows[0].Length + 2, h = rows.Length + 2;
         var image = Image.CreateEmpty(w, h, false, Image.Format.Rgba8);
         for (int y = 0; y < rows.Length; y++)
@@ -79,7 +79,7 @@ public static class Cursors
                     'h' => new Color("f2d06a"),   // gold arrow
                     's' => new Color("dfe2e7"),   // steel blade
                     'g' => new Color("c9a050"),   // crossguard
-                    'p' => new Color("f2c230"),   // pommel
+                    'p' => UiPalette.Gold,   // pommel
                     _ => new Color("6b4426") with { A = rows[y][x] == '.' ? 0 : 1 }, // grip
                 };
                 if (c.A > 0)

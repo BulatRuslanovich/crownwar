@@ -29,7 +29,7 @@ public partial class GameSettings : Node
     public string Language { get; set; } = "";
 
     /// <summary>Name shown to other players in network games.</summary>
-    public string PlayerName { get; set; } = DefaultPlayerName();
+    public string PlayerName { get; set; } = PlayerNames.Sanitize(System.Environment.UserName);
 
     public override void _EnterTree() => Instance = this;
 
@@ -114,14 +114,5 @@ public partial class GameSettings : Node
             });
         }
         return index;
-    }
-
-    /// <summary>The OS user name, trimmed to fit the lobby; "Player" if unavailable.</summary>
-    private static string DefaultPlayerName()
-    {
-        string name = System.Environment.UserName;
-        if (string.IsNullOrWhiteSpace(name))
-            return "Player";
-        return name.Length > 16 ? name[..16] : name;
     }
 }

@@ -4,6 +4,7 @@ using Godot;
 using Lordsio.Core;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.World;
+using Lordsio.World;
 
 namespace Lordsio.UI;
 
@@ -16,10 +17,10 @@ namespace Lordsio.UI;
 public partial class Minimap : Control
 {
     private static readonly Color ViewFrame = new(1f, 1f, 1f, 0.85f);
-    private static readonly Color Gold = new("f2c230");
+    private static readonly Color Gold = UiPalette.Gold;
     private static readonly Color Unexplored = new(0.03f, 0.03f, 0.05f, 0.78f);
     private static readonly Color Remembered = new(0.03f, 0.03f, 0.05f, 0.45f);
-    private static readonly Color AlertColor = new("ff5a4a");
+    private static readonly Color AlertColor = UiPalette.Hostile;
     private static readonly Color NightShade = new(0.05f, 0.08f, 0.25f, 0.35f);
     private static readonly Color Moon = new("e8ecff");
     private const float AlertSeconds = 4f;
@@ -30,10 +31,7 @@ public partial class Minimap : Control
 
     private MatchController _match = null!;
     private ImageTexture _terrain = null!;
-    private Image _fogImage = null!;
-    private ImageTexture _fog = null!;
-    private byte[] _fogPixels = System.Array.Empty<byte>();
-    private int _fogVersion = -1;
+    private FogPainter _fog = null!;
     private bool _dragging;
 
     public void Initialize(MatchController match)
@@ -45,9 +43,7 @@ public partial class Minimap : Control
             for (int x = 0; x < map.Width; x++)
                 image.SetPixel(x, y, Lordsio.World.Biomes.MinimapColor(match.BiomeAt(new Cell(x, y)), map.GetTerrain(new Cell(x, y))));
         _terrain = ImageTexture.CreateFromImage(image);
-        _fogImage = Image.CreateEmpty(map.Width, map.Height, false, Image.Format.Rgba8);
-        _fogPixels = new byte[map.Width * map.Height * 4];
-        _fog = ImageTexture.CreateFromImage(_fogImage);
+        _fog = new FogPainter(map.Width, map.Height, Unexplored, Remembered);
         TextureFilter = TextureFilterEnum.Nearest;
         MouseFilter = MouseFilterEnum.Stop;
         match.AttackAlerted += position => _alerts.Add((position, 0f));
@@ -55,7 +51,7 @@ public partial class Minimap : Control
 
     public override void _Process(double delta)
     {
-        UpdateFog();
+        _fog.Refresh(_match.Fog);
         UpdateScouted();
         for (int i = _alerts.Count - 1; i >= 0; i--)
         {
@@ -86,29 +82,6 @@ public partial class Minimap : Control
             if (!visibleNow && _match.Fog.IsAnyVisible(seen.Anchor, seen.Size))
                 _scouted.Remove(id);
         }
-    }
-
-    private void UpdateFog()
-    {
-        var fog = _match.Fog;
-        if (fog.Version == _fogVersion)
-            return;
-        _fogVersion = fog.Version;
-        int i = 0;
-        for (int y = 0; y < fog.Height; y++)
-        {
-            for (int x = 0; x < fog.Width; x++)
-            {
-                var cell = new Cell(x, y);
-                var c = fog.IsVisible(cell) ? Colors.Transparent : fog.IsExplored(cell) ? Remembered : Unexplored;
-                _fogPixels[i++] = (byte)c.R8;
-                _fogPixels[i++] = (byte)c.G8;
-                _fogPixels[i++] = (byte)c.B8;
-                _fogPixels[i++] = (byte)c.A8;
-            }
-        }
-        _fogImage.SetData(fog.Width, fog.Height, false, Image.Format.Rgba8, _fogPixels);
-        _fog.Update(_fogImage);
     }
 
     /// <summary>Pixels per tile, keeping the map's proportions inside the control.</summary>
@@ -156,7 +129,7 @@ public partial class Minimap : Control
             DrawRect(new Rect2(p - Vector2.One, Vector2.One * 2.5f), FactionColors.Get(unit.FactionId));
         }
 
-        DrawTextureRect(_fog, area, tile: false);
+        DrawTextureRect(_fog.Texture, area, tile: false);
         if (_match.Sim.IsNight)
         {
             DrawRect(area, NightShade);
@@ -177,10 +150,8 @@ public partial class Minimap : Control
         }
 
         // What the camera shows.
-        var camera = _match.Camera;
-        var half = camera.GetViewportRect().Size / (2 * camera.ZoomLevel) / SimConvert.TileSize;
-        var center = camera.GetScreenCenterPosition() / SimConvert.TileSize;
-        var view = new Rect2(Offset + (center - half) * s, half * 2 * s).Intersection(area);
+        var shown = _match.Camera.VisibleRect;
+        var view = new Rect2(Offset + shown.Position / SimConvert.TileSize * s, shown.Size / SimConvert.TileSize * s).Intersection(area);
         DrawRect(view, ViewFrame, filled: false, width: 1f);
         DrawRect(area, new Color(0, 0, 0, 0.8f), filled: false, width: 1f);
     }
@@ -200,9 +171,8 @@ public partial class Minimap : Control
                 AcceptEvent();
                 break;
             case InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } rally
-                when _match.Selection.BuildingId is { } id && _match.Sim.GetBuilding(id) is { } producer
-                     && producer.FactionId == _match.LocalFactionId && producer.Type.Recruits.Count > 0:
-                _match.Issue(new SetRallyCommand(_match.LocalFactionId, id, ToSim(rally.Position)));
+                when _match.SelectedRallyBuilding() is { } producer:
+                _match.Issue(new SetRallyCommand(_match.LocalFactionId, producer.Id, ToSim(rally.Position)));
                 AcceptEvent();
                 break;
             case InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } right when _match.Selection.Count > 0:

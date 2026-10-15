@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Linq;
 using Godot;
+using Lordsio.Dev;
 using Lordsio.Net;
 using Lordsio.Sim.AI;
 using Lordsio.Sim.Net;
@@ -31,14 +32,6 @@ public partial class Main : Node
     private Audio.MusicPlayer _music = null!;
     private Audio.UiSounds? _uiSounds;
 
-    // Dev options for testing network games with two copies on one PC (see StartDevNetwork).
-    private int _devAutoStartPlayers;
-    private bool _devAutoplay;
-    private bool _devNetLog;
-    private bool _devPauseTest;
-    private bool _devDiplomacyTest;
-    private int[]? _devTeams;
-
     public override void _EnterTree()
     {
         InputActions.Register();
@@ -54,40 +47,14 @@ public partial class Main : Node
         AddChild(_ui);
         // Developer options only in debug builds; a released game ignores its command line.
         var args = OS.IsDebugBuild() ? OS.GetCmdlineUserArgs() : System.Array.Empty<string>();
-        if (DevTools.Arg(args, "--export-art") is { } previewDirectory)
-        {
-            Dev.ArtGenerator.ExportAll(ProjectSettings.GlobalizePath("res://"), previewDirectory);
-            GD.Print("Art exported");
-            GetTree().Quit();
+        if (RunDevExport(args))
             return;
-        }
-        if (DevTools.Arg(args, "--export-sounds") is { } soundDirectory)
-        {
-            Audio.SoundBank.ExportAll(soundDirectory);
-            Audio.MusicPlayer.ExportAll(soundDirectory);
-            GetTree().Quit();
-            return;
-        }
         _music = new Audio.MusicPlayer { Name = "Music" };
         AddChild(_music);
         GetTree().AutoAcceptQuit = false; // closing the window goes through QuitGame too
-        if (DevTools.WantsDirectStart(args))
-            DevTools.Apply(StartMatch(MatchConfig.Default with { Seed = DevTools.Seed(args) }), args);
-        else if (DevTools.WantsNetwork(args))
-            StartDevNetwork(args);
-        else
+        if (!StartFromDevOptions(args))
             ShowMenu();
-        if (System.Array.IndexOf(args, "--show-help") >= 0 && _screen is MainMenu shown)
-            Callable.From(shown.ShowHelp).CallDeferred();
-
-        if (System.Array.IndexOf(args, "--smoke-flow") >= 0)
-            _ = RunSmokeFlow();
-
-        if (DevTools.Arg(args, "--screenshot") is { } screenshot)
-        {
-            double delay = double.Parse(DevTools.Arg(args, "--screenshot-delay") ?? "2", CultureInfo.InvariantCulture);
-            _ = TakeScreenshotAndQuit(screenshot, delay, DevTools.Arg(args, "--demo-select"));
-        }
+        ScheduleDevRuns(args);
     }
 
     public override void _Process(double delta)
@@ -132,172 +99,6 @@ public partial class Main : Node
         return match;
     }
 
-    // ---------------------------------------------------------------- network games
-
-    private NetSession Session()
-    {
-        if (_session != null)
-            return _session;
-        _session = new NetSession { Name = "NetSession" };
-        AddChild(_session);
-        // Session events can fire inside a button handler of the very screen they replace,
-        // so screen switches are deferred to the end of the frame.
-        _session.LobbyUpdated += () => Callable.From(OnLobbyUpdated).CallDeferred();
-        _session.MatchStarting += start => Callable.From(() => StartNetworkMatch(start)).CallDeferred();
-        _session.Failed += reason => Callable.From(() => OnSessionFailed(reason)).CallDeferred();
-        return _session;
-    }
-
-    private void EndSession()
-    {
-        if (_session == null)
-            return;
-        _session.Close();
-        _session.QueueFree();
-        _session = null;
-    }
-
-    private void ShowNetMenu(string? problemKey)
-    {
-        GetTree().Paused = false;
-        EnsureBackdrop();
-        var menu = NetMenuScene.Instantiate<NetMenu>();
-        menu.Initialize(Session(), problemKey);
-        menu.BackRequested += ShowMenu;
-        Replace(menu);
-    }
-
-    private void OnLobbyUpdated()
-    {
-        if (_session == null || _session.InMatch)
-            return;
-        if (_screen is NetMenu)
-        {
-            var lobby = LobbyScene.Instantiate<Lobby>();
-            lobby.Initialize(_session);
-            lobby.LeaveRequested += () =>
-            {
-                _session?.Close();
-                ShowNetMenu(null);
-            };
-            Replace(lobby);
-        }
-        if (_devAutoStartPlayers > 0 && _session.IsHost)
-            DevAutoStart(_session);
-    }
-
-    private void StartNetworkMatch(StartMessage start)
-    {
-        if (_session == null)
-            return;
-        var slots = start.Slots.Select(s => new SlotConfig(
-            s.Kind == NetSlotKind.Bot ? SlotKind.Bot : SlotKind.Human, s.Name, (BotDifficulty)s.Difficulty, s.Team)).ToList();
-        var driver = new NetMatchDriver(_session, start) { LogChecksums = _devNetLog };
-        var match = CreateMatch(new MatchConfig(slots, start.Seed, start.YourFaction), driver);
-        match.MenuRequested += ShowMenu;
-        if (_devAutoplay)
-            match.AddBot(match.LocalFactionId, BotDifficulty.Hard).CommandSink = match.Issue;
-        if (_devPauseTest)
-        {
-            // Dev: this player pauses the match for everyone at 20 s and resumes it at 26 s.
-            GetTree().CreateTimer(20.0).Timeout += () => { if (IsInstanceValid(match)) match.SetPaused(true); };
-            GetTree().CreateTimer(26.0, processAlways: true).Timeout += () => { if (IsInstanceValid(match)) match.SetPaused(false); };
-        }
-        if (_devDiplomacyTest)
-            DevDiplomacyTest(match);
-    }
-
-    /// <summary>
-    /// Dev (--net-diplo-test, on both copies): the host offers the other player peace at 6 s, the guest accepts at
-    /// 12 s (the offer pop-up shows meanwhile), the host opens the diplomacy panel at 22 s and declares war at 24 s.
-    /// </summary>
-    private void DevDiplomacyTest(MatchController match)
-    {
-        int me = match.LocalFactionId;
-        int other = match.Config.Slots.Select((s, i) => (s, i)).First(p => p.s.Kind == SlotKind.Human && p.i != me).i;
-        void At(double seconds, System.Action action) =>
-            GetTree().CreateTimer(seconds).Timeout += () => { if (IsInstanceValid(match)) action(); };
-        if (_session!.IsHost)
-        {
-            At(6, () => match.Issue(new Sim.Core.ProposePeaceCommand(me, other)));
-            At(22, () => match.GetNode<UI.Hud>("Hud").Diplomacy.Visible = true);
-            At(24, () => match.Issue(new Sim.Core.DeclareWarCommand(me, other)));
-        }
-        else
-        {
-            At(12, () => match.Issue(new Sim.Core.AnswerPeaceCommand(me, other, Accept: true)));
-        }
-    }
-
-    /// <summary>Lost connection, rejected, host gone: in a match the end screen explains; elsewhere back to the network menu.</summary>
-    private void OnSessionFailed(string reasonKey)
-    {
-        if (_screen is MatchController match)
-            match.ShowNetworkProblem(reasonKey);
-        else
-            ShowNetMenu(reasonKey);
-    }
-
-    /// <summary>
-    /// Dev-only, for two copies on one PC: --net-browse opens the network menu; --net-host or --net-join=ADDRESS
-    /// skip the menus; --net-players=N
-    /// makes the host start once N players are in (open slots become Hard bots), --net-teams=0,0,1,1 sets the
-    /// slots' teams; --net-diplo-test plays a scripted round of diplomacy (see DevDiplomacyTest); --net-autoplay lets a bot
-    /// play the local faction through the network; --net-log prints checksums to compare the copies' logs;
-    /// --net-lag=MS[,JITTER] holds this copy's outgoing packets back (a poor link on one PC; ENet's ping does not see it);
-    /// --net-resume hosts the saved match again (as after a crash), if there is one; --net-pause-test pauses the
-    /// match from this copy at 20 s and resumes it at 26 s.
-    /// </summary>
-    private void StartDevNetwork(string[] args)
-    {
-        _devAutoplay = System.Array.IndexOf(args, "--net-autoplay") >= 0;
-        _devNetLog = System.Array.IndexOf(args, "--net-log") >= 0;
-        _devPauseTest = System.Array.IndexOf(args, "--net-pause-test") >= 0;
-        _devDiplomacyTest = System.Array.IndexOf(args, "--net-diplo-test") >= 0;
-        string name = DevTools.Arg(args, "--net-name") ?? GameSettings.Instance?.PlayerName ?? "Player";
-        ShowNetMenu(null);
-        if (DevTools.Arg(args, "--net-lag") is { } lag)
-        {
-            var parts = lag.Split(',').Select(p => int.Parse(p, CultureInfo.InvariantCulture)).ToArray();
-            Session().DevLagMs = parts[0];
-            Session().DevJitterMs = parts.Length > 1 ? parts[1] : 0;
-        }
-        if (System.Array.IndexOf(args, "--net-browse") >= 0)
-            return;
-        if (System.Array.IndexOf(args, "--net-resume") >= 0 && Net.MatchSaveStore.TryLoad() is { } save)
-        {
-            var resumed = Session().HostResume(name, save);
-            if (resumed != Error.Ok)
-                GD.PushError($"Could not resume: {resumed}");
-            return;
-        }
-        if (DevTools.Arg(args, "--net-join") is { } address)
-        {
-            Session().Join(address, name);
-            return;
-        }
-        _devAutoStartPlayers = int.Parse(DevTools.Arg(args, "--net-players") ?? "2", CultureInfo.InvariantCulture);
-        _devTeams = DevTools.Arg(args, "--net-teams")?.Split(',').Select(t => int.Parse(t, CultureInfo.InvariantCulture)).ToArray();
-        var error = Session().Host(name);
-        if (error != Error.Ok)
-            GD.PushError($"Could not host: {error}");
-    }
-
-    private void DevAutoStart(NetSession session)
-    {
-        if (session.Slots.Count(s => s.Kind == NetSlotKind.Human) < _devAutoStartPlayers)
-            return;
-        _devAutoStartPlayers = 0;
-        for (int i = 0; i < session.Slots.Count; i++)
-        {
-            if (session.Slots[i].Kind == NetSlotKind.Empty)
-                session.SetSlot(i, NetSlotKind.Bot, BotDifficulty.Hard);
-            if (_devTeams != null && i < _devTeams.Length)
-                session.SetTeam(i, _devTeams[i]);
-        }
-        session.StartMatch();
-    }
-
     private void Replace(Node screen)
     {
         if (_screen != null)
@@ -337,45 +138,6 @@ public partial class Main : Node
         RemoveChild(_backdrop);
         _backdrop.QueueFree();
         _backdrop = null;
-    }
-
-    /// <summary>
-    /// Dev-only (--smoke-flow): menu → match → pause → restart → main menu → match → quit,
-    /// to catch errors in screen switching without clicking through it by hand.
-    /// </summary>
-    private async System.Threading.Tasks.Task RunSmokeFlow()
-    {
-        async System.Threading.Tasks.Task Wait(double seconds) =>
-            await ToSignal(GetTree().CreateTimer(seconds, processAlways: true), SceneTreeTimer.SignalName.Timeout);
-
-        await Wait(0.5);
-        var match = StartMatch(MatchConfig.Single(2, Sim.AI.BotDifficulty.Hard, 11));
-        await Wait(1.0);
-        match.SetPaused(true);
-        await Wait(0.5);
-        match.RequestRestart();
-        await Wait(1.0);
-        ((MatchController)_screen!).RequestMenu();
-        await Wait(0.5);
-        StartMatch(MatchConfig.Default);
-        await Wait(1.0);
-        GD.Print("Smoke flow finished");
-        QuitGame();
-    }
-
-    private async System.Threading.Tasks.Task TakeScreenshotAndQuit(string path, double delay, string? selectType)
-    {
-        // Process even while the game is paused, so paused screens can be captured too.
-        await ToSignal(GetTree().CreateTimer(delay, processAlways: true), SceneTreeTimer.SignalName.Timeout);
-        if (selectType != null && _screen is MatchController match)
-        {
-            DevTools.SelectFirst(match, selectType);
-            await ToSignal(GetTree().CreateTimer(0.2, processAlways: true), SceneTreeTimer.SignalName.Timeout);
-        }
-        await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
-        var error = GetViewport().GetTexture().GetImage().SavePng(path);
-        GD.Print($"Screenshot saved to {path}: {error}");
-        QuitGame();
     }
 
     public override void _Notification(int what)

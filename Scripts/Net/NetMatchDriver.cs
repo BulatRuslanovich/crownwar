@@ -12,7 +12,7 @@ namespace Lordsio.Net;
 /// merges everyone's input into frames and sends them back; a tick is simulated only once its frame is
 /// known. Checksums are compared every second to detect a desync.
 /// </summary>
-public sealed class NetMatchDriver
+public sealed partial class NetMatchDriver : IDisposable
 {
     /// <summary>Ticks between checksum reports.</summary>
     public const int ChecksumInterval = Simulation.TicksPerSecond;
@@ -28,22 +28,6 @@ public sealed class NetMatchDriver
 
     /// <summary>Ticks between a returning player's "caught up" and taking the faction back (one second).</summary>
     private const int ReturnDelay = Simulation.TicksPerSecond;
-
-    /// <summary>
-    /// What a client's input needs on top of the round trip to reach the host in time: the client runs up to a
-    /// tick behind the host, plus a rendered frame on each side, plus a margin.
-    /// </summary>
-    private const double PipelineMilliseconds = 100;
-    /// <summary>The input delay is raised at once when the link gets worse, but lowered only after this many good checks in a row.</summary>
-    private const int LowerAfterChecks = 5;
-    /// <summary>A delay raised because the match stalled is kept at least this many checks (seconds) per extra tick.</summary>
-    private const int StallFloorChecks = 60;
-    private double _sinceLinkCheck;
-    private int _goodChecks;
-    private int _stallsSinceCheck;
-    /// <summary>Client: the input delay the stalls have shown to be needed, whatever the measured round trip says.</summary>
-    private int _stallFloor = LockstepHost.InputDelay;
-    private int _checksSinceStall;
 
     public NetMatchDriver(NetSession session, StartMessage start)
     {
@@ -74,13 +58,27 @@ public sealed class NetMatchDriver
                 _host = new LockstepHost(humans);
                 _save = MatchSaveStore.Create(start, session.MatchPlayers);
             }
-            session.PlayerLeftMatch += faction => _host.DropFaction(faction);
+            session.PlayerLeftMatch += OnPlayerLeft;
             session.PlayerRejoining += SendMatchSoFar;
         }
         IsRejoin = start.Rejoin;
         session.MessageReceived += OnMessage;
         session.FlushEarlyMessages();
     }
+
+    /// <summary>
+    /// Leaving the match screen (to the menu, or quitting): the save keeps what was played so far, and the session
+    /// (which outlives the match until the menu) stops calling back into this driver.
+    /// </summary>
+    public void Dispose()
+    {
+        CloseSave();
+        _session.MessageReceived -= OnMessage;
+        _session.PlayerLeftMatch -= OnPlayerLeft;
+        _session.PlayerRejoining -= SendMatchSoFar;
+    }
+
+    private void OnPlayerLeft(int faction) => _host?.DropFaction(faction);
 
     public bool IsHost => _host != null;
 
@@ -104,83 +102,6 @@ public sealed class NetMatchDriver
         _caughtUpReported = true;
         if (_host == null)
             _session.Send(1, new CaughtUpMessage(tick)); // a host resuming its own save has no one to tell
-    }
-
-    // ---------------------------------------------------------------- the save (host)
-
-    private System.IO.FileStream? _save;
-    private readonly List<FrameMessage> _unsaved = new();
-    private double _sinceSave;
-    private const double SaveIntervalSeconds = 1.0;
-
-    /// <summary>Writes the frames made since the last save (about once a second).</summary>
-    private void SaveNow()
-    {
-        if (_save == null)
-        {
-            _unsaved.Clear(); // nothing to save to (finished, or the disk refused)
-            return;
-        }
-        if (_unsaved.Count == 0)
-            return;
-        try
-        {
-            MatchSave.AppendFrames(_save, _unsaved);
-            _save.Flush(flushToDisk: true);
-        }
-        catch (System.IO.IOException e)
-        {
-            Godot.GD.PushWarning($"Saving the network match failed: {e.Message}");
-        }
-        _unsaved.Clear();
-    }
-
-    /// <summary>The match is over: its save is of no use any more.</summary>
-    public void DiscardSave()
-    {
-        _save?.Dispose();
-        _save = null;
-        _unsaved.Clear();
-        if (_host != null)
-            MatchSaveStore.Delete();
-    }
-
-    /// <summary>Leaving the match screen (to the menu, or quitting): the save keeps what was played so far.</summary>
-    public void CloseSave()
-    {
-        SaveNow();
-        _save?.Dispose();
-        _save = null;
-    }
-
-    // ---------------------------------------------------------------- pause
-
-    /// <summary>Someone paused the match: no frames are made, every machine stands still with the pause menu open.</summary>
-    public bool IsPausedByPlayer { get; private set; }
-
-    /// <summary>Who paused the match.</summary>
-    public string PausedBy { get; private set; } = "";
-
-    public event Action? PauseChanged;
-
-    /// <summary>Asks to pause or resume for everyone (the host decides and tells all).</summary>
-    public void RequestPause(bool paused)
-    {
-        if (_host != null)
-            SetPause(paused, _session.NameOfPeer(1));
-        else
-            _session.Send(1, new PauseMessage(paused));
-    }
-
-    private void SetPause(bool paused, string by)
-    {
-        if (paused == IsPausedByPlayer)
-            return;
-        IsPausedByPlayer = paused;
-        PausedBy = by;
-        if (_host != null)
-            _session.Broadcast(new PauseMessage(paused, by));
-        PauseChanged?.Invoke();
     }
 
     /// <summary>Host: a player is back; send them the start of the match and every frame so far.</summary>
@@ -207,16 +128,6 @@ public sealed class NetMatchDriver
 
     public void QueueLocal(Command command) => _peer.QueueLocal(command);
 
-    /// <summary>Ticks ahead our commands are sent (a client's grows with a slow or jittery link).</summary>
-    public int InputDelay => _peer.InputDelay;
-
-    /// <summary>Round trip to the host (client) or to the slowest player (host), and its variance, in ms; -1 if unknown.</summary>
-    public double PingMilliseconds { get; private set; } = -1;
-    public double JitterMilliseconds { get; private set; } = -1;
-
-    /// <summary>Frames already received beyond the current tick.</summary>
-    public int BufferedFrames(int currentTick) => Math.Max(0, _peer.LatestFrameTick - currentTick);
-
     /// <summary>
     /// Before the match steps: take in what has arrived; the host turns complete inputs into frames, sends them
     /// out and keeps its own copy; a client adapts its input delay to the link now and then.
@@ -238,9 +149,6 @@ public sealed class NetMatchDriver
         }
         EmitFrames();
     }
-
-    /// <summary>The match had to stop for a whole tick waiting for a frame: the client's commands may arrive too late.</summary>
-    public void ReportStall() => _stallsSinceCheck++;
 
     /// <summary>
     /// After the match stepped: send our inputs, frames and checksums now rather than next frame. The host first
@@ -265,54 +173,6 @@ public sealed class NetMatchDriver
         }
     }
 
-    /// <summary>
-    /// Measures the link; a client sends its commands far enough ahead that they reach the host before the host
-    /// needs them (round trip + four variances + the pipeline), so the match does not stall on every spike.
-    /// Stalls the round trip does not explain (a busy PC, a link ENet measures as fine) raise the delay too,
-    /// and keep it up for a while.
-    /// </summary>
-    private void CheckLink()
-    {
-        int stalls = _stallsSinceCheck;
-        _stallsSinceCheck = 0;
-        if (LogChecksums)
-            Godot.GD.Print($"[net] link: ping {PingMilliseconds:0} ±{JitterMilliseconds:0} ms, input delay {_peer.InputDelay}, stalls {stalls}");
-        var links = (_host == null ? new[] { 1 } : _session.MatchPeers)
-            .Select(id => _session.LinkTo(id)).OfType<(double RoundTrip, double Variance)>().ToList();
-        if (links.Count > 0)
-        {
-            var worst = links.MaxBy(l => l.RoundTrip + 4 * l.Variance);
-            PingMilliseconds = worst.RoundTrip;
-            JitterMilliseconds = worst.Variance;
-        }
-        if (_host != null || IsRejoin && !_caughtUpReported)
-            return; // the host's own commands reach it at once; a replay is not real time
-
-        if (stalls > 0)
-        {
-            _stallFloor = Math.Min(LockstepPeer.MaxInputDelay, Math.Max(_stallFloor, _peer.InputDelay) + 1);
-            _checksSinceStall = 0;
-        }
-        else if (++_checksSinceStall >= StallFloorChecks && _stallFloor > LockstepHost.InputDelay)
-        {
-            _stallFloor--;
-            _checksSinceStall = 0;
-        }
-
-        double needed = PingMilliseconds >= 0 ? PingMilliseconds + 4 * JitterMilliseconds + PipelineMilliseconds : 0;
-        int wanted = Math.Max(_stallFloor, (int)Math.Ceiling(needed / (Simulation.TickDuration * 1000)));
-        if (wanted >= _peer.InputDelay)
-        {
-            _peer.InputDelay = wanted;
-            _goodChecks = 0;
-        }
-        else if (++_goodChecks >= LowerAfterChecks)
-        {
-            _peer.InputDelay--;
-            _goodChecks = 0;
-        }
-    }
-
     public bool HasFrame(int tick) => _peer.HasFrame(tick);
 
     public FrameMessage TakeFrame(int tick) => _peer.TakeFrame(tick);
@@ -323,10 +183,8 @@ public sealed class NetMatchDriver
         foreach (var input in _peer.TakeInputs(tick))
         {
             if (!sendInput)
-            {
-                // Replaying the past: those ticks are long decided, the host would ignore the input anyway.
-            }
-            else if (_host != null)
+                continue; // replaying the past: those ticks are long decided, the host would ignore the input anyway
+            if (_host != null)
                 _host.SubmitInput(_localFaction, input);
             else
                 _session.Send(1, input);
@@ -374,9 +232,7 @@ public sealed class NetMatchDriver
                 SetPause(pause.Paused, _session.NameOfPeer(from));
                 break;
             case PauseMessage pause:
-                IsPausedByPlayer = pause.Paused;
-                PausedBy = pause.By;
-                PauseChanged?.Invoke();
+                SetPause(pause.Paused, pause.By); // the host's word
                 break;
         }
     }

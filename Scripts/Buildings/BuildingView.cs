@@ -1,8 +1,9 @@
 using System.Collections.Generic;
 using Godot;
 using Lordsio.Core;
-using Lordsio.Dev;
 using Lordsio.Sim.Buildings;
+using Lordsio.UI;
+using Lordsio.World;
 
 namespace Lordsio.Buildings;
 
@@ -18,9 +19,9 @@ namespace Lordsio.Buildings;
 public partial class BuildingView : Node2D
 {
     private static readonly Color Scaffold = new("c8a26a");
-    private static readonly Color SelectionColor = new("7cff6b");
+    private static readonly Color SelectionColor = UiPalette.Friendly;
     private static readonly Color BarBack = new(0f, 0f, 0f, 0.65f);
-    private static readonly Color TrainingFill = new("7cff6b");
+    private static readonly Color TrainingFill = UiPalette.Friendly;
     private static readonly Color ConstructionFill = new("ffd44a");
     private static readonly Color ReserveFill = new("e8b830");
     private static readonly Color RegenFill = new("5fb4ff");
@@ -180,9 +181,9 @@ public partial class BuildingView : Node2D
         if (lit)
         {
             float flicker = _flickers ? 0.82f + 0.18f * Mathf.Sin(_time * 9.1f) * Mathf.Sin(_time * 5.3f + 1f) : 1f;
-            var boost = _match.LightBoost;
-            _lights.Modulate = new Color(boost.R, boost.G, boost.B) * night * flicker;
-            _glow.Modulate = new Color(boost.R, boost.G, boost.B) * night * flicker;
+            var light = _match.Lit(Colors.White) * night * flicker;
+            _lights.Modulate = light;
+            _glow.Modulate = light;
             _glow.QueueRedraw();
         }
         if (b.IsComplete && Chimneys.ContainsKey(b.Type.Id))
@@ -308,10 +309,10 @@ public partial class BuildingView : Node2D
     private void ShowLevel(BuildingType type)
     {
         _shownTier = type.Tier;
-        _spriteName = SpriteName(type);
-        SetTexture(_body, $"res://Assets/Sprites/{_spriteName}.png");
-        SetTexture(_team, $"res://Assets/Sprites/{_spriteName}_team.png");
-        string lights = $"res://Assets/Sprites/{_spriteName}_lights.png";
+        _spriteName = Sprites.BuildingName(type);
+        SetTexture(_body, Sprites.Path(_spriteName));
+        SetTexture(_team, Sprites.Path(_spriteName, "_team"));
+        string lights = Sprites.Path(_spriteName, "_lights");
         if (ResourceLoader.Exists(lights))
         {
             SetTexture(_lights, lights);
@@ -350,12 +351,6 @@ public partial class BuildingView : Node2D
             return (Vector2.Zero, 0f);
         var size = max - min;
         return (sum / count, Mathf.Max(size.X, size.Y) / 2f + 14f);
-    }
-
-    public static string SpriteName(BuildingType type)
-    {
-        string tiered = $"{type.Id}_t{type.Tier}";
-        return type.Tier > 1 && ResourceLoader.Exists($"res://Assets/Sprites/{tiered}.png") ? tiered : type.Id;
     }
 
     private static void SetTexture(Sprite2D sprite, string path)
