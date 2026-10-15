@@ -51,7 +51,7 @@ public static class ArtLayout
     public const int UnitCellWidth = 16;
     public const int UnitCellHeight = 20;
     public const int UnitFrames = 8;
-    public const int UnitRows = 8;
+    public const int UnitRows = 9;
     public const int FrameIdle = 0, FrameBreath = 1, FrameWalk1 = 2, FrameWalk2 = 3, FrameWalk3 = 4, FrameWalk4 = 5, FrameWindup = 6, FrameStrike = 7;
     /// <summary>Feet position inside a unit cell.</summary>
     public static readonly Vector2I UnitFeet = new(8, 19);
@@ -65,6 +65,10 @@ public static class ArtLayout
         "crossbowman" => 5,
         "monk" => 6,
         "trebuchet" => 7,
+        "warlord" => 8,
         _ => 0,
     };
+
+    /// <summary>How much bigger than its cell a unit is drawn: the horde's warlord towers over everyone.</summary>
+    public static float UnitScale(string unitTypeId) => unitTypeId == "warlord" ? 1.5f : 1f;
 }

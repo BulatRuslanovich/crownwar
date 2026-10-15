@@ -5,7 +5,10 @@ using Lordsio.Sim.Buildings;
 
 namespace Lordsio.UI;
 
-/// <summary>The build bar: a button per building kind, with its price, hotkey and how many stand.</summary>
+/// <summary>
+/// The build bar: a button per building kind, with its price, hotkey and how many stand. In Defense a player whose
+/// outpost has fallen also gets a button to build a new one.
+/// </summary>
 public partial class Hud
 {
     /// <summary>
@@ -17,11 +20,11 @@ public partial class Hud
         string hotkey = BuildHotkeys.TryGetValue(type.Id, out var key) ? $"[{key}]" : "";
         string count = type.MaxCount > 0 ? $"{standing}/{type.MaxCount}" : "";
         string second = hotkey.Length > 0 && count.Length > 0 ? hotkey + " " + count : hotkey + count;
-        return $"{type.Cost}{Tr("HUD_GOLD_SHORT")}\n{second}";
+        return $"{_match.Sim.BuildCost(type)}{Tr("HUD_GOLD_SHORT")}\n{second}";
     }
 
     /// <summary>What each build button last showed: how many stand, whether it is affordable, pressed, in which language.</summary>
-    private (int Standing, bool Available, bool Pressed, int Text)[] _buildShown = System.Array.Empty<(int, bool, bool, int)>();
+    private (int Standing, bool Available, bool Pressed, bool Shown, int Text)[] _buildShown = System.Array.Empty<(int, bool, bool, bool, int)>();
 
     private void UpdateBuildButtons()
     {
@@ -29,17 +32,21 @@ public partial class Hud
             return;
         if (_buildShown.Length != _buildButtons.Count)
         {
-            _buildShown = new (int, bool, bool, int)[_buildButtons.Count];
-            System.Array.Fill(_buildShown, (-1, false, false, -1));
+            _buildShown = new (int, bool, bool, bool, int)[_buildButtons.Count];
+            System.Array.Fill(_buildShown, (-1, false, false, false, -1));
         }
         for (int i = 0; i < _buildButtons.Count; i++)
         {
             var (button, type) = _buildButtons[i];
             int standing = type.MaxCount > 0 ? _match.Sim.CountBuildings(_match.LocalFactionId, type.Id) : 0;
-            bool available = faction.Treasury.CanAfford(type.Cost) && (type.MaxCount == 0 || standing < type.MaxCount);
+            bool available = faction.Treasury.CanAfford(_match.Sim.BuildCost(type)) && (type.MaxCount == 0 || standing < type.MaxCount);
             bool pressed = _placement.ActiveType == type;
-            if (!Changed(ref _buildShown[i], (standing, available, pressed, _textVersion)))
+            bool shown = type.IsBuildable || _match.Sim.MayBuildOutpost(_match.LocalFactionId, type);
+            if (!Changed(ref _buildShown[i], (standing, available, pressed, shown, _textVersion)))
                 continue;
+            button.Visible = shown;
+            if (!shown && pressed)
+                _placement.Cancel();
             button.Text = BuildButtonText(type, standing);
             MarkAvailable(button, available);
             button.ButtonPressed = pressed;
@@ -48,7 +55,8 @@ public partial class Hud
 
     private void CreateBuildButtons(HBoxContainer row)
     {
-        foreach (var type in _match.Sim.Rules.BuildingTypes.Where(t => t.IsBuildable).OrderBy(t => t.Cost))
+        bool defense = _match.Sim.Defense != null;
+        foreach (var type in _match.Sim.Rules.BuildingTypes.Where(t => t.IsBuildable || defense && t.IsCapital).OrderBy(_match.Sim.BuildCost))
         {
             var button = new Button
             {
@@ -57,8 +65,11 @@ public partial class Hud
                 IconAlignment = HorizontalAlignment.Left,
                 ToggleMode = true,
                 FocusMode = Control.FocusModeEnum.None,
-                TooltipText = Names.Of(type) + "\n" + HudText.DescribeBuildingType(_match.Sim, type)
-                              + (type.MaxCount > 0 ? "\n" + string.Format(Tr("INFO_LIMIT"), type.MaxCount) : ""),
+                TooltipText = type.IsCapital
+                    ? Tr("DEFENSE_OUTPOST") + "\n" + Tr("DEFENSE_OUTPOST_TOOLTIP")
+                    : Names.Of(type) + "\n" + HudText.DescribeBuildingType(_match.Sim, type)
+                      + (type.MaxCount > 0 ? "\n" + string.Format(Tr("INFO_LIMIT"), type.MaxCount) : ""),
+                Visible = type.IsBuildable,
             };
             // Compact: tall buildings are drawn narrower so every button stays about as high as the text.
             button.AddThemeConstantOverride("icon_max_width", 22);

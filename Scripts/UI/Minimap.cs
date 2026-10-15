@@ -11,7 +11,7 @@ namespace Lordsio.UI;
 /// <summary>
 /// The whole map in the corner: terrain, the fog of war, gold, buildings and units the player can see, enemy
 /// buildings scouted earlier (dimmed, as last seen), blinking rings where the player is attacked, the night, and
-/// the camera's view. Left click or drag moves the camera; right click sends the selected troops (advancing with
+/// the camera's view; in Defense, pulsing arrows where the next wave will come in. Left click or drag moves the camera; right click sends the selected troops (advancing with
 /// Ctrl), or sets the rally point of a selected castle or barracks, like a right click on the map itself.
 /// </summary>
 public partial class Minimap : Control
@@ -34,6 +34,8 @@ public partial class Minimap : Control
     private ImageTexture _terrain = null!;
     private FogPainter _fog = null!;
     private bool _dragging;
+    /// <summary>Seconds since the match began on this screen, for the pulse of the wave arrows.</summary>
+    private float _time;
 
     public void Initialize(MatchController match)
     {
@@ -52,6 +54,7 @@ public partial class Minimap : Control
 
     public override void _Process(double delta)
     {
+        _time += (float)delta;
         bool fogChanged = _fog.Refresh(_match.Fog);
         bool ticked = _match.Sim.Tick != _drawnTick;
         if (ticked)
@@ -66,7 +69,8 @@ public partial class Minimap : Control
         }
         // Units move once a tick, not every frame; the view frame moves with the camera; alerts blink.
         var view = _match.Camera.VisibleRect;
-        if (ticked || fogChanged || _alerts.Count > 0 || view != _drawnView)
+        bool waveComing = _match.Sim.Defense is { IncomingFrom.Count: > 0 };
+        if (ticked || fogChanged || _alerts.Count > 0 || waveComing || view != _drawnView)
         {
             QueueRedraw();
             _drawnTick = _match.Sim.Tick;
@@ -165,11 +169,33 @@ public partial class Minimap : Control
             DrawRect(new Rect2(ToMinimap(position) - Vector2.One * 1.5f, Vector2.One * 3f), AlertColor);
         }
 
+        DrawIncomingWave();
+
         // What the camera shows.
         var shown = _match.Camera.VisibleRect;
         var view = new Rect2(Offset + shown.Position / SimConvert.TileSize * s, shown.Size / SimConvert.TileSize * s).Intersection(area);
         DrawRect(view, ViewFrame, filled: false, width: 1f);
         DrawRect(area, new Color(0, 0, 0, 0.8f), filled: false, width: 1f);
+    }
+
+    /// <summary>Defense: an arrow at each point the announced wave will come in from, pointing to the middle.</summary>
+    private void DrawIncomingWave()
+    {
+        if (_match.Sim.Defense is not { IncomingFrom.Count: > 0 } defense)
+            return;
+        var middle = ToMinimap(new System.Numerics.Vector2(_match.Sim.Map.Width / 2f, _match.Sim.Map.Height / 2f));
+        float pulse = 0.5f + 0.5f * Mathf.Sin(_time * 8f);
+        foreach (var from in defense.IncomingFrom)
+        {
+            var at = ToMinimap(from);
+            var dir = (middle - at).Normalized();
+            var side = new Vector2(-dir.Y, dir.X);
+            float size = 6f + 2f * pulse;
+            var tip = at + dir * size;
+            var points = new[] { tip, at - dir * size * 0.4f + side * size * 0.7f, at - dir * size * 0.4f - side * size * 0.7f };
+            DrawColoredPolygon(points, AlertColor with { A = 0.6f + 0.4f * pulse });
+            DrawPolyline(new[] { points[0], points[1], points[2], points[0] }, Colors.Black, 1f);
+        }
     }
 
     public override void _GuiInput(InputEvent @event)

@@ -29,8 +29,8 @@ public sealed record HelloMessage(string Version, string Name, string RejoinToke
 /// <summary>Host → client: connection refused (a translation key for the reason).</summary>
 public sealed record RejectMessage(string Reason) : NetMessage;
 
-/// <summary>Host → all: the current lobby.</summary>
-public sealed record LobbyMessage(IReadOnlyList<NetSlot> Slots) : NetMessage;
+/// <summary>Host → all: the current lobby and the mode the host picked.</summary>
+public sealed record LobbyMessage(IReadOnlyList<NetSlot> Slots, MatchMode Mode = MatchMode.Versus) : NetMessage;
 
 /// <summary>Client → host: move my slot to another team.</summary>
 public sealed record SetTeamMessage(byte Team) : NetMessage;
@@ -40,8 +40,8 @@ public sealed record SetTeamMessage(byte Team) : NetMessage;
 /// <paramref name="RejoinToken"/> its key for coming back after a drop. With <paramref name="Rejoin"/> the match
 /// is already running: every frame so far follows, to be replayed before playing on.
 /// </summary>
-public sealed record StartMessage(int Seed, IReadOnlyList<NetSlot> Slots, int YourFaction, string RejoinToken = "", bool Rejoin = false)
-    : NetMessage;
+public sealed record StartMessage(int Seed, IReadOnlyList<NetSlot> Slots, int YourFaction, string RejoinToken = "", bool Rejoin = false,
+    MatchMode Mode = MatchMode.Versus) : NetMessage;
 
 /// <summary>A faction a returning player takes back from its bot, starting with <paramref name="FromTick"/>.</summary>
 public sealed record FactionReturn(int Faction, int FromTick);
@@ -75,6 +75,8 @@ public sealed record DesyncMessage(int Tick) : NetMessage;
 /// <summary>
 /// Compact binary encoding of all network messages. Decoding treats input as untrusted:
 /// sizes are bounded and malformed data throws <see cref="FormatException"/>.
+/// The match mode goes last in the lobby and start messages and may be missing (Versus): saves made before the Defense
+/// mode still load.
 /// </summary>
 public static class NetCodec
 {
@@ -100,11 +102,11 @@ public static class NetCodec
         {
             case HelloMessage m: w.Write((byte)Tag.Hello); WriteString(w, m.Version); WriteString(w, m.Name); WriteString(w, m.RejoinToken); break;
             case RejectMessage m: w.Write((byte)Tag.Reject); WriteString(w, m.Reason); break;
-            case LobbyMessage m: w.Write((byte)Tag.Lobby); WriteSlots(w, m.Slots); break;
+            case LobbyMessage m: w.Write((byte)Tag.Lobby); WriteSlots(w, m.Slots); w.Write((byte)m.Mode); break;
             case SetTeamMessage m: w.Write((byte)Tag.SetTeam); w.Write(m.Team); break;
             case StartMessage m:
                 w.Write((byte)Tag.Start); w.Write(m.Seed); WriteSlots(w, m.Slots); w.Write(m.YourFaction);
-                WriteString(w, m.RejoinToken); w.Write(m.Rejoin);
+                WriteString(w, m.RejoinToken); w.Write(m.Rejoin); w.Write((byte)m.Mode);
                 break;
             case InputMessage m: w.Write((byte)Tag.Input); w.Write(m.Tick); WriteCommands(w, m.Commands); break;
             case FrameMessage m:
@@ -140,9 +142,9 @@ public static class NetCodec
             {
                 Tag.Hello => new HelloMessage(ReadString(r), ReadString(r), ReadString(r)),
                 Tag.Reject => new RejectMessage(ReadString(r)),
-                Tag.Lobby => new LobbyMessage(ReadSlots(r)),
+                Tag.Lobby => new LobbyMessage(ReadSlots(r), ReadOptionalMode(r)),
                 Tag.SetTeam => new SetTeamMessage(r.ReadByte()),
-                Tag.Start => new StartMessage(r.ReadInt32(), ReadSlots(r), r.ReadInt32(), ReadString(r), r.ReadBoolean()),
+                Tag.Start => new StartMessage(r.ReadInt32(), ReadSlots(r), r.ReadInt32(), ReadString(r), r.ReadBoolean(), ReadOptionalMode(r)),
                 Tag.Input => new InputMessage(r.ReadInt32(), ReadCommands(r)),
                 Tag.Frame => new FrameMessage(r.ReadInt32(), ReadCommands(r), ReadInts(r), ReadReturns(r)),
                 Tag.CaughtUp => new CaughtUpMessage(r.ReadInt32()),
@@ -324,6 +326,14 @@ public static class NetCodec
         if (!float.IsFinite(v.X) || !float.IsFinite(v.Y))
             throw new FormatException("Non-finite position.");
         return v;
+    }
+
+    private static MatchMode ReadOptionalMode(BinaryReader r)
+    {
+        if (r.BaseStream.Position == r.BaseStream.Length)
+            return MatchMode.Versus;
+        var mode = (MatchMode)r.ReadByte();
+        return Enum.IsDefined(mode) ? mode : throw new FormatException("Bad match mode.");
     }
 
     private static MoveMode ReadMode(BinaryReader r)

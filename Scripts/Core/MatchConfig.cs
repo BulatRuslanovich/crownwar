@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Lordsio.Sim.AI;
+using Lordsio.Sim.Core;
 
 namespace Lordsio.Core;
 
@@ -17,8 +18,10 @@ public sealed record SlotConfig(SlotKind Kind, string Name, BotDifficulty Diffic
 /// How a match is set up: slot i becomes faction i. <paramref name="LocalFactionId"/> is the slot this
 /// machine controls. A null seed means a new random layout each match. A <paramref name="Showcase"/> match
 /// is the living backdrop of the menus: bots only, no interface, no fog, a drifting camera.
+/// In <see cref="MatchMode.Defense"/> all slots defend one citadel together against waves; teams are ignored.
 /// </summary>
-public sealed record MatchConfig(IReadOnlyList<SlotConfig> Slots, int? Seed, int LocalFactionId = 0, bool Showcase = false)
+public sealed record MatchConfig(IReadOnlyList<SlotConfig> Slots, int? Seed, int LocalFactionId = 0, bool Showcase = false,
+    MatchMode Mode = MatchMode.Versus)
 {
     /// <summary>Four bots fighting it out behind the main menu.</summary>
     public static MatchConfig ShowcaseMatch(int seed) => new(new[]
@@ -46,4 +49,6 @@ public sealed record MatchConfig(IReadOnlyList<SlotConfig> Slots, int? Seed, int
     public BotDifficulty Difficulty => Slots.FirstOrDefault(s => s.Kind == SlotKind.Bot)?.Difficulty ?? BotDifficulty.Normal;
 
     public IReadOnlyList<int> Teams => Slots.Select(s => s.Team).ToList();
+
+    public bool IsDefense => Mode == MatchMode.Defense;
 }

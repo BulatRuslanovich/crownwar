@@ -44,7 +44,7 @@ public partial class Main
     private bool StartFromDevOptions(string[] args)
     {
         if (DevTools.WantsDirectStart(args))
-            DevTools.Apply(StartMatch(MatchConfig.Default with { Seed = DevTools.Seed(args) }), args);
+            DevTools.Apply(StartMatch(DevTools.DirectStartConfig(args)), args);
         else if (DevTools.WantsNetwork(args))
             StartDevNetwork(args);
         else
@@ -96,7 +96,7 @@ public partial class Main
     /// play the local faction through the network; --net-log prints checksums to compare the copies' logs;
     /// --net-lag=MS[,JITTER] holds this copy's outgoing packets back (a poor link on one PC; ENet's ping does not see it);
     /// --net-resume hosts the saved match again (as after a crash), if there is one; --net-pause-test pauses the
-    /// match from this copy at 20 s and resumes it at 26 s.
+    /// match from this copy at 20 s and resumes it at 26 s; --net-defense hosts a Defense match (no bots).
     /// </summary>
     private void StartDevNetwork(string[] args)
     {
@@ -131,6 +131,8 @@ public partial class Main
         var error = Session().Host(name);
         if (error != Error.Ok)
             GD.PushError($"Could not host: {error}");
+        else if (DevTools.Has(args, "--net-defense"))
+            Session().SetMode(Sim.Core.MatchMode.Defense);
     }
 
     private void DevAutoStart(NetSession session)
@@ -149,7 +151,7 @@ public partial class Main
     }
 
     /// <summary>
-    /// Dev-only (--smoke-flow): menu → match → pause → restart → main menu → match → quit,
+    /// Dev-only (--smoke-flow): menu → match → pause → restart → main menu → match → main menu → Defense match → quit,
     /// to catch errors in screen switching without clicking through it by hand.
     /// </summary>
     private async System.Threading.Tasks.Task RunSmokeFlow()
@@ -167,6 +169,10 @@ public partial class Main
         ((MatchController)_screen!).RequestMenu();
         await Wait(0.5);
         StartMatch(MatchConfig.Default);
+        await Wait(1.0);
+        ((MatchController)_screen!).RequestMenu();
+        await Wait(0.5);
+        StartMatch(MatchConfig.Single(1, Sim.AI.BotDifficulty.Normal, 12) with { Mode = Sim.Core.MatchMode.Defense });
         await Wait(1.0);
         GD.Print("Smoke flow finished");
         QuitGame();

@@ -9,7 +9,7 @@ public static partial class ArtGenerator
 {
     /// <summary>
     /// Cells of 16×20, feet at (8, 19), facing right. Rows: infantry, archer, heavy, ram, cavalry, crossbowman, monk,
-    /// trebuchet. Columns (see
+    /// trebuchet, warlord. Columns (see
     /// <see cref="ArtLayout"/>): idle, breathing, four walking steps, wind-up and strike. units_team.png holds the
     /// faction-colour mask.
     /// </summary>
@@ -32,7 +32,8 @@ public static partial class ArtGenerator
                     case 4: Cavalry(c, pose, cell); break;
                     case 5: Crossbowman(c, pose, cell); break;
                     case 6: Monk(c, pose, cell); break;
-                    default: Trebuchet(c, pose, frame); break;
+                    case 7: Trebuchet(c, pose, frame); break;
+                    default: Warlord(c, pose, cell); break;
                 }
                 c.Origin = cell;
                 c.Outline(Outline, new Rect2I(cell, new Vector2I(ArtLayout.UnitCellWidth, ArtLayout.UnitCellHeight)));
@@ -393,6 +394,60 @@ public static partial class ArtGenerator
             for (int x = 0; x < 3; x++)
                 c.Team(weight.X - 1 + x, weight.Y + y, x == 0 ? 1f : 0.72f);
         c.Rect(weight.X - 1, weight.Y + 3, 3, 1, SteelDark);
+    }
+
+    /// <summary>
+    /// The horde's warlord (drawn half as big again in the game): a hulking brute in blackened mail, a horned helm, a
+    /// fur mantle, a cape in his colours and a great two-handed axe.
+    /// </summary>
+    private static void Warlord(PixelCanvas c, Pose pose, Vector2I cell)
+    {
+        var mail = new Color("3d3b40");
+        var mailLight = new Color("5a5860");
+        var fur = new Color("6b4a2e");
+        var horn = new Color("e6dcc0");
+        Legs(c, pose, cell, 3, new Color("2e2a26"), new Color("201d1a"));
+        // Cape behind, in his colours, swinging on the march.
+        int flutter = pose.Step is 2 or 4 ? 1 : 0;
+        for (int y = 8; y < 17; y++)
+        {
+            c.Team(2 - (y > 12 ? flutter : 0), y, 0.55f);
+            c.Team(3, y, 0.7f);
+        }
+        if (pose.Windup)
+        {
+            // The axe heaved up over the shoulder.
+            c.Line(8, 9, 3, 2, Leather);
+            c.Rect(1, 0, 3, 4, SteelLight);
+            c.Px(0, 1, Steel);
+        }
+        else if (!pose.Strike)
+        {
+            int bob = pose.Step is 2 or 4 ? 1 : 0;
+            c.Rect(13, 3 + bob, 1, 14, Leather);
+            c.Rect(14, 3 + bob, 2, 5, SteelLight);
+            c.Px(15, 2 + bob, Steel);
+            c.Px(15, 8 + bob, Steel);
+        }
+        // A broad body of mail with a fur mantle over the shoulders.
+        c.Shaded(4, 9, 9, 8, mail, mailLight, new Color("2a282c"));
+        c.Rect(4, 15, 9, 1, Leather);
+        c.Px(8, 15, Gold);
+        c.Rect(3, 8, 11, 2, fur);
+        c.Rect(4, 8, 9, 1, new Color("86613c"));
+        // Head in a horned helm, eyes glowing.
+        c.Shaded(5, 3, 6, 5, mail, mailLight, new Color("2a282c"));
+        c.Rect(7, 5, 4, 1, Outline);
+        c.Px(9, 5, new Color("ff5a2a"));
+        c.Px(4, 3, horn); c.Px(3, 2, horn); c.Px(3, 1, horn);
+        c.Px(11, 3, horn); c.Px(12, 2, horn); c.Px(12, 1, horn);
+        if (pose.Strike)
+        {
+            // The axe brought down in a great arc in front.
+            c.Line(9, 9, 14, 13, Leather);
+            c.Rect(13, 13, 3, 4, SteelLight);
+            c.Px(15, 17, Steel);
+        }
     }
 
     /// <summary>Knight in plate with a plumed helm, a kite shield in his colours and a sword.</summary>

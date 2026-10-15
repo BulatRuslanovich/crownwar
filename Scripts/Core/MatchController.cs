@@ -107,14 +107,15 @@ public partial class MatchController : Node2D
         ActualSeed = Config.Seed ?? (int)(GD.Randi() & int.MaxValue);
         // Every match is on a new map, sized and laid out for the sides at the start; the seed (the "map number" in the
         // menu) and their number reproduce it exactly, which is also how network players all get the same map.
-        var map = MapGenerator.Generate(ActualSeed, Config.Slots.Count);
+        var map = MapGenerator.Generate(ActualSeed, Config.Slots.Count, Config.Mode);
         MapBiomes = map.Biomes;
         LocalFactionId = Config.LocalFactionId;
-        Sim = new Simulation(map, rules, new MatchSetup(Config.Slots.Count, ActualSeed, Teams: Config.Teams));
+        Sim = new Simulation(map, rules, new MatchSetup(Config.Slots.Count, ActualSeed, Teams: Config.Teams, Mode: Config.Mode));
+        FactionColors.UseDefense(Sim.Defense?.GarrisonFactionId ?? -1, Sim.Defense?.HordeFactionId ?? -1);
         Stats = new MatchStats();
         Fog = new Visibility(Sim.Map.Width, Sim.Map.Height);
         UpdateFog();
-        _alerts = new AttackAlerts(LocalFactionId);
+        _alerts = new AttackAlerts(LocalFactionId, Sim.Defense?.GarrisonFactionId);
         for (int i = 0; i < Config.Slots.Count; i++)
         {
             if (Config.Slots[i].Kind == SlotKind.Bot)

@@ -136,6 +136,64 @@ public static partial class ArtGenerator
         Flag(c, 23, 0, frame);
     });
 
+    /// <summary>
+    /// 64×80 frames, bottom-centre origin; the footprint is 4×4 tiles. The Defense mode's citadel: a curtain wall with
+    /// four round-shouldered towers, a tall keep with a gilded crown behind, a double gate between torches, and banners
+    /// and flags in the garrison's colours.
+    /// </summary>
+    private static PixelCanvas Citadel() => Sheet(64, 80, (c, frame) =>
+    {
+        // The keep at the back, rising over everything.
+        Bricks(c, 22, 12, 20, 32, StoneLight);
+        Crenellations(c, 22, 9, 20, StoneLight);
+        c.Rect(26, 6, 12, 3, Gold);
+        for (int x = 26; x < 38; x += 3)
+            c.Px(x, 5, GoldDark);
+        foreach (int x in new[] { 26, 31, 36 })
+            LitWindow(c, x, 18, 2, 4);
+        LitWindow(c, 31, 28, 2, 3);
+        Flag(c, 31, 0, frame);
+        // The back towers peeping over the wall.
+        Bricks(c, 6, 20, 10, 20, Stone);
+        Bricks(c, 48, 20, 10, 20, Stone);
+        Crenellations(c, 6, 17, 10, Stone);
+        Crenellations(c, 48, 17, 10, Stone);
+        Flag(c, 10, 9, (frame + 1) % 4);
+        Flag(c, 52, 9, (frame + 3) % 4);
+        // The curtain wall.
+        Bricks(c, 6, 40, 52, 38, Stone);
+        Crenellations(c, 8, 37, 48, Stone);
+        // The front towers at the corners.
+        Bricks(c, 0, 32, 14, 46, StoneLight);
+        Bricks(c, 50, 32, 14, 46, StoneLight);
+        Crenellations(c, 0, 29, 14, StoneLight);
+        Crenellations(c, 50, 29, 14, StoneLight);
+        c.Rect(0, 76, 64, 2, StoneDark); // the plinth
+        // The double gate under an arch.
+        c.Rect(24, 58, 16, 18, Door);
+        c.Rect(26, 56, 12, 2, Door);
+        for (int x = 26; x < 39; x += 2)
+            c.Rect(x, 59, 1, 17, WoodDark);
+        c.Rect(31, 58, 2, 18, StoneDark);
+        c.Rect(23, 55, 18, 1, StoneDark);
+        c.Rect(23, 56, 1, 20, StoneDark);
+        c.Rect(40, 56, 1, 20, StoneDark);
+        Torch(c, 20, 57, frame);
+        Torch(c, 43, 57, (frame + 2) % 4);
+        // Windows: slits in the towers, a row along the wall.
+        foreach (int x in new[] { 4, 9, 53, 58 })
+        {
+            LitWindow(c, x, 38, 2, 3);
+            LitWindow(c, x, 50, 2, 3);
+        }
+        foreach (int x in new[] { 17, 45 })
+            LitWindow(c, x, 46, 2, 3);
+        // Long banners on the front towers and over the gate.
+        Banner(c, 4, 58, 6, 12);
+        Banner(c, 54, 58, 6, 12);
+        Banner(c, 29, 44, 6, 8);
+    });
+
     /// <summary>32×36 frames, bottom-centre origin; footprint 2×2 tiles. The roof is in faction colours.</summary>
     private static PixelCanvas Barracks() => Sheet(32, 36, (c, frame) =>
     {

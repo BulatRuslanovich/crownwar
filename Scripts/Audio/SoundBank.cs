@@ -28,6 +28,8 @@ public enum Sound
     Order,
     /// <summary>Coins clinking: gold taken from a fallen enemy building.</summary>
     Coin,
+    /// <summary>A low war horn, two long notes: a wave of the horde is coming (Defense).</summary>
+    Horn,
 }
 
 /// <summary>
@@ -96,7 +98,24 @@ public static class SoundBank
         [Sound.Coin] = Make(0.45f, (t, _) =>
             (Sine(2637, t) + 0.5f * Sine(3951, t)) * Decay(t, 0.06f) * 0.5f
             + (t > 0.08f ? (Sine(3136, t) + 0.4f * Sine(4699, t)) * Decay(t - 0.08f, 0.09f) * 0.45f : 0f)),
+        [Sound.Horn] = Make(2.1f, Horn),
     };
+
+    /// <summary>
+    /// A war horn: a low note that swells in, sagging up to pitch, then a fifth higher after a breath; brassy from a
+    /// saw wave pushed into saturation, with a little breath noise.
+    /// </summary>
+    private static float Horn(float t, float noise)
+    {
+        const float second = 1.05f, length = 2.1f;
+        // Each note counts its own time, so the pitch slide starts cleanly.
+        float local = t < second ? t : t - second;
+        float pitch = t < second ? 98f * (0.93f + 0.07f * MathF.Min(1f, local / 0.2f)) : 147f * (0.97f + 0.03f * MathF.Min(1f, local / 0.12f));
+        float envelope = Attack(local, t < second ? 0.18f : 0.08f)
+                         * MathF.Min(1f, (t < second ? second - 0.03f - t : length - t) / 0.3f);
+        float brass = Soft(Saw(pitch, local) * 1.6f + Saw(pitch * 2f, local) * 0.35f);
+        return MathF.Max(0f, envelope) * (brass * 0.6f + LowNoise(noise) * 0.06f);
+    }
 
     /// <summary>Renders <paramref name="seconds"/> of audio from a sample function f(time, white noise).</summary>
     private static AudioStreamWav Make(float seconds, Func<float, float, float> sample)

@@ -69,7 +69,7 @@ public partial class Main
         var slots = start.Slots.Select(s => new SlotConfig(
             s.Kind == NetSlotKind.Bot ? SlotKind.Bot : SlotKind.Human, s.Name, (BotDifficulty)s.Difficulty, s.Team)).ToList();
         var driver = new NetMatchDriver(_session, start) { LogChecksums = _devNetLog };
-        var match = CreateMatch(new MatchConfig(slots, start.Seed, start.YourFaction), driver);
+        var match = CreateMatch(new MatchConfig(slots, start.Seed, start.YourFaction, Mode: start.Mode), driver);
         match.MenuRequested += ShowMenu;
         if (_devAutoplay)
             match.AddBot(match.LocalFactionId, BotDifficulty.Hard).CommandSink = match.Issue;

@@ -4,13 +4,15 @@ using System.Linq;
 using Godot;
 using Lordsio.Net;
 using Lordsio.Sim.AI;
+using Lordsio.Sim.Core;
 using Lordsio.Sim.Net;
 
 namespace Lordsio.UI;
 
 /// <summary>
 /// The lobby of a network game: four slots, each a player, a bot or open, on one of four teams.
-/// The host fills open slots with bots, sets teams and starts; a client may only change its own team.
+/// The host picks the mode, fills open slots with bots, sets teams and starts; a client may only change its own team.
+/// In Defense there are no bots and no teams: everyone holds the citadel together.
 /// </summary>
 public partial class Lobby : Control
 {
@@ -23,6 +25,9 @@ public partial class Lobby : Control
     private Label _info = null!;
     private Label _hint = null!;
     private Button _start = null!;
+    private OptionButton _mode = null!;
+    private Label _modeHint = null!;
+    private static readonly MatchMode[] Modes = { MatchMode.Versus, MatchMode.Defense };
     private readonly List<(Label Name, OptionButton Kind, OptionButton Team)> _rows = new();
 
     /// <summary>Raised when the player leaves the lobby (the host closing it ends the game for everyone).</summary>
@@ -38,6 +43,7 @@ public partial class Lobby : Control
         _start.Pressed += _session.StartMatch;
         (_leaveButton = GetNode<Button>("Center/Panel/Rows/Buttons/Leave")).Pressed += () => LeaveRequested?.Invoke();
 
+        CreateModeRow(GetNode<VBoxContainer>("Center/Panel/Rows"));
         var grid = GetNode<GridContainer>("Center/Panel/Rows/Slots");
         for (int i = 0; i < NetSession.MaxSlots; i++)
             _rows.Add(CreateRow(grid, i));
@@ -52,6 +58,26 @@ public partial class Lobby : Control
     }
 
     public override void _ExitTree() => _session.LobbyUpdated -= Refresh;
+
+    /// <summary>The mode picker under the address: the host chooses, everyone else sees the choice.</summary>
+    private void CreateModeRow(VBoxContainer rows)
+    {
+        var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+        row.AddThemeConstantOverride("separation", 10);
+        row.AddChild(new Label { Text = "NET_MODE" });
+        _mode = new OptionButton();
+        foreach (var mode in Modes)
+            _mode.AddItem(ModeKey(mode));
+        _mode.ItemSelected += item => _session.SetMode(Modes[item]);
+        row.AddChild(_mode);
+        _modeHint = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, HorizontalAlignment = HorizontalAlignment.Center, Modulate = new Color(1, 1, 1, 0.7f) };
+        rows.AddChild(row);
+        rows.AddChild(_modeHint);
+        rows.MoveChild(row, GetNode("Center/Panel/Rows/Info").GetIndex() + 1);
+        rows.MoveChild(_modeHint, row.GetIndex() + 1);
+    }
+
+    public static string ModeKey(MatchMode mode) => mode == MatchMode.Defense ? "MODE_DEFENSE" : "MODE_VERSUS";
 
     private (Label, OptionButton, OptionButton) CreateRow(GridContainer grid, int index)
     {
@@ -86,6 +112,10 @@ public partial class Lobby : Control
     private void Refresh()
     {
         var slots = _session.Slots;
+        bool defense = _session.Mode == MatchMode.Defense;
+        _mode.Selected = Array.IndexOf(Modes, _session.Mode);
+        _mode.Disabled = !_session.IsHost;
+        _modeHint.Text = Tr(defense ? "MODE_DEFENSE_HINT" : "MODE_VERSUS_HINT");
         int own = slots.FindIndex(s => s.Kind == NetSlotKind.Human && s.PeerId == _session.LocalPeerId);
         for (int i = 0; i < _rows.Count; i++)
         {
@@ -110,14 +140,18 @@ public partial class Lobby : Control
                 _ => KindOpen,
             };
             kind.Disabled = !_session.IsHost || slot.Kind == NetSlotKind.Human;
+            for (int item = 1; item < KindPlayer; item++)
+                kind.SetItemDisabled(item, defense); // no bots against the waves
             team.Selected = slot.Team;
-            team.Disabled = slot.Kind == NetSlotKind.Empty || !(_session.IsHost || i == own);
+            // Hidden in place (not Visible = false, which would shift the grid's cells): no teams in Defense.
+            team.Modulate = defense ? Colors.Transparent : Colors.White;
+            team.Disabled = defense || slot.Kind == NetSlotKind.Empty || !(_session.IsHost || i == own);
         }
 
         if (_session.IsHost)
         {
             _start.Disabled = !_session.CanStart;
-            _hint.Text = _session.CanStart ? Tr("NET_HINT_HOST") : Tr("NET_NEED_TWO_TEAMS");
+            _hint.Text = _session.CanStart ? Tr(defense ? "NET_HINT_HOST_DEFENSE" : "NET_HINT_HOST") : Tr("NET_NEED_TWO_TEAMS");
         }
         else
         {

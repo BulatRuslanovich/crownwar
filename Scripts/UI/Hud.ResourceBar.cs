@@ -3,9 +3,16 @@ using Lordsio.Core;
 
 namespace Lordsio.UI;
 
-/// <summary>The top bar: gold (and the treasury limit), net income, army size, the day/night clock.</summary>
+/// <summary>
+/// The top bar: gold (and the treasury limit), net income, army size, the day/night clock; in Defense also the next
+/// wave and how many of the horde are still on the field.
+/// </summary>
 public partial class Hud
 {
+    private Label? _wave;
+    private (int Next, int Left, int Alive, int Text) _waveShown = (-1, -1, -1, -1);
+    private int _hordeCountedTick = -1;
+    private int _hordeAlive;
     /// <summary>The numbers the bar last showed (see <see cref="Changed{T}"/>).</summary>
     private (int Gold, int Capacity, int Net, int Income, int Upkeep, int ArmyUpkeep, int Population, int Cap, bool Night, int Left, int Text) _barShown;
 
@@ -51,6 +58,39 @@ public partial class Hud
             _dayNight.Modulate = sim.IsNight ? NightColor : Colors.White;
             _dayNight.TooltipText = Tr("HUD_NIGHT_TOOLTIP");
         }
+    }
+
+    /// <summary>Defense: the wave counter on the top bar.</summary>
+    private void AddWaveCounter()
+    {
+        if (_match.Sim.Defense == null)
+            return;
+        _wave = new Label { MouseFilter = Control.MouseFilterEnum.Pass, TooltipText = "HUD_WAVE_TOOLTIP" };
+        GetNode("ResourceBar/Row").AddChild(_wave);
+    }
+
+    /// <summary>"Wave 4 in 1:20", and while some of the horde still stand, how many.</summary>
+    private void UpdateWaveCounter()
+    {
+        if (_wave == null || _match.Sim.Defense is not { } defense)
+            return;
+        var sim = _match.Sim;
+        if (sim.Tick != _hordeCountedTick)
+        {
+            _hordeCountedTick = sim.Tick;
+            _hordeAlive = 0;
+            foreach (var unit in sim.Units)
+                if (unit.FactionId == defense.HordeFactionId)
+                    _hordeAlive++;
+        }
+        int left = Mathf.CeilToInt(sim.SecondsToNextWave);
+        if (!Changed(ref _waveShown, (defense.WavesLaunched + 1, left, _hordeAlive, _textVersion)))
+            return;
+        string text = string.Format(Tr("HUD_WAVE_IN"), defense.WavesLaunched + 1, TimeFormat.MinSec(left));
+        if (_hordeAlive > 0)
+            text += "   " + string.Format(Tr("HUD_HORDE_ALIVE"), _hordeAlive);
+        _wave.Text = text;
+        _wave.Modulate = left <= sim.Rules.Defense.WarningSeconds || _hordeAlive > 0 ? ProblemColor : Colors.White;
     }
 
     /// <summary>A coin before the gold and a soldier before the army size.</summary>

@@ -4,6 +4,7 @@ using System.Linq;
 using Godot;
 using Lordsio.Core;
 using Lordsio.Sim.AI;
+using Lordsio.Sim.Core;
 using Lordsio.Sim.Net;
 
 namespace Lordsio.Net;
@@ -11,10 +12,27 @@ namespace Lordsio.Net;
 /// <summary>The host's lobby: slots, teams, newcomers saying hello, and the start of the match.</summary>
 public partial class NetSession
 {
-    /// <summary>Host: turn a non-player slot into a bot of the given difficulty, or empty it.</summary>
+    /// <summary>
+    /// Host: pick the mode. Defense is for people only (the waves are the enemy), so its bot slots are opened again;
+    /// teams do not matter there (everyone defends together).
+    /// </summary>
+    public void SetMode(MatchMode mode)
+    {
+        if (!IsHost || InMatch || mode == Mode)
+            return;
+        Mode = mode;
+        if (mode == MatchMode.Defense)
+            for (int i = 0; i < Slots.Count; i++)
+                if (Slots[i].Kind == NetSlotKind.Bot)
+                    Slots[i] = Slots[i] with { Kind = NetSlotKind.Empty };
+        BroadcastLobby();
+    }
+
+    /// <summary>Host: turn a non-player slot into a bot of the given difficulty (not in Defense), or empty it.</summary>
     public void SetSlot(int index, NetSlotKind kind, BotDifficulty difficulty)
     {
-        if (!IsHost || InMatch || index <= 0 || index >= Slots.Count || Slots[index].Kind == NetSlotKind.Human || kind == NetSlotKind.Human)
+        if (!IsHost || InMatch || index <= 0 || index >= Slots.Count || Slots[index].Kind == NetSlotKind.Human || kind == NetSlotKind.Human
+            || (kind == NetSlotKind.Bot && Mode == MatchMode.Defense))
             return;
         Slots[index] = Slots[index] with { Kind = kind, Difficulty = (byte)difficulty, Name = "" };
         BroadcastLobby();
@@ -37,12 +55,14 @@ public partial class NetSession
             Send(1, new SetTeamMessage((byte)Math.Clamp(team, 0, MaxSlots - 1)));
     }
 
-    /// <summary>At least two occupied slots on at least two different teams.</summary>
+    /// <summary>Versus: at least two occupied slots on at least two different teams. Defense: anyone at all.</summary>
     public bool CanStart
     {
         get
         {
             var used = Slots.Where(s => s.Kind != NetSlotKind.Empty).ToList();
+            if (Mode == MatchMode.Defense)
+                return used.Count >= 1;
             return used.Count >= 2 && used.Select(s => s.Team).Distinct().Count() >= 2;
         }
     }
@@ -64,9 +84,9 @@ public partial class NetSession
             string token = GD.Randi().ToString("x8") + GD.Randi().ToString("x8");
             _players[faction] = (token, slot.Name);
             if (slot.PeerId != 1)
-                Send(slot.PeerId, new StartMessage(seed, factions, faction, token));
+                Send(slot.PeerId, new StartMessage(seed, factions, faction, token, Mode: Mode));
         }
-        StartedWith = new StartMessage(seed, factions, _factionOfPeer[1], TokenOf(_factionOfPeer[1]));
+        StartedWith = new StartMessage(seed, factions, _factionOfPeer[1], TokenOf(_factionOfPeer[1]), Mode: Mode);
         MatchStarting?.Invoke(StartedWith);
     }
 
@@ -106,7 +126,7 @@ public partial class NetSession
 
     private void BroadcastLobby()
     {
-        Broadcast(new LobbyMessage(Slots));
+        Broadcast(new LobbyMessage(Slots, Mode));
         LobbyUpdated?.Invoke();
     }
 

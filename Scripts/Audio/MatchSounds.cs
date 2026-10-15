@@ -129,6 +129,15 @@ public partial class MatchSounds : Node
             case MatchEnded ended:
                 PlayUi(ended.WinningTeam == _match.LocalTeam ? Sound.Victory : Sound.Defeat, 0f);
                 break;
+            case WaveIncoming:
+                PlayUi(Sound.Horn, -6f);
+                break;
+            case WaveStarted:
+                PlayUi(Sound.Horn, 0f);
+                break;
+            case WaveCleared:
+                PlayUi(Sound.BuildingCompleted, -2f);
+                break;
         }
     }
 

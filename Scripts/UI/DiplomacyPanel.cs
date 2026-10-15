@@ -80,7 +80,8 @@ public partial class DiplomacyPanel : PanelContainer
     public bool HasCounterparts => _rows.Any(r => _match.Sim.StanceBetween(_match.LocalFactionId, r.Faction) != Stance.Ally
                                                   && !_match.IsBotControlled(r.Faction));
 
-    public void Toggle() => Visible = !Visible;
+    /// <summary>Opens or closes the panel; not in Defense, where every player is on one side.</summary>
+    public void Toggle() => Visible = !Visible && _match.Sim.Defense == null;
 
     /// <summary>How the player stands with a side, as a short colored label (also used by the scoreboard).</summary>
     public static (string Text, Color Color) Describe(MatchController match, int faction)

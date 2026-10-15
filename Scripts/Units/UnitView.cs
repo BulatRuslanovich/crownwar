@@ -65,10 +65,15 @@ public partial class UnitView : Node2D
     public Vector2 SpriteOffset { get; private set; }
     public int Row => _row;
 
+    /// <summary>How much bigger than its cell the unit is drawn (see <see cref="ArtLayout.UnitScale"/>).</summary>
+    public float BodyScale => _scale;
+    private float _scale = 1f;
+
     public void Initialize(Unit unit, Texture2D sheet)
     {
         _unit = unit;
         _row = ArtLayout.UnitRow(unit.Type.Id);
+        _scale = ArtLayout.UnitScale(unit.Type.Id);
         _drawnHealth = unit.Health;
         // Every soldier breathes in his own time.
         _idleTime = unit.Id * 0.73f % BreathPeriod;
@@ -100,8 +105,8 @@ public partial class UnitView : Node2D
     /// <summary>A recruit steps out: squashed flat, then springing up past its height and settling.</summary>
     public void Pop()
     {
-        _sprite.Scale = new Vector2(1.45f, 0.5f);
-        CreateTween().TweenProperty(_sprite, "scale", Vector2.One, 0.32).SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
+        _sprite.Scale = new Vector2(1.45f, 0.5f) * _scale;
+        CreateTween().TweenProperty(_sprite, "scale", Vector2.One * _scale, 0.32).SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
     }
 
     /// <summary>Briefly flashes white and staggers away from the blow (visual only).</summary>
@@ -221,6 +226,7 @@ public partial class UnitView : Node2D
             Vframes = ArtLayout.UnitRows,
             Centered = false,
             Offset = -new Vector2(ArtLayout.UnitFeet.X, ArtLayout.UnitFeet.Y),
+            Scale = Vector2.One * _scale,
         };
         AddChild(sprite);
         return sprite;

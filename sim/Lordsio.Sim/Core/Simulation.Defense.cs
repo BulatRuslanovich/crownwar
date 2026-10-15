@@ -38,12 +38,12 @@ public sealed partial class Simulation
     }
 
     /// <summary>A new outpost for a player whose own has fallen: the castle becomes buildable for them, one at a time.</summary>
-    private bool MayBuildOutpost(int factionId, BuildingType type) =>
+    public bool MayBuildOutpost(int factionId, BuildingType type) =>
         Defense is { } d && type.IsCapital && d.IsPlayer(factionId)
         && CountBuildings(factionId, type.Id) + PlannedCount(factionId, type.Id) == 0;
 
     /// <summary>What a building costs: a castle (only ever a new outpost in Defense) at the mode's price.</summary>
-    private int BuildCost(BuildingType type) => Defense != null && type.IsCapital ? Rules.Defense.OutpostCost : type.Cost;
+    public int BuildCost(BuildingType type) => Defense != null && type.IsCapital ? Rules.Defense.OutpostCost : type.Cost;
 
     private float BuildSeconds(BuildingType type) => Defense != null && type.IsCapital ? Rules.Defense.OutpostBuildSeconds : type.BuildTime;
 

@@ -4,6 +4,7 @@ using System.Linq;
 using Godot;
 using Lordsio.Core;
 using Lordsio.Sim.AI;
+using Lordsio.Sim.Core;
 using Lordsio.Sim.Net;
 
 namespace Lordsio.Net;
@@ -43,6 +44,9 @@ public partial class NetSession : Node
 
     /// <summary>The lobby as the host sees it (clients receive copies).</summary>
     public List<NetSlot> Slots { get; private set; } = new();
+
+    /// <summary>The mode the host picked for the match (clients receive it with the lobby).</summary>
+    public MatchMode Mode { get; private set; }
 
     public event Action? LobbyUpdated;
     /// <summary>The match is starting; the message carries this machine's faction.</summary>
@@ -137,6 +141,7 @@ public partial class NetSession : Node
         StartedWith = null;
         Resumed = null;
         Slots = new List<NetSlot>();
+        Mode = MatchMode.Versus;
         _helloSent = false;
         IsHost = false;
         InMatch = false;
@@ -212,6 +217,7 @@ public partial class NetSession : Node
         {
             case LobbyMessage lobby:
                 Slots = lobby.Slots.ToList();
+                Mode = lobby.Mode;
                 LobbyUpdated?.Invoke();
                 break;
             case RejectMessage reject:

@@ -26,7 +26,9 @@ public partial class Hud
                 break;
             case BuildingDestroyed destroyed:
                 string name = Names.Of(_match.Sim.Rules.GetBuildingType(destroyed.BuildingTypeId));
-                if (destroyed.FactionId == player)
+                if (destroyed.FactionId == player && _match.Sim.Defense != null && _match.Sim.Rules.GetBuildingType(destroyed.BuildingTypeId).IsCapital)
+                    ShowMessage(string.Format(Tr("MSG_OUTPOST_LOST"), _match.Sim.Rules.Defense.OutpostCost));
+                else if (destroyed.FactionId == player)
                     ShowMessage(string.Format(Tr("MSG_BUILDING_LOST"), name));
                 else if (destroyed.KillerFactionId == player)
                     ShowMessage(string.Format(Tr("MSG_ENEMY_BUILDING_DESTROYED"), name));
@@ -64,11 +66,25 @@ public partial class Hud
             case DepositRestored restored when restored.FactionId == player:
                 ShowMessage(Tr("MSG_DEPOSIT_RESTORED"));
                 break;
+            case WaveIncoming incoming:
+                ShowMessage(string.Format(Tr("MSG_WAVE_INCOMING"), incoming.Wave, Mathf.RoundToInt(incoming.Seconds)));
+                _alert.PointAt(incoming.From, WaveArrowSeconds);
+                break;
+            case WaveStarted started:
+                ShowMessage(string.Format(Tr(started.Wave % 10 == 0 ? "MSG_WAVE_BOSS" : "MSG_WAVE_STARTED"), started.Wave, started.Units));
+                _alert.PointAt(started.From, WaveArrowSeconds);
+                break;
+            case WaveCleared cleared:
+                ShowMessage(string.Format(Tr("MSG_WAVE_CLEARED"), cleared.Wave, cleared.Reward));
+                break;
             case FactionEliminated eliminated when eliminated.FactionId != player:
                 ShowMessage(string.Format(Tr("MSG_FACTION_FELL"), Names.Faction(eliminated.FactionId)));
                 break;
         }
     }
+
+    /// <summary>How long the screen-edge arrows point at where a wave comes in.</summary>
+    private const float WaveArrowSeconds = 8f;
 
     /// <summary>Warns that the player is under attack and points at the place.</summary>
     public void ShowAlert(System.Numerics.Vector2 simPosition)

@@ -112,7 +112,8 @@ public partial class EndScreen : CanvasLayer
 
     private void Present(bool victory, bool matchOver)
     {
-        _title.Text = Tr(victory ? "END_VICTORY" : "END_DEFEAT");
+        var defense = _match.Sim.Defense;
+        _title.Text = Tr(defense != null && matchOver ? "END_CITADEL_FELL" : victory ? "END_VICTORY" : "END_DEFEAT");
         _title.Modulate = victory ? VictoryColor : DefeatColor;
         _watch.Visible = !matchOver;
         _details.Visible = true;
@@ -125,6 +126,8 @@ public partial class EndScreen : CanvasLayer
         string text = string.Format(Tr("END_DURATION"), seconds / 60, seconds % 60);
         if (winners.Count > 0)
             text += "   ·   " + string.Format(Tr("END_WINNER"), string.Join(", ", winners.Select(f => Names.Player(_match, f))));
+        if (defense != null)
+            text += "   ·   " + string.Format(Tr("END_WAVES_HELD"), defense.WavesCleared, defense.WavesLaunched);
         _stats.Text = text;
 
         FillAwards(sides);

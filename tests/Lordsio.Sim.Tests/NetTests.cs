@@ -29,6 +29,8 @@ public class NetCodecTests
         yield return new SetTeamMessage(2);
         yield return new StartMessage(12345, slots, 1);
         yield return new StartMessage(12345, slots, 1, "a1b2c3", Rejoin: true);
+        yield return new LobbyMessage(slots, MatchMode.Defense);
+        yield return new StartMessage(12345, slots, 0, "d4e5f6", Mode: MatchMode.Defense);
         yield return new InputMessage(77, commands);
         yield return new FrameMessage(78, commands, new[] { 2 }, Array.Empty<FactionReturn>());
         yield return new FrameMessage(79, Array.Empty<Command>(), Array.Empty<int>(), new[] { new FactionReturn(1, 120) });
@@ -47,6 +49,21 @@ public class NetCodecTests
 
         Assert.That(decoded.GetType(), Is.EqualTo(message.GetType()));
         Assert.That(NetCodec.Encode(decoded), Is.EqualTo(bytes), "re-encoding must give the same bytes");
+    }
+
+    [Test]
+    public void TheModeTravelsWithTheStartAndOlderMessagesMeanVersus()
+    {
+        var slots = new[] { new NetSlot(NetSlotKind.Human, "Аня", 0, 0, 1) };
+        var defense = NetCodec.Encode(new StartMessage(9, slots, 0, "tok", Mode: MatchMode.Defense));
+        var versus = NetCodec.Encode(new StartMessage(9, slots, 0, "tok"));
+
+        Assert.That(((StartMessage)NetCodec.Decode(defense)).Mode, Is.EqualTo(MatchMode.Defense));
+        // A start saved before the modes existed has no mode byte at the end.
+        Assert.That(((StartMessage)NetCodec.Decode(versus[..^1])).Mode, Is.EqualTo(MatchMode.Versus));
+        Assert.That(((LobbyMessage)NetCodec.Decode(NetCodec.Encode(new LobbyMessage(slots, MatchMode.Defense)))).Mode, Is.EqualTo(MatchMode.Defense));
+        defense[^1] = 77;
+        Assert.Throws<FormatException>(() => NetCodec.Decode(defense), "unknown mode");
     }
 
     [Test]

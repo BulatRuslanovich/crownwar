@@ -35,6 +35,7 @@ namespace Lordsio.Dev;
 ///   --demo-scoreboard        keep the players table (Tab) open
 ///   --demo-diplomacy         open the diplomacy panel (P)
 ///   --demo-far-build         order a barracks far from the player's troops (a soldier walks over to build it)
+///   --demo-defense[=&lt;n&gt;]     a Defense match for n sides (default 1): you and n-1 bots hold the citadel
 ///   --perf-log=&lt;s&gt;           measure s seconds of frames (vsync off, after a warm-up), print the numbers and quit
 /// </summary>
 public static class DevTools
@@ -51,6 +52,15 @@ public static class DevTools
         args.Any(a => a == "--net-host" || a == "--net-resume" || a == "--net-browse" || a.StartsWith("--net-join=", StringComparison.Ordinal));
 
     public static int? Seed(string[] args) => Arg(args, "--seed") is { } s ? int.Parse(s, CultureInfo.InvariantCulture) : null;
+
+    /// <summary>The match a direct start plays: the default one, or a Defense match with --demo-defense.</summary>
+    public static MatchConfig DirectStartConfig(string[] args)
+    {
+        if (!Has(args, "--demo-defense") && Arg(args, "--demo-defense") is null)
+            return MatchConfig.Default with { Seed = Seed(args) };
+        int sides = Arg(args, "--demo-defense") is { } n ? int.Parse(n, CultureInfo.InvariantCulture) : 1;
+        return MatchConfig.Single(sides - 1, Sim.AI.BotDifficulty.Normal, Seed(args)) with { Mode = MatchMode.Defense };
+    }
 
     /// <summary>Applies the demo options to a freshly started match.</summary>
     public static void Apply(MatchController match, string[] args)

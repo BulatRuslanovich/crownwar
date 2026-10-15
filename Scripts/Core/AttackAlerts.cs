@@ -7,7 +7,7 @@ namespace Lordsio.Core;
 /// <summary>
 /// Decides when to warn the player that they are under attack: an enemy hit on one of the player's
 /// units or buildings, at most once per <see cref="CooldownTicks"/>, plus whenever a fight breaks out
-/// somewhere new (far from the previous warning).
+/// somewhere new (far from the previous warning). In Defense a blow on the shared citadel warns too.
 /// </summary>
 public sealed class AttackAlerts
 {
@@ -17,12 +17,15 @@ public sealed class AttackAlerts
     private const int NewFrontCooldownTicks = 3 * Simulation.TicksPerSecond;
 
     private readonly int _player;
+    /// <summary>An ally whose hits count as the player's own (the citadel's garrison), or -1.</summary>
+    private readonly int _guarded;
     private int _lastTick = int.MinValue / 2;
     private SimVector2 _lastPosition;
 
-    public AttackAlerts(int playerFactionId)
+    public AttackAlerts(int playerFactionId, int? guardedFactionId = null)
     {
         _player = playerFactionId;
+        _guarded = guardedFactionId ?? -1;
     }
 
     /// <summary>Where the most recent warning came from, for "jump to alert".</summary>
@@ -33,7 +36,7 @@ public sealed class AttackAlerts
 
     public void OnSimEvent(SimEvent e, int tick)
     {
-        if (e is not AttackLanded hit || hit.TargetFactionId != _player || hit.FactionId == _player)
+        if (e is not AttackLanded hit || hit.TargetFactionId != _player && hit.TargetFactionId != _guarded || hit.FactionId == _player)
             return;
         int since = tick - _lastTick;
         bool newFront = SimVector2.Distance(hit.Position, _lastPosition) > NewFrontDistance;

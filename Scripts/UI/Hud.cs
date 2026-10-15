@@ -108,6 +108,7 @@ public partial class Hud : CanvasLayer
         _buildingPanel.Visible = false;
         CreateBuildButtons(GetNode<HBoxContainer>("BuildBar/Rows/Buttons"));
         AddResourceIcons();
+        AddWaveCounter();
         GetNode<Minimap>("MinimapPanel/Minimap").Initialize(match);
         var scoreboard = new Scoreboard { Name = "Scoreboard" };
         AddChild(scoreboard);
@@ -131,6 +132,7 @@ public partial class Hud : CanvasLayer
     public override void _Process(double delta)
     {
         UpdateResourceBar((float)delta);
+        UpdateWaveCounter();
         UpdateBuildButtons();
         UpdateRest(delta);
     }

@@ -97,7 +97,8 @@ public partial class ShadowsView : CanvasGroup
             var feet = view.Position + view.SpriteOffset;
             var region = new Rect2(view.Frame * w, view.Row * h, w, h);
             var rect = new Rect2(-ArtLayout.UnitFeet.X, -ArtLayout.UnitFeet.Y, w, h);
-            _drawer.DrawSetTransformMatrix(new Transform2D(view.FacingLeft ? Vector2.Left : Vector2.Right, shear, feet));
+            _drawer.DrawSetTransformMatrix(new Transform2D(view.FacingLeft ? Vector2.Left : Vector2.Right, shear, feet)
+                .ScaledLocal(Vector2.One * view.BodyScale));
             _drawer.DrawTextureRectRegion(silhouettes, rect, region, Colors.Black);
         }
         _drawer.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);

@@ -20,6 +20,8 @@ public static class Names
     public static string Player(MatchController match, int faction)
     {
         var slots = match.Config.Slots;
+        if (match.Sim.Defense is { } defense && (faction == defense.GarrisonFactionId || faction == defense.HordeFactionId))
+            return TranslationServer.Translate(faction == defense.HordeFactionId ? "DEFENSE_HORDE" : "DEFENSE_GARRISON");
         if (faction >= slots.Count)
             return Faction(faction);
         var slot = slots[faction];
