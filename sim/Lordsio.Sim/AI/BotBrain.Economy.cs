@@ -104,7 +104,7 @@ public sealed partial class BotBrain
     /// </summary>
     private int PlanUpgrades(Faction me, int reserve, int armyValue)
     {
-        var own = OwnBuildings().ToList();
+        var own = OwnBuildings();
         int levelsBought = own.Sum(b => b.Type.Tier - 1);
         if (own.Any(b => b.IsUpgrading) || levelsBought >= _profile.MaxUpgrades
             || _sim.Tick < _profile.UpgradeAfter * Simulation.TicksPerSecond)
@@ -223,14 +223,20 @@ public sealed partial class BotBrain
         var c = Cell.FromPosition(center);
         for (int r = minRadius; r <= maxRadius; r++)
         {
-            var ring = new List<Cell>();
+            _ring.Clear();
             for (int dy = -r; dy <= r; dy++)
                 for (int dx = -r; dx <= r; dx++)
                     if (Math.Max(Math.Abs(dx), Math.Abs(dy)) == r)
-                        ring.Add(new Cell(c.X + dx, c.Y + dy));
-            // Shuffle so bases do not all grow in the same direction.
-            foreach (var anchor in ring.OrderBy(_ => _rng.Next()))
+                        _ring.Add(new Cell(c.X + dx, c.Y + dy));
+            // Shuffle so bases do not all grow in the same direction: a random key per cell, in ring order, and a
+            // stable sort by it (ties keep ring order).
+            _ringOrder.Clear();
+            for (int i = 0; i < _ring.Count; i++)
+                _ringOrder.Add((_rng.Next(), i));
+            _ringOrder.Sort();
+            foreach (var (_, index) in _ringOrder)
             {
+                var anchor = _ring[index];
                 if (_sim.CanBuild(FactionId, type.Id, anchor) != BuildError.None || BlocksNeighbours(anchor, type.Size))
                     continue;
                 Issue(new BuildCommand(FactionId, type.Id, anchor));

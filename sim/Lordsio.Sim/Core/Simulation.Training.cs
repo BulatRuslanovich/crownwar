@@ -38,8 +38,16 @@ public sealed partial class Simulation
     /// How many steps of units the faction has opened: one per finished barracks (any building that unlocks units)
     /// still standing. Lose them and the steps close again.
     /// </summary>
-    public int UnlockLevel(int factionId) =>
-        _buildings.Count(b => b.FactionId == factionId && b.IsAlive && b.IsComplete && b.Type.UnlocksUnits);
+    public int UnlockLevel(int factionId)
+    {
+        int level = 0;
+        foreach (var b in _buildings)
+        {
+            if (b.FactionId == factionId && b.IsAlive && b.IsComplete && b.Type.UnlocksUnits)
+                level++;
+        }
+        return level;
+    }
 
     /// <summary>Whether the faction may train this kind now.</summary>
     public bool IsUnlocked(int factionId, UnitType type) => type.BarracksRequired <= UnlockLevel(factionId);
@@ -67,10 +75,13 @@ public sealed partial class Simulation
     public int TrainingSlots(Building building) => 1 + UnlockLevel(building.FactionId);
 
     private readonly List<UnitType> _finished = new();
+    /// <summary>Training places per faction this tick (reused, filled as buildings come up).</summary>
+    private readonly Dictionary<int, int> _trainingSlots = new();
 
     private void AdvanceConstructionAndTraining()
     {
-        var slots = new Dictionary<int, int>();
+        var slots = _trainingSlots;
+        slots.Clear();
         foreach (var building in _buildings)
         {
             if (!building.IsComplete)
@@ -113,10 +124,20 @@ public sealed partial class Simulation
         var slots = Formation.ComputeSlots(Map, SpawnPointOf(building), 32, radius);
         foreach (var slot in slots)
         {
-            bool occupied = _units.Any(u => Vector2.DistanceSquared(u.Position, slot) < MathF.Pow(u.Type.Radius + radius, 2));
-            if (!occupied)
+            if (!IsStoodOn(slot, radius))
                 return slot;
         }
         return slots[0]; // crowded: separation will make room
+    }
+
+    /// <summary>Whether a body of <paramref name="radius"/> at the point would overlap any unit.</summary>
+    private bool IsStoodOn(Vector2 point, float radius)
+    {
+        foreach (var u in _units)
+        {
+            if (Vector2.DistanceSquared(u.Position, point) < MathF.Pow(u.Type.Radius + radius, 2))
+                return true;
+        }
+        return false;
     }
 }

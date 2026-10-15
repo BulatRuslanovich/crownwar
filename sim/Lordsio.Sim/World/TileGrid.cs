@@ -13,6 +13,8 @@ public sealed class TileGrid
 
     private readonly Terrain[] _tiles;
     private readonly bool[] _occupied;
+    /// <summary>Walkable terrain without a building on it: the cell test of every path search, kept up to date.</summary>
+    private readonly bool[] _walkable;
     private readonly int[] _component;
 
     public int Width { get; }
@@ -29,6 +31,9 @@ public sealed class TileGrid
         Height = height;
         _tiles = tiles;
         _occupied = new bool[tiles.Length];
+        _walkable = new bool[tiles.Length];
+        for (int i = 0; i < tiles.Length; i++)
+            _walkable[i] = TerrainInfo.IsWalkable(tiles[i]);
         _component = new int[tiles.Length];
         LabelComponents();
     }
@@ -38,30 +43,40 @@ public sealed class TileGrid
 
     public Terrain GetTerrain(Cell cell) => _tiles[Index(cell.X, cell.Y)];
 
-    public bool IsWalkable(int x, int y)
-    {
-        if (!InBounds(x, y))
-            return false;
-        int i = Index(x, y);
-        return !_occupied[i] && TerrainInfo.IsWalkable(_tiles[i]);
-    }
+    public bool IsWalkable(int x, int y) => InBounds(x, y) && _walkable[Index(x, y)];
+
+    /// <summary>Walkability by flat index (<see cref="Index"/>), for tight loops that have checked the bounds.</summary>
+    internal bool IsWalkableAt(int index) => _walkable[index];
 
     public bool IsWalkable(Cell cell) => IsWalkable(cell.X, cell.Y);
 
     /// <summary>A building stands on the cell.</summary>
     public bool IsOccupied(Cell cell) => InBounds(cell) && _occupied[Index(cell.X, cell.Y)];
 
-    /// <summary>Marks a building footprint as solid (or frees it) and recomputes connectivity.</summary>
-    public void SetOccupied(IEnumerable<Cell> cells, bool occupied)
+    /// <summary>
+    /// Marks a building footprint (the <paramref name="size"/>×<paramref name="size"/> square at <paramref name="anchor"/>)
+    /// as solid, or frees it, and recomputes connectivity unless <paramref name="relabel"/> is false — then the caller
+    /// changes several footprints in a row and calls <see cref="Relabel"/> once at the end.
+    /// </summary>
+    public void SetOccupied(Cell anchor, int size, bool occupied, bool relabel = true)
     {
-        foreach (var cell in cells)
+        for (int y = anchor.Y; y < anchor.Y + size; y++)
         {
-            if (!InBounds(cell))
-                throw new ArgumentOutOfRangeException(nameof(cells), $"Cell {cell} is outside the map.");
-            _occupied[Index(cell.X, cell.Y)] = occupied;
+            for (int x = anchor.X; x < anchor.X + size; x++)
+            {
+                if (!InBounds(x, y))
+                    throw new ArgumentOutOfRangeException(nameof(anchor), $"Cell ({x}, {y}) is outside the map.");
+                int i = Index(x, y);
+                _occupied[i] = occupied;
+                _walkable[i] = !occupied && TerrainInfo.IsWalkable(_tiles[i]);
+            }
         }
-        LabelComponents();
+        if (relabel)
+            LabelComponents();
     }
+
+    /// <summary>Recomputes connectivity after footprints were changed with <c>relabel: false</c>.</summary>
+    public void Relabel() => LabelComponents();
 
     /// <summary>
     /// Id of the walkable region the cell belongs to, or -1 for blocked / out-of-bounds cells.
@@ -237,14 +252,16 @@ public sealed class TileGrid
 
     internal int Index(int x, int y) => y * Width + x;
 
+    private readonly Stack<int> _labelStack = new();
+
     private void LabelComponents()
     {
         Array.Fill(_component, -1);
-        var stack = new Stack<int>();
+        var stack = _labelStack;
         int next = 0;
         for (int start = 0; start < _tiles.Length; start++)
         {
-            if (_component[start] != -1 || _occupied[start] || !TerrainInfo.IsWalkable(_tiles[start]))
+            if (_component[start] != -1 || !_walkable[start])
                 continue;
 
             // 4-connectivity is sufficient: a diagonal step is only legal when both orthogonal

@@ -106,12 +106,19 @@ public sealed partial class BotBrain
 
     private int DefenceValue(Vector2 point, int owner)
     {
-        int units = _sim.Units.Where(u => u.FactionId == owner && Vector2.Distance(u.Position, point) <= DefenceRadius).Sum(u => u.Type.Cost);
+        int value = 0;
+        foreach (var u in _sim.Units)
+        {
+            if (u.FactionId == owner && Vector2.Distance(u.Position, point) <= DefenceRadius)
+                value += u.Type.Cost;
+        }
         // Shooting buildings (towers, the castle) count in proportion to their damage.
-        int buildings = _sim.Buildings
-            .Where(b => b.FactionId == owner && b.Type.Attack != null && b.IsComplete && Vector2.Distance(b.Position, point) <= DefenceRadius)
-            .Sum(b => TowerDefenceValue * b.Type.Attack!.Damage / 10);
-        return units + buildings;
+        foreach (var b in _sim.Buildings)
+        {
+            if (b.FactionId == owner && b.Type.Attack is { } attack && b.IsComplete && Vector2.Distance(b.Position, point) <= DefenceRadius)
+                value += TowerDefenceValue * attack.Damage / 10;
+        }
+        return value;
     }
 
     /// <summary>

@@ -155,6 +155,10 @@ public sealed class Building : Entity
 
     public static Vector2 CenterOf(Cell anchor, int size) => anchor.CenterOfSquare(size);
 
+    /// <summary>Whether <paramref name="cell"/> lies in the footprint.</summary>
+    public bool Covers(Cell cell) =>
+        cell.X >= Anchor.X && cell.Y >= Anchor.Y && cell.X < Anchor.X + Type.Size && cell.Y < Anchor.Y + Type.Size;
+
     public static IEnumerable<Cell> FootprintOf(Cell anchor, int size)
     {
         for (int y = 0; y < size; y++)

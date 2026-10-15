@@ -61,14 +61,15 @@ public sealed partial class Simulation
         _events.Add(new BuildingDemolished(building.FactionId, building.Id, building.Type.Id, refund, building.Position, building.Type.Size));
     }
 
-    private void RemoveBuilding(Building building)
+    /// <param name="relabel">False when several buildings go at once; the caller then relabels the map once.</param>
+    private void RemoveBuilding(Building building, bool relabel = true)
     {
         building.Health = 0; // anyone still aiming at it lets go
         _buildings.Remove(building);
         _entitiesById.Remove(building.Id);
         if (building.Deposit != null)
             building.Deposit.MineId = 0;
-        Map.SetOccupied(building.Footprint, false);
+        Map.SetOccupied(building.Anchor, building.Type.Size, false, relabel);
     }
 
     /// <summary>
@@ -83,13 +84,38 @@ public sealed partial class Simulation
                 Eliminate(faction);
         }
 
-        var contenders = _factions.Where(f => f.IsContender).ToList();
-        int teams = contenders.Select(f => f.Team).Distinct().Count();
-        var standingTeams = contenders.Where(f => !f.IsEliminated).Select(f => f.Team).Distinct().ToList();
-        if (teams >= 2 && standingTeams.Count <= 1)
+        // Counted without allocating, every tick: are there two teams at all, and how many still stand?
+        int firstTeam = 0, standingTeam = 0;
+        bool anyContender = false, twoTeams = false, anyStanding = false, twoStanding = false;
+        foreach (var f in _factions)
+        {
+            if (!f.IsContender)
+                continue;
+            if (!anyContender)
+            {
+                anyContender = true;
+                firstTeam = f.Team;
+            }
+            else if (f.Team != firstTeam)
+            {
+                twoTeams = true;
+            }
+            if (f.IsEliminated)
+                continue;
+            if (!anyStanding)
+            {
+                anyStanding = true;
+                standingTeam = f.Team;
+            }
+            else if (f.Team != standingTeam)
+            {
+                twoStanding = true;
+            }
+        }
+        if (twoTeams && !twoStanding)
         {
             IsOver = true;
-            WinningTeam = standingTeams.Count == 1 ? standingTeams[0] : -1;
+            WinningTeam = anyStanding ? standingTeam : -1;
             _events.Add(new MatchEnded(WinningTeam));
         }
     }
@@ -98,14 +124,25 @@ public sealed partial class Simulation
     private void Eliminate(Faction faction)
     {
         faction.IsEliminated = true;
-        foreach (var unit in _units.Where(u => u.FactionId == faction.Id).ToList())
+        for (int i = 0; i < _units.Count; i++)
         {
+            var unit = _units[i];
+            if (unit.FactionId != faction.Id)
+                continue;
             unit.Health = 0;
-            _units.Remove(unit);
+            _units.RemoveAt(i--);
             _entitiesById.Remove(unit.Id);
         }
-        foreach (var building in _buildings.Where(b => b.FactionId == faction.Id).ToList())
-            RemoveBuilding(building);
+        bool collapsed = false;
+        for (int i = 0; i < _buildings.Count; i++)
+        {
+            if (_buildings[i].FactionId != faction.Id)
+                continue;
+            RemoveBuilding(_buildings[i--], relabel: false);
+            collapsed = true;
+        }
+        if (collapsed)
+            Map.Relabel();
         _events.Add(new FactionEliminated(faction.Id));
     }
 }

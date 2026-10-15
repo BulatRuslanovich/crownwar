@@ -94,7 +94,15 @@ public sealed partial class Simulation
     public Entity? GetEntity(int id) => _entitiesById.GetValueOrDefault(id);
     public Unit? GetUnit(int id) => GetEntity(id) as Unit;
     public Building? GetBuilding(int id) => GetEntity(id) as Building;
-    public Faction? GetFaction(int id) => _factions.Find(f => f.Id == id);
+    public Faction? GetFaction(int id)
+    {
+        foreach (var faction in _factions)
+        {
+            if (faction.Id == id)
+                return faction;
+        }
+        return null;
+    }
 
     public void Issue(Command command) => _pending.Enqueue(command);
 

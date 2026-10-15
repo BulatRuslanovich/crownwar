@@ -33,7 +33,7 @@ public sealed partial class Simulation
         {
             if (unit.FactionId != factionId || !unit.IsAlive || unit.Type.IsSiege
                 || Map.ComponentOf(Cell.FromPosition(unit.Position)) != component
-                || _plans.Any(p => p.BuilderId == unit.Id))
+                || IsBuilder(unit.Id))
                 continue;
             var key = (unit.Target != null, Vector2.Distance(unit.Position, center));
             if (key.Item1 != bestKey.Busy ? !key.Item1 : key.Item2 < bestKey.Distance)
@@ -45,14 +45,39 @@ public sealed partial class Simulation
         return best;
     }
 
-    /// <summary>Whether the footprint overlaps a building the faction has already sent someone to put up.</summary>
-    private bool OverlapsPlan(int factionId, Cell anchor, int size) =>
-        _plans.Any(p => p.FactionId == factionId
-                        && anchor.X < p.Anchor.X + p.Type.Size && p.Anchor.X < anchor.X + size
-                        && anchor.Y < p.Anchor.Y + p.Type.Size && p.Anchor.Y < anchor.Y + size);
+    private bool IsBuilder(int unitId)
+    {
+        foreach (var p in _plans)
+        {
+            if (p.BuilderId == unitId)
+                return true;
+        }
+        return false;
+    }
 
-    private int PlannedCount(int factionId, string buildingTypeId) =>
-        _plans.Count(p => p.FactionId == factionId && p.Type.Id == buildingTypeId);
+    /// <summary>Whether the footprint overlaps a building the faction has already sent someone to put up.</summary>
+    private bool OverlapsPlan(int factionId, Cell anchor, int size)
+    {
+        foreach (var p in _plans)
+        {
+            if (p.FactionId == factionId
+                && anchor.X < p.Anchor.X + p.Type.Size && p.Anchor.X < anchor.X + size
+                && anchor.Y < p.Anchor.Y + p.Type.Size && p.Anchor.Y < anchor.Y + size)
+                return true;
+        }
+        return false;
+    }
+
+    private int PlannedCount(int factionId, string buildingTypeId)
+    {
+        int count = 0;
+        foreach (var p in _plans)
+        {
+            if (p.FactionId == factionId && p.Type.Id == buildingTypeId)
+                count++;
+        }
+        return count;
+    }
 
     /// <summary>A build order with nobody near: pay, send the nearest free soldier, and lay out the site when he arrives.</summary>
     private bool TryPlanBuild(BuildCommand build)

@@ -46,6 +46,8 @@ internal sealed class CombatSystem
     /// <summary>Decides what the unit does this tick: fight, chase, resume its march or go back to its post.</summary>
     public void UpdateBehaviour(Unit unit, IReadOnlyList<Unit> units, IReadOnlyList<Building> buildings, int tick)
     {
+        if (!unit.IsAlive)
+            return; // fell earlier this tick: it is removed at the end of the tick, and does nothing meanwhile
         if (unit.AttackCooldownTicks > 0)
             unit.AttackCooldownTicks--;
         unit.IsAttacking = false;
@@ -181,7 +183,7 @@ internal sealed class CombatSystem
     /// <summary>A finished tower shoots the nearest enemy unit in range.</summary>
     public void UpdateTower(Building tower, IReadOnlyList<Unit> units, int tick)
     {
-        if (tower.Type.Attack is not { } attack || !tower.IsComplete)
+        if (tower.Type.Attack is not { } attack || !tower.IsComplete || !tower.IsAlive)
             return;
         if (tower.AttackCooldownTicks > 0)
             tower.AttackCooldownTicks--;

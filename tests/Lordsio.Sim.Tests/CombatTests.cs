@@ -2,6 +2,7 @@ using System.Numerics;
 using Lordsio.Sim.Combat;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.Units;
+using Lordsio.Sim.World;
 using static Lordsio.Sim.Tests.TestSim;
 
 namespace Lordsio.Sim.Tests;
@@ -42,6 +43,46 @@ public class CombatTests
         var died = sim.TakeEvents().OfType<UnitDied>().Single();
         Assert.That(died.UnitId, Is.EqualTo(dummy.Id));
         Assert.That(died.KillerFactionId, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void AUnitKilledEarlierInATickDoesNotStrikeBack()
+    {
+        var sim = EmptySim();
+        var first = sim.SpawnUnit("infantry", 0, new Vector2(2.5f, 2.5f));
+        var second = sim.SpawnUnit("infantry", 1, new Vector2(3.1f, 2.5f));
+        first.Health = second.Health = 10; // one blow kills either
+        sim.Issue(new AttackCommand(0, new[] { first.Id }, second.Id));
+        sim.Issue(new AttackCommand(1, new[] { second.Id }, first.Id));
+
+        sim.Step(); // both are in reach and ready: the first in line strikes first
+
+        Assert.That(second.IsAlive, Is.False);
+        Assert.That(first.IsAlive, Is.True, "the dead do not fight on until the end of the tick");
+    }
+
+    [Test]
+    public void ATowerDestroyedEarlierInATickDoesNotShoot()
+    {
+        var sim = TestMaps.WithCapitals(2, TestMaps.Field(20, 10), "start 1 1", "start 16 6", "unit infantry 0 8 6");
+        sim.Issue(new BuildCommand(0, "tower", new Cell(8, 3)));
+        RunSeconds(sim, TestMaps.Tower.BuildTime + 0.2f);
+        var tower = sim.Buildings.Single(b => b.Type.Id == "tower");
+        var raider = sim.SpawnUnit("infantry", 1, new Vector2(9.3f, 3.5f));
+        sim.Issue(new AttackCommand(1, new[] { raider.Id }, tower.Id));
+        RunTicks(sim, CombatSystem.ScanIntervalTicks); // the tower takes aim
+        Assert.That(tower.Target, Is.SameAs(raider));
+        sim.TakeEvents();
+
+        // Both ready to strike in the same tick; units act before towers, and the tower has one hit point left.
+        tower.Health = 1;
+        tower.AttackCooldownTicks = 0;
+        raider.AttackCooldownTicks = 0;
+        sim.Step();
+
+        Assert.That(tower.IsAlive, Is.False);
+        Assert.That(sim.TakeEvents().OfType<ProjectileFired>().Where(e => e.FactionId == 0), Is.Empty,
+            "a tower brought down in a tick fires nothing that tick");
     }
 
     [Test]

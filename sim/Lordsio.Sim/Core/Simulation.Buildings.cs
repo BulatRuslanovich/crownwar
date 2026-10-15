@@ -9,8 +9,16 @@ namespace Lordsio.Sim.Core;
 public sealed partial class Simulation
 {
     /// <summary>Standing buildings of one kind a faction has, construction sites included.</summary>
-    public int CountBuildings(int factionId, string buildingTypeId) =>
-        _buildings.Count(b => b.FactionId == factionId && b.IsAlive && b.Type.Id == buildingTypeId);
+    public int CountBuildings(int factionId, string buildingTypeId)
+    {
+        int count = 0;
+        foreach (var b in _buildings)
+        {
+            if (b.FactionId == factionId && b.IsAlive && b.Type.Id == buildingTypeId)
+                count++;
+        }
+        return count;
+    }
 
     /// <summary>
     /// Whether a <see cref="BuildCommand"/> would currently succeed: the same check the command runs,
@@ -31,14 +39,18 @@ public sealed partial class Simulation
         if (OverlapsPlan(factionId, anchor, type.Size))
             return BuildError.Occupied;
 
-        foreach (var cell in Building.FootprintOf(anchor, type.Size))
+        for (int y = 0; y < type.Size; y++)
         {
-            if (!Map.InBounds(cell))
-                return BuildError.OutOfBounds;
-            if (!TerrainInfo.IsBuildable(Map.GetTerrain(cell)))
-                return BuildError.BlockedTerrain;
-            if (Map.IsOccupied(cell))
-                return BuildError.Occupied;
+            for (int x = 0; x < type.Size; x++)
+            {
+                var cell = new Cell(anchor.X + x, anchor.Y + y);
+                if (!Map.InBounds(cell))
+                    return BuildError.OutOfBounds;
+                if (!TerrainInfo.IsBuildable(Map.GetTerrain(cell)))
+                    return BuildError.BlockedTerrain;
+                if (Map.IsOccupied(cell))
+                    return BuildError.Occupied;
+            }
         }
 
         if (type.IsMine)
@@ -46,14 +58,12 @@ public sealed partial class Simulation
             if (DepositAt(anchor) is not { } deposit || deposit.Anchor != anchor)
                 return BuildError.NeedsDeposit;
         }
-        else if (Building.FootprintOf(anchor, type.Size).Any(c => DepositAt(c) != null))
+        else if (TouchesDeposit(anchor, type.Size))
         {
             return BuildError.OnDeposit;
         }
 
-        Vector2 center = Building.CenterOf(anchor, type.Size);
-        float radiusSq = Rules.BuildRadius * Rules.BuildRadius;
-        if (!_units.Any(u => u.FactionId == factionId && u.IsAlive && Vector2.DistanceSquared(u.Position, center) <= radiusSq))
+        if (!HasUnitNear(factionId, Building.CenterOf(anchor, type.Size), Rules.BuildRadius))
             return BuildError.NoUnitsNearby;
 
         if (checkGold && !faction.Treasury.CanAfford(type.Cost))
@@ -61,7 +71,40 @@ public sealed partial class Simulation
         return BuildError.None;
     }
 
-    public GoldDeposit? DepositAt(Cell cell) => _deposits.Find(d => d.Contains(cell));
+    public GoldDeposit? DepositAt(Cell cell)
+    {
+        foreach (var deposit in _deposits)
+        {
+            if (deposit.Contains(cell))
+                return deposit;
+        }
+        return null;
+    }
+
+    /// <summary>Whether any cell of the square overlaps a gold deposit.</summary>
+    private bool TouchesDeposit(Cell anchor, int size)
+    {
+        foreach (var deposit in _deposits)
+        {
+            bool apart = anchor.X + size <= deposit.Anchor.X || deposit.Anchor.X + GoldDeposit.Size <= anchor.X
+                      || anchor.Y + size <= deposit.Anchor.Y || deposit.Anchor.Y + GoldDeposit.Size <= anchor.Y;
+            if (!apart)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>Whether a living unit of the faction stands within <paramref name="radius"/> of the point.</summary>
+    private bool HasUnitNear(int factionId, Vector2 point, float radius)
+    {
+        float radiusSq = radius * radius;
+        foreach (var u in _units)
+        {
+            if (u.FactionId == factionId && u.IsAlive && Vector2.DistanceSquared(u.Position, point) <= radiusSq)
+                return true;
+        }
+        return false;
+    }
 
     private void PlaceCapitals(IReadOnlyList<Cell> starts, MatchSetup setup)
     {
@@ -108,7 +151,7 @@ public sealed partial class Simulation
         _entitiesById.Add(building.Id, building);
         if (deposit != null)
             deposit.MineId = building.Id;
-        Map.SetOccupied(building.Footprint, true);
+        Map.SetOccupied(building.Anchor, type.Size, true);
         MakeRoomFor(building);
         return building;
     }
@@ -141,10 +184,9 @@ public sealed partial class Simulation
     /// <summary>Units standing on a new footprint step aside; routes through it are planned again.</summary>
     private void MakeRoomFor(Building building)
     {
-        var footprint = building.Footprint.ToHashSet();
         foreach (var unit in _units)
         {
-            if (footprint.Contains(Cell.FromPosition(unit.Position))
+            if (building.Covers(Cell.FromPosition(unit.Position))
                 && Map.FindNearestInComponent(Cell.FromPosition(unit.Position), TileGrid.AnyComponent, 8) is { } free)
             {
                 unit.Position = free.Center;
@@ -153,12 +195,12 @@ public sealed partial class Simulation
 
             if (unit.Target != null)
                 unit.ChaseRepathTicks = 0; // chase routes are refreshed next tick
-            else if (unit.State == UnitState.Moving && unit.Destination is { } destination && PathCrosses(unit, footprint))
+            else if (unit.State == UnitState.Moving && unit.Destination is { } destination && PathCrosses(unit, building))
                 Repath(unit, destination);
         }
     }
 
-    private static bool PathCrosses(Unit unit, HashSet<Cell> cells)
+    private static bool PathCrosses(Unit unit, Building building)
     {
         Vector2 from = unit.Position;
         for (int i = unit.PathIndex; i < unit.Path.Count; i++)
@@ -168,7 +210,7 @@ public sealed partial class Simulation
             int steps = Math.Max(1, (int)(Vector2.Distance(from, to) * 4));
             for (int s = 0; s <= steps; s++)
             {
-                if (cells.Contains(Cell.FromPosition(Vector2.Lerp(from, to, (float)s / steps))))
+                if (building.Covers(Cell.FromPosition(Vector2.Lerp(from, to, (float)s / steps))))
                     return true;
             }
             from = to;

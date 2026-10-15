@@ -54,6 +54,11 @@ public sealed partial class BotBrain
     /// <summary>Beyond what the army limit needs, a new barracks (to open the next kind of unit) at most this often.</summary>
     private const float BarracksIntervalSeconds = 60f;
     private UnitType? _nextUnit;
+    /// <summary>The bot's own buildings, taken once per decision (orders only take effect when the simulation steps).</summary>
+    private readonly List<Building> _own = new();
+    /// <summary>Scratch lists for <see cref="TryPlaceNear"/>.</summary>
+    private readonly List<Cell> _ring = new();
+    private readonly List<(int Key, int Index)> _ringOrder = new();
 
     public BotBrain(Simulation sim, int factionId, BotDifficulty difficulty, int seed)
         : this(sim, factionId, BotProfile.For(difficulty), seed)
@@ -102,6 +107,12 @@ public sealed partial class BotBrain
             if (_sim.HasPeaceOffer(faction.Id, FactionId))
                 Issue(new AnswerPeaceCommand(FactionId, faction.Id, Accept: false));
 
+        _own.Clear();
+        foreach (var building in _sim.Buildings)
+        {
+            if (building.FactionId == FactionId)
+                _own.Add(building);
+        }
         var army = _sim.Units.Where(u => u.FactionId == FactionId).ToList();
         int armyValue = army.Sum(u => u.Type.Cost);
         var threats = FindThreats();
@@ -113,20 +124,42 @@ public sealed partial class BotBrain
         CommandArmy(capital, army, armyValue, threats);
     }
 
-    private IEnumerable<Building> OwnBuildings() => _sim.Buildings.Where(b => b.FactionId == FactionId);
+    private List<Building> OwnBuildings() => _own;
 
     private List<Unit> FindThreats()
     {
-        var own = OwnBuildings().ToList();
-        return _sim.Units
-            .Where(u => _sim.AreEnemies(FactionId, u.FactionId) && u.IsAlive && own.Any(b => b.SurfaceDistance(u.Position) <= ThreatRadius))
-            .ToList();
+        var threats = new List<Unit>();
+        foreach (var u in _sim.Units)
+        {
+            if (!_sim.AreEnemies(FactionId, u.FactionId) || !u.IsAlive)
+                continue;
+            foreach (var b in _own)
+            {
+                if (b.SurfaceDistance(u.Position) <= ThreatRadius)
+                {
+                    threats.Add(u);
+                    break;
+                }
+            }
+        }
+        return threats;
     }
 
     /// <summary>No enemy units or buildings near the point.</summary>
-    private bool IsSafe(Vector2 point) =>
-        !_sim.Units.Any(u => _sim.AreEnemies(FactionId, u.FactionId) && Vector2.Distance(u.Position, point) < DefenceRadius)
-        && !_sim.Buildings.Any(b => _sim.AreEnemies(FactionId, b.FactionId) && Vector2.Distance(b.Position, point) < DefenceRadius);
+    private bool IsSafe(Vector2 point)
+    {
+        foreach (var u in _sim.Units)
+        {
+            if (_sim.AreEnemies(FactionId, u.FactionId) && Vector2.Distance(u.Position, point) < DefenceRadius)
+                return false;
+        }
+        foreach (var b in _sim.Buildings)
+        {
+            if (_sim.AreEnemies(FactionId, b.FactionId) && Vector2.Distance(b.Position, point) < DefenceRadius)
+                return false;
+        }
+        return true;
+    }
 
     private Vector2 RallyPoint(Building capital) => SpawnSide(capital) + new Vector2(0f, 1.5f);
 

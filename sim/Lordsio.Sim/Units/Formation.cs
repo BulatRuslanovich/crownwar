@@ -28,7 +28,8 @@ public static class Formation
 
         var cells = NearestCells(map, goal, cellsWanted: (int)MathF.Ceiling(count * Spacing * Spacing * 2f) + 9);
 
-        var candidates = new List<(Vector2 Point, float Key)>();
+        var candidates = Scratch.Candidates;
+        candidates.Clear();
         foreach (var (cell, walkDistance) in cells)
         {
             int i0 = (int)MathF.Ceiling((cell.X - target.X) / Spacing);
@@ -61,13 +62,22 @@ public static class Formation
         return slots;
     }
 
-    /// <summary>Dijkstra from <paramref name="goal"/> (8 directions, no corner cutting) until enough cells are settled.</summary>
+    /// <summary>
+    /// Dijkstra from <paramref name="goal"/> (8 directions, no corner cutting) until enough cells are settled.
+    /// The list returned is scratch space, valid until the next call.
+    /// </summary>
     private static List<(Cell Cell, float Distance)> NearestCells(TileGrid map, Cell goal, int cellsWanted)
     {
-        var result = new List<(Cell, float)>();
-        var best = new Dictionary<Cell, float> { [goal] = 0f };
-        var settled = new HashSet<Cell>();
-        var open = new PriorityQueue<Cell, float>();
+        var scratch = Scratch;
+        var result = scratch.Result;
+        var best = scratch.Best;
+        var settled = scratch.Settled;
+        var open = scratch.Open;
+        result.Clear();
+        best.Clear();
+        settled.Clear();
+        open.Clear();
+        best[goal] = 0f;
         open.Enqueue(goal, 0f);
 
         while (result.Count < cellsWanted && open.TryDequeue(out var cell, out float dist))
@@ -98,4 +108,18 @@ public static class Formation
         }
         return result;
     }
+
+    /// <summary>Search buffers reused between calls (every recruit and every move order lays out slots).</summary>
+    private sealed class Buffers
+    {
+        public readonly List<(Cell, float)> Result = new();
+        public readonly Dictionary<Cell, float> Best = new();
+        public readonly HashSet<Cell> Settled = new();
+        public readonly PriorityQueue<Cell, float> Open = new();
+        public readonly List<(Vector2 Point, float Key)> Candidates = new();
+    }
+
+    [ThreadStatic] private static Buffers? _scratch;
+
+    private static Buffers Scratch => _scratch ??= new Buffers();
 }
