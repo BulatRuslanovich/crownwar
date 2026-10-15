@@ -36,23 +36,66 @@ public class MapGeneratorTests
         Assert.That(mixed, Is.GreaterThan(20), "most maps mix two or three biomes");
     }
 
-    [Test]
-    public void GeneratedMapsAreLargerAndRichInGold()
+    [TestCase(2, 128)]
+    [TestCase(3, 144)]
+    [TestCase(4, 160)]
+    public void MapsAreSquaresSizedForThePlayers(int players, int size)
     {
-        var map = MapGenerator.Generate(5);
-        Assert.That((map.Grid.Width, map.Grid.Height), Is.EqualTo((192, 128)));
-        Assert.That(map.Deposits.Count, Is.GreaterThanOrEqualTo(16));
+        var map = MapGenerator.Generate(5, players);
+        Assert.That((map.Grid.Width, map.Grid.Height), Is.EqualTo((size, size)));
+        Assert.That(map.StartPositions, Has.Count.EqualTo(players), "one castle per side");
+        Assert.That(map.Deposits.Count, Is.InRange(players * 7, players * 11), "fewer deposits on a smaller map, a share per player");
+    }
+
+    /// <summary>
+    /// What players complained of, three in a network game: the start must be fair. Every castle as far from the middle
+    /// and from its neighbours as the others (within the few tiles each castle may shift to dry land), two deposits of
+    /// its own close by, and no gold out in the corners where only some castles could reach it first.
+    /// </summary>
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    public void EveryCastleStartsAlike(int players)
+    {
+        for (int seed = 1; seed <= 25; seed++)
+        {
+            var map = MapGenerator.Generate(seed, players);
+            float size = map.Grid.Width;
+            var middle = new System.Numerics.Vector2(size / 2f, size / 2f);
+            var castles = map.StartPositions.Select(s => new System.Numerics.Vector2(s.X + 1.5f, s.Y + 1.5f)).ToList();
+
+            var toMiddle = castles.Select(c => System.Numerics.Vector2.Distance(c, middle)).ToList();
+            Assert.That(toMiddle.Max() - toMiddle.Min(), Is.LessThan(12f), $"seed {seed}: as far from the middle");
+            var toNeighbour = castles.Select((c, i) => castles.Where((_, j) => j != i).Min(o => System.Numerics.Vector2.Distance(c, o))).ToList();
+            Assert.That(toNeighbour.Max() - toNeighbour.Min(), Is.LessThan(14f), $"seed {seed}: as far from the nearest enemy");
+            Assert.That(toNeighbour.Min(), Is.GreaterThan(75f), $"seed {seed}: room to grow");
+
+            foreach (var c in castles)
+            {
+                int own = map.Deposits.Count(d => System.Numerics.Vector2.Distance(new(d.Anchor.X + 1, d.Anchor.Y + 1), c) <= 23f);
+                Assert.That(own, Is.GreaterThanOrEqualTo(2), $"seed {seed}: castle at {c} has its two deposits");
+            }
+            // Gold away from the castles (all but their own two) lies inside the circle, none out in the corners.
+            foreach (var d in map.Deposits)
+            {
+                var at = new System.Numerics.Vector2(d.Anchor.X + 1, d.Anchor.Y + 1);
+                if (castles.Min(c => System.Numerics.Vector2.Distance(at, c)) > 23f)
+                    Assert.That(System.Numerics.Vector2.Distance(at, middle), Is.LessThanOrEqualTo(size / 2f), $"seed {seed}: deposit {d} inside the circle");
+            }
+        }
     }
 
     [Test]
     public void SameSeedSameMapOtherSeedOtherMap()
     {
-        string first = Fingerprint(MapGenerator.Generate(7));
-        string again = Fingerprint(MapGenerator.Generate(7));
-        string other = Fingerprint(MapGenerator.Generate(8));
+        string first = Fingerprint(MapGenerator.Generate(7, 3));
+        string again = Fingerprint(MapGenerator.Generate(7, 3));
+        string other = Fingerprint(MapGenerator.Generate(8, 3));
+        string forFour = Fingerprint(MapGenerator.Generate(7, 4));
 
         Assert.That(again, Is.EqualTo(first));
         Assert.That(other, Is.Not.EqualTo(first));
+        Assert.That(forFour, Is.Not.EqualTo(first), "the number of players shapes the map too");
     }
 
     [TestCase(1)]
@@ -71,7 +114,7 @@ public class MapGeneratorTests
                     differ++;
         Assert.That(differ, Is.GreaterThan(g.Width * g.Height / 8), "the halves differ");
 
-        // But no hopeless start: castles far apart, in their own corners, each with a deposit close by.
+        // But no hopeless start: castles far apart, each with a deposit close by.
         var starts = map.StartPositions;
         for (int i = 0; i < starts.Count; i++)
         {
@@ -89,12 +132,13 @@ public class MapGeneratorTests
         var rules = Rules();
         for (int seed = 0; seed < 200; seed++)
         {
-            var map = MapGenerator.Generate(seed);
+            int players = 2 + seed % 3;
+            var map = MapGenerator.Generate(seed, players);
             var g = map.Grid;
-            Assert.That(map.StartPositions, Has.Count.EqualTo(4), $"seed {seed}");
+            Assert.That(map.StartPositions, Has.Count.EqualTo(players), $"seed {seed}");
 
-            // Castles fit and the match can be created for four players.
-            Assert.DoesNotThrow(() => new Simulation(MapGenerator.Generate(seed), rules, new MatchSetup(4, seed)), $"seed {seed}");
+            // Castles fit and the match can be created for that many players.
+            Assert.DoesNotThrow(() => new Simulation(MapGenerator.Generate(seed, players), rules, new MatchSetup(players, seed)), $"seed {seed}");
 
             // All castles are linked by land (roads bridge the rivers).
             int home = g.ComponentOf(new Cell(map.StartPositions[0].X + 1, map.StartPositions[0].Y + 3));
@@ -102,7 +146,7 @@ public class MapGeneratorTests
                 Assert.That(g.ComponentOf(new Cell(start.X + 1, start.Y + 3)), Is.EqualTo(home), $"seed {seed}: start {start}");
 
             // Enough gold, all of it on open ground the castles can reach.
-            Assert.That(map.Deposits.Count, Is.GreaterThanOrEqualTo(9), $"seed {seed}: safe and exposed deposits for everyone, plus rich ones");
+            Assert.That(map.Deposits.Count, Is.GreaterThanOrEqualTo(3 * players), $"seed {seed}: safe and exposed deposits for everyone, plus rich ones");
             Assert.That(map.Deposits.Any(d => d.Yield > MapLoader.DefaultDepositYield), $"seed {seed}: a rich deposit");
             foreach (var deposit in map.Deposits)
             {
@@ -120,12 +164,12 @@ public class MapGeneratorTests
 
     /// <summary>Prints maps as text (run by hand: --filter "Name~DumpMap").</summary>
     [Explicit("prints maps for a look")]
-    [TestCase(70)]
-    [TestCase(1)]
-    [TestCase(2)]
-    public void DumpMap(int seed)
+    [TestCase(70, 4)]
+    [TestCase(1, 3)]
+    [TestCase(2, 2)]
+    public void DumpMap(int seed, int players)
     {
-        var map = MapGenerator.Generate(seed);
+        var map = MapGenerator.Generate(seed, players);
         var g = map.Grid;
         var rows = new List<char[]>();
         for (int y = 0; y < g.Height; y++)

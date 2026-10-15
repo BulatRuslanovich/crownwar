@@ -105,9 +105,9 @@ public partial class MatchController : Node2D
         AddChild(_night);
         var rules = GameRules.Parse(ReadText(RulesPath));
         ActualSeed = Config.Seed ?? (int)(GD.Randi() & int.MaxValue);
-        // Every match is on a new map; the seed (the "map number" in the menu) reproduces it exactly,
-        // which is also how network players all get the same map.
-        var map = MapGenerator.Generate(ActualSeed);
+        // Every match is on a new map, sized and laid out for the sides at the start; the seed (the "map number" in the
+        // menu) and their number reproduce it exactly, which is also how network players all get the same map.
+        var map = MapGenerator.Generate(ActualSeed, Config.Slots.Count);
         MapBiomes = map.Biomes;
         LocalFactionId = Config.LocalFactionId;
         Sim = new Simulation(map, rules, new MatchSetup(Config.Slots.Count, ActualSeed, Teams: Config.Teams));
