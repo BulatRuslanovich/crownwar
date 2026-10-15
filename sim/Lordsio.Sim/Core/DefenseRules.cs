@@ -10,7 +10,8 @@ namespace Lordsio.Sim.Core;
 /// <param name="BaseBudget">What the first wave's troops cost, in gold, for one player.</param>
 /// <param name="Growth">Each wave is worth this many times the one before.</param>
 /// <param name="ExtraPlayerShare">Each player beyond the first adds this share of the budget.</param>
-/// <param name="MaxUnitsPerWave">A cap on a wave's numbers (late waves bring stronger troops instead of ever more).</param>
+/// <param name="MaxUnitsPerWave">A cap on a wave's numbers for one player (late waves bring stronger troops instead of ever
+/// more); each further player raises it by <paramref name="ExtraPlayerShare"/> like the budget.</param>
 /// <param name="RewardBase">Gold every player gets for a wave wiped out, plus <paramref name="RewardPerWave"/> × its number.</param>
 /// <param name="OutpostCost">Gold to build a new outpost (a castle) once the old one has fallen.</param>
 /// <param name="OutpostBuildSeconds">How long a new outpost takes to build.</param>
@@ -22,9 +23,9 @@ public sealed record DefenseRules(
     float WaveIntervalSeconds = 150f,
     float WarningSeconds = 30f,
     int BaseBudget = 400,
-    float Growth = 1.12f,
+    float Growth = 1.32f,
     float ExtraPlayerShare = 0.5f,
-    int MaxUnitsPerWave = 150,
+    int MaxUnitsPerWave = 100,
     int RewardBase = 100,
     int RewardPerWave = 15,
     int OutpostCost = 400,

@@ -146,7 +146,7 @@ public sealed partial class Simulation
         var units = Rules.Units;
         var troops = new List<UnitType>();
         int left = budget;
-        int cap = Rules.Defense.MaxUnitsPerWave;
+        int cap = (int)(Rules.Defense.MaxUnitsPerWave * (1f + Rules.Defense.ExtraPlayerShare * (d.Players - 1)));
         bool Take(string id)
         {
             if (!units.Contains(id) || troops.Count >= cap)
@@ -206,7 +206,35 @@ public sealed partial class Simulation
         }
         if (troops.Count == 0)
             Take(mix.Count > 0 ? mix[0].Id : units.All.First().Id);
+        UpgradeTroops(troops, left);
         return troops;
+    }
+
+    /// <summary>What a horde soldier becomes when a wave at its cap has gold to spare: spearmen into men-at-arms, bowmen into crossbowmen.</summary>
+    private static readonly (string From, string To)[] Upgrades = { ("infantry", "heavy"), ("archer", "crossbowman") };
+
+    /// <summary>
+    /// A wave that hit the cap on its numbers spends what is left on better troops instead: the cheap soldiers are
+    /// turned into tougher ones, front to back, while the gold lasts.
+    /// </summary>
+    private void UpgradeTroops(List<UnitType> troops, int left)
+    {
+        var units = Rules.Units;
+        foreach (var (from, to) in Upgrades)
+        {
+            if (!units.Contains(from) || !units.Contains(to))
+                continue;
+            int extra = units.Get(to).Cost - units.Get(from).Cost;
+            if (extra <= 0)
+                continue;
+            for (int i = 0; i < troops.Count && left >= extra; i++)
+            {
+                if (troops[i].Id != from)
+                    continue;
+                troops[i] = units.Get(to);
+                left -= extra;
+            }
+        }
     }
 
     private Vector2 CitadelPosition(DefenseState d) => GetBuilding(d.CitadelId)?.Position ?? new Vector2(Map.Width / 2f, Map.Height / 2f);

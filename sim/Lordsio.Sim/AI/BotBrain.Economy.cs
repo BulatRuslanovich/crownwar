@@ -217,8 +217,11 @@ public sealed partial class BotBrain
             .FirstOrDefault();
     }
 
-    /// <summary>Tries anchors on rings around <paramref name="center"/> until the rules accept one.</summary>
-    private bool TryPlaceNear(BuildingType type, Vector2 center, int minRadius, int maxRadius)
+    /// <summary>
+    /// Tries anchors on rings around <paramref name="center"/> until the rules accept one; with
+    /// <paramref name="sendBuilder"/> also one where nobody stands but a soldier can walk over to build.
+    /// </summary>
+    private bool TryPlaceNear(BuildingType type, Vector2 center, int minRadius, int maxRadius, bool sendBuilder = false)
     {
         var c = Cell.FromPosition(center);
         for (int r = minRadius; r <= maxRadius; r++)
@@ -237,7 +240,9 @@ public sealed partial class BotBrain
             foreach (var (_, index) in _ringOrder)
             {
                 var anchor = _ring[index];
-                if (_sim.CanBuild(FactionId, type.Id, anchor) != BuildError.None || BlocksNeighbours(anchor, type.Size))
+                var error = _sim.CanBuild(FactionId, type.Id, anchor);
+                bool walkOver = sendBuilder && error == BuildError.NoUnitsNearby && _sim.FindBuilder(FactionId, type.Id, anchor) != null;
+                if (error != BuildError.None && !walkOver || BlocksNeighbours(anchor, type.Size))
                     continue;
                 Issue(new BuildCommand(FactionId, type.Id, anchor));
                 return true;

@@ -184,6 +184,48 @@ public class DefenseTests
     }
 
     [Test]
+    public void ACappedWaveSpendsTheRestOnTougherTroops()
+    {
+        var sim = Defense(QuickRules(d =>
+        {
+            d["baseBudget"] = 100000;
+            d["maxUnitsPerWave"] = 10;
+        }));
+
+        Run(sim, 10.2f);
+
+        var horde = Horde(sim).ToList();
+        Assert.That(horde, Has.Count.EqualTo(15), "the cap, raised by half for the second player");
+        Assert.That(horde.All(u => u.Type.Id == "heavy"), Is.True, "the first wave's spearmen all became men-at-arms");
+    }
+
+    [Test]
+    public void ABotBuildsItsFallenOutpostAgain()
+    {
+        var sim = Defense(QuickRules(d => d["firstWaveSeconds"] = 600));
+        var faction = sim.GetFaction(0)!;
+        var bot = new AI.BotBrain(sim, 0, AI.BotDifficulty.Normal, 1);
+        for (int i = 0; i < Simulation.TicksPerSecond * 3; i++)
+        {
+            sim.Step();
+            bot.Update();
+        }
+        var outpost = sim.GetBuilding(faction.CapitalId)!;
+        CombatSystem.ApplyDamage(outpost, outpost.MaxHealth, ranged: false, attackerFactionId: sim.Defense!.HordeFactionId);
+        faction.Treasury.Add(sim.Rules.Defense.OutpostCost);
+
+        for (int i = 0; i < Simulation.TicksPerSecond * 30 && sim.GetBuilding(faction.CapitalId) == null; i++)
+        {
+            sim.Step();
+            bot.Update();
+        }
+
+        var rebuilt = sim.GetBuilding(faction.CapitalId);
+        Assert.That(rebuilt, Is.Not.Null, "a new outpost stands (or is going up)");
+        Assert.That(Vector2.Distance(rebuilt!.Position, outpost.Position), Is.LessThan(12f), "near the old one");
+    }
+
+    [Test]
     public void IdleHordeTroopsMarchOnTheCitadel()
     {
         var sim = Defense();

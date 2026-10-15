@@ -99,8 +99,14 @@ public sealed partial class BotBrain
     /// <summary>One decision round: economy first, then what the army does.</summary>
     public void Think()
     {
-        if (_sim.GetFaction(FactionId) is not { IsEliminated: false } me || _sim.GetBuilding(me.CapitalId) is not { } capital)
+        if (_sim.GetFaction(FactionId) is not { IsEliminated: false } me)
             return;
+        if (_sim.GetBuilding(me.CapitalId) is not { } capital)
+        {
+            PlayWithoutOutpost(me); // Defense: the outpost fell and may be built again
+            return;
+        }
+        _home = capital.Position;
 
         // Bots do not do diplomacy: any offer of peace is turned down at once.
         foreach (var faction in _sim.Factions)
@@ -116,6 +122,7 @@ public sealed partial class BotBrain
         var army = _sim.Units.Where(u => u.FactionId == FactionId).ToList();
         int armyValue = army.Sum(u => u.Type.Cost);
         var threats = FindThreats();
+        AddCitadelThreats(threats);
 
         int reserve = PlanConstruction(me, capital, army, threatened: threats.Count > 0);
         if (threats.Count == 0)

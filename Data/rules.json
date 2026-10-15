@@ -10,7 +10,7 @@
   "upkeepAllowance": 60,
   "defense": {
     "firstWaveSeconds": 240, "waveIntervalSeconds": 150, "warningSeconds": 30,
-    "baseBudget": 400, "growth": 1.12, "extraPlayerShare": 0.5, "maxUnitsPerWave": 150,
+    "baseBudget": 400, "growth": 1.32, "extraPlayerShare": 0.5, "maxUnitsPerWave": 100,
     "rewardBase": 100, "rewardPerWave": 15, "outpostCost": 400, "outpostBuildSeconds": 45,
     "twoSidesFrom": 6, "threeSidesFrom": 13, "bossUnit": "warlord"
   },
@@ -69,9 +69,9 @@
       "attack": { "damage": 16, "range": 7, "cooldown": 1.0, "projectileSpeed": 14 }
     },
     {
-      "id": "citadel", "name": "Citadel", "size": 4, "cost": 0, "buildTime": 0, "health": 20000, "rangedArmor": 0.8,
+      "id": "citadel", "name": "Citadel", "size": 4, "cost": 0, "buildTime": 0, "health": 8000, "rangedArmor": 0.6,
       "citadel": true, "sight": 12,
-      "attack": { "damage": 24, "range": 8, "cooldown": 0.8, "projectileSpeed": 14 }
+      "attack": { "damage": 16, "range": 8, "cooldown": 0.8, "projectileSpeed": 14 }
     },
     {
       "id": "mine", "name": "Gold Mine", "size": 2, "cost": 100, "buildTime": 10, "health": 450, "rangedArmor": 0.7,
