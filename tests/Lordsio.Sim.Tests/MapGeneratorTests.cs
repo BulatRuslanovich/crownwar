@@ -126,6 +126,62 @@ public class MapGeneratorTests
         }
     }
 
+    /// <summary>
+    /// Defense maps: the citadel in the very middle, the outposts in a close ring round it at equal distances, a way in
+    /// for the waves from every edge, two deposits of its own by every outpost and the rest out beyond the ring.
+    /// </summary>
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    public void DefenseMapsRingTheCitadel(int players)
+    {
+        var rules = Rules();
+        for (int seed = 1; seed <= 20; seed++)
+        {
+            var map = MapGenerator.Generate(seed, players, MatchMode.Defense);
+            var g = map.Grid;
+            int size = g.Width;
+            var middle = new System.Numerics.Vector2(size / 2f, size / 2f);
+            Assert.That(map.Citadel, Is.EqualTo(new Cell(size / 2 - 2, size / 2 - 2)), $"seed {seed}: the citadel in the middle");
+            Assert.That(map.StartPositions, Has.Count.EqualTo(players));
+
+            var outposts = map.StartPositions.Select(s => new System.Numerics.Vector2(s.X + 1.5f, s.Y + 1.5f)).ToList();
+            var toMiddle = outposts.Select(o => System.Numerics.Vector2.Distance(o, middle)).ToList();
+            Assert.That(toMiddle.Min(), Is.GreaterThan(15f), $"seed {seed}: clear of the citadel");
+            Assert.That(toMiddle.Max() - toMiddle.Min(), Is.LessThan(5f), $"seed {seed}: the outposts alike");
+
+            // The waves can reach the citadel from every edge.
+            int home = g.ComponentOf(new Cell(size / 2, size / 2 + 3));
+            Assert.That(home, Is.GreaterThanOrEqualTo(0), $"seed {seed}: open ground at the gate");
+            foreach (var edge in new[] { new Cell(size / 2, 3), new Cell(size - 4, size / 2), new Cell(size / 2, size - 4), new Cell(3, size / 2) })
+                Assert.That(g.FindNearestInComponent(edge, home, 24), Is.Not.Null, $"seed {seed}: a way in from {edge}");
+            foreach (var start in map.StartPositions)
+                Assert.That(g.ComponentOf(new Cell(start.X + 1, start.Y + 3)), Is.EqualTo(home), $"seed {seed}: outpost {start} linked");
+
+            foreach (var o in outposts)
+                Assert.That(map.Deposits.Count(d => System.Numerics.Vector2.Distance(new(d.Anchor.X + 1, d.Anchor.Y + 1), o) <= 21f),
+                    Is.GreaterThanOrEqualTo(2), $"seed {seed}: outpost at {o} has its own gold");
+            Assert.That(map.Deposits.Count(d => System.Numerics.Vector2.Distance(new(d.Anchor.X + 1, d.Anchor.Y + 1), middle) > 30f),
+                Is.GreaterThanOrEqualTo(players * 3), $"seed {seed}: riches out towards the edge");
+
+            Assert.DoesNotThrow(() => new Simulation(map, rules, new MatchSetup(players, seed, Mode: MatchMode.Defense)), $"seed {seed}");
+        }
+    }
+
+    [Test]
+    public void TheHordeComesOnAGeneratedDefenseMap()
+    {
+        var sim = new Simulation(MapGenerator.Generate(3, 3, MatchMode.Defense), Rules(), new MatchSetup(3, 3, Mode: MatchMode.Defense));
+        var rules = sim.Rules.Defense;
+        int ticks = Lordsio.Sim.Core.Ticks.FromSeconds(rules.FirstWaveSeconds + rules.WaveIntervalSeconds) + 20;
+        for (int i = 0; i < ticks && !sim.IsOver; i++)
+            sim.Step();
+
+        Assert.That(sim.Defense!.WavesLaunched, Is.EqualTo(2));
+        Assert.That(sim.Units.Count(u => u.FactionId == sim.Defense.HordeFactionId) + sim.Defense.WavesCleared, Is.GreaterThan(0));
+        Assert.That(sim.IsOver, Is.False, "the citadel holds the first waves");
+    }
+
     [Test]
     public void EveryMapIsPlayable()
     {
@@ -167,9 +223,10 @@ public class MapGeneratorTests
     [TestCase(70, 4)]
     [TestCase(1, 3)]
     [TestCase(2, 2)]
-    public void DumpMap(int seed, int players)
+    [TestCase(5, 3, MatchMode.Defense)]
+    public void DumpMap(int seed, int players, MatchMode mode = MatchMode.Versus)
     {
-        var map = MapGenerator.Generate(seed, players);
+        var map = MapGenerator.Generate(seed, players, mode);
         var g = map.Grid;
         var rows = new List<char[]>();
         for (int y = 0; y < g.Height; y++)
@@ -185,6 +242,10 @@ public class MapGeneratorTests
             for (int y = s.Y; y < s.Y + 3; y++)
                 for (int x = s.X; x < s.X + 3; x++)
                     rows[y][x] = 'C';
+        if (map.Citadel is { } k)
+            for (int y = k.Y; y < k.Y + 4; y++)
+                for (int x = k.X; x < k.X + 4; x++)
+                    rows[y][x] = 'K';
         TestContext.Out.WriteLine($"seed {seed}: {map.Deposits.Count} deposits");
         foreach (var row in rows)
             TestContext.Out.WriteLine(new string(row));

@@ -1,4 +1,5 @@
 using System.Numerics;
+using Lordsio.Sim.Core;
 
 namespace Lordsio.Sim.World;
 
@@ -31,6 +32,9 @@ public enum Biome : byte
 /// middle), as far from one castle as from the next; the rest scattered as it falls, all of it inside the circle the
 /// castles stand on, so the corners of the square are no hidden treasure for whoever starts next to them.</item>
 /// </list>
+/// For the Defense mode the layout turns inside out: the shared citadel in the middle, the players' outposts in a
+/// close ring round it, roads in from the middle of every edge (where the waves come from), and the gold beyond the
+/// outposts out towards the edges, so growing rich means going out where the horde comes.
 /// </summary>
 public static class MapGenerator
 {
@@ -42,6 +46,9 @@ public static class MapGenerator
     private const float ClearRadius = 7.5f;
     /// <summary>How far castles stand in from the edge of the map (tiles, to their centre).</summary>
     private const int CastleMargin = 14;
+    /// <summary>Defense: the citadel's side, and how far the outposts stand from its centre.</summary>
+    private const int CitadelSize = 4;
+    private const float OutpostRing = 20f;
 
     /// <summary>The side of the square map for a match of <paramref name="players"/> (more players, more room).</summary>
     public static int SizeFor(int players) => Math.Clamp(players, MinPlayers, MaxPlayers) switch
@@ -52,14 +59,24 @@ public static class MapGenerator
     };
 
     /// <param name="players">Sides at the start of the match (players and bots): one castle each.</param>
-    public static MapDefinition Generate(int seed, int players = MaxPlayers)
+    /// <param name="mode">Defense lays out a citadel in the middle with the players' outposts round it.</param>
+    public static MapDefinition Generate(int seed, int players = MaxPlayers, MatchMode mode = MatchMode.Versus)
     {
         // One random stream for everything, drawn in a fixed order: the same seed gives the same map on every peer.
         var build = new Builder(SizeFor(players), new Random(seed));
+        int sides = Math.Clamp(players, MinPlayers, MaxPlayers);
         build.GrowLand();
         build.SeparateBiomes();
         build.JoinDiagonalWater();
-        var starts = build.PlaceCastles(Math.Clamp(players, MinPlayers, MaxPlayers));
+        if (mode == MatchMode.Defense)
+        {
+            var (outposts, citadel) = build.PlaceCitadelAndOutposts(sides);
+            var gate = build.LayDefenseRoads(outposts, citadel);
+            var defenseGrid = new TileGrid(build.Width, build.Height, build.Tiles);
+            var gold = build.PlaceDefenseGold(defenseGrid, outposts, citadel, home: defenseGrid.ComponentOf(gate));
+            return new MapDefinition(defenseGrid, Array.Empty<UnitSpawn>(), outposts, gold, build.Biomes, citadel);
+        }
+        var starts = build.PlaceCastles(sides);
         var doors = build.LayRoads(starts);
         var grid = new TileGrid(build.Width, build.Height, build.Tiles);
         var deposits = build.PlaceGold(grid, starts, home: grid.ComponentOf(doors[0]));
@@ -186,30 +203,127 @@ public static class MapGenerator
         /// </summary>
         public List<Cell> PlaceCastles(int players)
         {
-            float quarterTurns = _rng.Next(4) * MathF.PI / 2f;
-            float first = players switch
-            {
-                3 => -MathF.PI / 2f, // a corner of the triangle points straight at a side
-                _ => MathF.PI / 4f, // along the diagonals
-            } + quarterTurns;
             var starts = new List<Cell>();
-            for (int i = 0; i < players; i++)
-            {
-                float angle = first + i * MathF.Tau / players;
-                starts.Add(PickStart(Middle + new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * CastleRadius));
-            }
+            foreach (var place in RingPlaces(players, CastleRadius))
+                starts.Add(PickStart(place, jitter: 4));
             foreach (var start in starts)
                 Clear(start.CenterOfSquare(CastleSize), ClearRadius);
             return starts;
         }
 
         /// <summary>
+        /// Points on a circle of <paramref name="radius"/> round the middle at equal angles, turned one of the ways that
+        /// leave the square unchanged: two face each other across a diagonal, three stand as a triangle pointing at a
+        /// side, four in the corners.
+        /// </summary>
+        private List<Vector2> RingPlaces(int count, float radius)
+        {
+            float quarterTurns = _rng.Next(4) * MathF.PI / 2f;
+            float first = count switch
+            {
+                3 => -MathF.PI / 2f, // a corner of the triangle points straight at a side
+                _ => MathF.PI / 4f, // along the diagonals
+            } + quarterTurns;
+            var places = new List<Vector2>();
+            for (int i = 0; i < count; i++)
+            {
+                float angle = first + i * MathF.Tau / count;
+                places.Add(Middle + new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * radius);
+            }
+            return places;
+        }
+
+        /// <summary>Defense: the citadel in the very middle, the outposts in a close ring round it; all cleared.</summary>
+        public (List<Cell> Outposts, Cell Citadel) PlaceCitadelAndOutposts(int players)
+        {
+            var citadel = new Cell(Width / 2 - CitadelSize / 2, Height / 2 - CitadelSize / 2);
+            Clear(Middle, ClearRadius + 3f);
+            var outposts = new List<Cell>();
+            foreach (var place in RingPlaces(players, OutpostRing))
+                outposts.Add(PickStart(place, jitter: 1));
+            foreach (var outpost in outposts)
+                Clear(outpost.CenterOfSquare(CastleSize), ClearRadius);
+            return (outposts, citadel);
+        }
+
+        /// <summary>
+        /// Defense roads: from every outpost to the citadel's gate, and from the middle of every edge to it, so the
+        /// waves always find a way in (over bridges and passes where they must). Returns the gate.
+        /// </summary>
+        public Cell LayDefenseRoads(List<Cell> outposts, Cell citadel)
+        {
+            var gate = new Cell(citadel.X + CitadelSize / 2, citadel.Y + CitadelSize + 1);
+            foreach (var outpost in outposts)
+                Road(new Cell(outpost.X + 1, outpost.Y + CastleSize + 1), gate);
+            const int inset = 2;
+            foreach (var edge in new[]
+                     {
+                         new Cell(Width / 2, inset), new Cell(Width - 1 - inset, Height / 2),
+                         new Cell(Width / 2, Height - 1 - inset), new Cell(inset, Height / 2),
+                     })
+                Road(edge, gate);
+            return gate;
+        }
+
+        /// <summary>
+        /// Defense gold: two deposits by every outpost at the same distances (the safe ones); rich ones out on a ring
+        /// in the gaps between the outposts' directions; and more scattered between the outposts' ring and the edge,
+        /// so the riches lie out where the waves come in.
+        /// </summary>
+        public List<DepositSpawn> PlaceDefenseGold(TileGrid grid, List<Cell> outposts, Cell citadel, int home)
+        {
+            var taken = outposts.Select(s => (Anchor: new Cell(s.X - 1, s.Y - 1), Size: CastleSize + 3)).ToList();
+            taken.Add((new Cell(citadel.X - 2, citadel.Y - 2), CitadelSize + 4));
+            var deposits = new List<DepositSpawn>();
+            var castles = outposts.Select(s => s.CenterOfSquare(CastleSize)).ToList();
+            float edgeRadius = Width / 2f - 4f;
+            float FromMiddle(Cell c) => Vector2.Distance(new Vector2(c.X + 1, c.Y + 1), Middle);
+            bool OutOfTheRing(Cell c) => FromMiddle(c) >= OutpostRing + 10f && FromMiddle(c) <= edgeRadius;
+            float Nearest(Cell c) => castles.Min(k => Vector2.Distance(k, new Vector2(c.X + 1, c.Y + 1)));
+
+            void Add(Cell? anchor, int yield)
+            {
+                if (anchor is not { } a)
+                    return;
+                taken.Add((new Cell(a.X - 2, a.Y - 2), GoldDeposit.Size + 4));
+                deposits.Add(new DepositSpawn(a, yield));
+            }
+
+            Cell? Near(Vector2 center, float min, float max, Func<Cell, bool>? where = null) =>
+                Place(grid, taken, home, () => Around(center, min, max), where);
+
+            // Every outpost's own gold, on its outer side (away from the citadel): the same for everyone.
+            foreach (var center in castles)
+            {
+                var outward = Vector2.Normalize(center - Middle);
+                Add(Near(center + outward * 8f, 0f, 4f) ?? Near(center, 6f, 12f), MapLoader.DefaultDepositYield);
+                Add(Near(center + outward * 15f, 0f, 4f) ?? Near(center, 12f, 18f), MapLoader.DefaultDepositYield);
+            }
+
+            // Rich deposits out on a ring, in the gaps between the outposts' directions.
+            float angle0 = MathF.Atan2(castles[0].Y - Middle.Y, castles[0].X - Middle.X);
+            float richRadius = OutpostRing + (edgeRadius - OutpostRing) * 0.55f;
+            int gaps = castles.Count == 2 ? 2 : castles.Count;
+            for (int i = 0; i < gaps; i++)
+            {
+                float angle = angle0 + (i + 0.5f) * MathF.Tau / castles.Count;
+                var point = Middle + new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * richRadius;
+                Add(Near(point, 0f, 5f) ?? Near(point, 4f, 9f), RichYield);
+            }
+
+            // The rest beyond the outposts, out towards the edge.
+            int scattered = castles.Count * _rng.Next(5, 8);
+            for (int i = 0; i < scattered; i++)
+                Add(Place(grid, taken, home, RandomCell, c => OutOfTheRing(c) && Nearest(c) > 12f), MapLoader.DefaultDepositYield);
+            return deposits;
+        }
+
+        /// <summary>
         /// The castle's top-left cell close to <paramref name="place"/>: of a few dozen spots around it, the one with the
         /// most dry land around (lakes and mountains are not cleared away into a meadow), with a little luck in the choice.
         /// </summary>
-        private Cell PickStart(Vector2 place)
+        private Cell PickStart(Vector2 place, int jitter)
         {
-            const int jitter = 4;
             var ideal = new Cell((int)(place.X - CastleSize / 2f), (int)(place.Y - CastleSize / 2f));
             Cell best = ideal;
             float bestScore = float.MinValue;
