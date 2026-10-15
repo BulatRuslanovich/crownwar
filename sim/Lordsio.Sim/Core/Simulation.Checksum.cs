@@ -54,6 +54,7 @@ public sealed partial class Simulation
         }
         HashDiplomacy(ref hash);
         HashPlans(ref hash);
+        HashDefense(ref hash);
         return hash.Value;
     }
 

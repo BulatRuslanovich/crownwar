@@ -78,6 +78,11 @@ public sealed partial class Simulation
     /// </summary>
     private void CheckEliminations()
     {
+        if (Defense is { } defense)
+        {
+            CheckCitadel(defense); // outposts may fall and be built again: only the citadel counts
+            return;
+        }
         foreach (var faction in _factions)
         {
             if (faction.IsContender && !faction.IsEliminated && GetBuilding(faction.CapitalId) == null)

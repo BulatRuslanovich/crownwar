@@ -8,6 +8,12 @@
   "depositReserveSeconds": 240,
   "depositRegenSeconds": 90,
   "upkeepAllowance": 60,
+  "defense": {
+    "firstWaveSeconds": 240, "waveIntervalSeconds": 150, "warningSeconds": 30,
+    "baseBudget": 400, "growth": 1.12, "extraPlayerShare": 0.5, "maxUnitsPerWave": 150,
+    "rewardBase": 100, "rewardPerWave": 15, "outpostCost": 400, "outpostBuildSeconds": 45,
+    "twoSidesFrom": 6, "threeSidesFrom": 13, "bossUnit": "warlord"
+  },
   "startingUnits": [{ "unit": "infantry", "count": 4 }],
   "units": [
     {
@@ -49,6 +55,11 @@
       "id": "trebuchet", "name": "Trebuchet", "speed": 1.4, "radius": 0.45, "cost": 350, "buildTime": 18,
       "health": 220, "damage": 60, "attackRange": 10, "attackCooldown": 6, "sightRange": 10, "projectileSpeed": 9,
       "rangedArmor": 0.6, "armorPiercing": 1.0, "upkeep": 35, "siege": true, "buildingMultiplier": 3, "barracksRequired": 7
+    },
+    {
+      "id": "warlord", "name": "Warlord", "speed": 2.4, "radius": 0.45, "cost": 600, "buildTime": 1,
+      "health": 1400, "damage": 40, "attackRange": 0.35, "attackCooldown": 1.6, "sightRange": 7, "rangedArmor": 0.5,
+      "buildingMultiplier": 2
     }
   ],
   "buildings": [
@@ -56,6 +67,11 @@
       "id": "castle", "name": "Castle", "size": 3, "cost": 0, "buildTime": 0, "health": 8000, "rangedArmor": 0.8,
       "income": 3, "armyCap": 10, "recruits": ["infantry", "archer", "cavalry", "crossbowman", "monk", "heavy", "ram", "trebuchet"], "capital": true, "sight": 10,
       "attack": { "damage": 16, "range": 7, "cooldown": 1.0, "projectileSpeed": 14 }
+    },
+    {
+      "id": "citadel", "name": "Citadel", "size": 4, "cost": 0, "buildTime": 0, "health": 20000, "rangedArmor": 0.8,
+      "citadel": true, "sight": 12,
+      "attack": { "damage": 24, "range": 8, "cooldown": 0.8, "projectileSpeed": 14 }
     },
     {
       "id": "mine", "name": "Gold Mine", "size": 2, "cost": 100, "buildTime": 10, "health": 450, "rangedArmor": 0.7,

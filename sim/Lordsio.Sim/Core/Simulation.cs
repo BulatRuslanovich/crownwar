@@ -48,6 +48,7 @@ public sealed partial class Simulation
         }
 
         var factionIds = Enumerable.Range(0, setup.FactionCount)
+            .Concat(setup.Mode == MatchMode.Defense ? new[] { setup.GarrisonFactionId, setup.HordeFactionId } : Array.Empty<int>())
             .Concat(map.UnitSpawns.Select(u => u.FactionId))
             .Where(id => id >= 0).Distinct().Order().ToList();
         _teamOf = new int[factionIds.Count == 0 ? 0 : factionIds[^1] + 1];
@@ -60,6 +61,8 @@ public sealed partial class Simulation
         InitDiplomacy(_teamOf.Length);
 
         PlaceCapitals(map.StartPositions, setup);
+        if (setup.Mode == MatchMode.Defense)
+            SetUpDefense(map, setup);
 
         foreach (var spawn in map.UnitSpawns)
         {
@@ -131,6 +134,7 @@ public sealed partial class Simulation
         UpdateDeposits();
         UpdateEconomy(payIncome: true);
         AdvanceConstructionAndTraining();
+        UpdateDefense();
 
         foreach (var unit in _units)
             _combat.UpdateBehaviour(unit, _units, _buildings, Tick);
@@ -170,6 +174,20 @@ public sealed partial class Simulation
     {
         if (GetFaction(command.FactionId) is { IsEliminated: true })
             return; // the eliminated no longer give orders
+        if (Defense != null && command is ProposePeaceCommand or AnswerPeaceCommand or DeclareWarCommand)
+        {
+            // One team against the horde: there is nobody to make peace or war with.
+            int other = command switch
+            {
+                ProposePeaceCommand o => o.OtherFactionId,
+                AnswerPeaceCommand a => a.OtherFactionId,
+                DeclareWarCommand w => w.OtherFactionId,
+                _ => -1,
+            };
+            _events.Add(new DiplomacyRejected(command.FactionId, other,
+                AreEnemies(command.FactionId, other) ? DiplomacyError.UnknownFaction : DiplomacyError.Allies));
+            return;
+        }
         switch (command)
         {
             case MoveCommand move:
@@ -217,6 +235,7 @@ public sealed partial class Simulation
             _units.RemoveAt(i);
             _entitiesById.Remove(unit.Id);
             _events.Add(new UnitDied(unit.FactionId, unit.Id, unit.KilledByFactionId, unit.Position, unit.Type.Id));
+            OnHordeUnitGone(unit);
         }
     }
 }

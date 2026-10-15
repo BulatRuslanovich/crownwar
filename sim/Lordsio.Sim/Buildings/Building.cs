@@ -44,13 +44,17 @@ public sealed record BuildingType(
     int UpgradeCost = 0,
     float UpgradeTime = 0f,
     int YieldBonus = 0,
-    bool UnlocksUnits = false)
+    bool UnlocksUnits = false,
+    bool IsCitadel = false)
 {
     // UnlocksUnits: each finished building of such a kind (a barracks) opens one more step of the units the owner can
     // train (see UnitType.BarracksRequired).
 
-    /// <summary>Capitals are placed at match start and cannot be built by players.</summary>
-    public bool IsBuildable => !IsCapital;
+    /// <summary>
+    /// Capitals are placed at match start and cannot be built by players (except a new outpost in the Defense mode,
+    /// see <c>Simulation.CanBuild</c>); nor can the Defense mode's citadel.
+    /// </summary>
+    public bool IsBuildable => !IsCapital && !IsCitadel;
 
     /// <summary>The highest level this kind can reach.</summary>
     public int MaxTier => NextTier?.MaxTier ?? Tier;

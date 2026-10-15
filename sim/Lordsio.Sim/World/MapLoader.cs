@@ -10,12 +10,14 @@ public sealed record DepositSpawn(Cell Anchor, int Yield);
 
 /// <param name="StartPositions">Top-left cells where capitals may be placed; factions are assigned to them at match start.</param>
 /// <param name="Biomes">The biome of every cell, row by row (generated maps); null means all meadow.</param>
+/// <param name="Citadel">Top-left cell of the Defense mode's citadel; null on maps not made for that mode.</param>
 public sealed record MapDefinition(
     TileGrid Grid,
     IReadOnlyList<UnitSpawn> UnitSpawns,
     IReadOnlyList<Cell> StartPositions,
     IReadOnlyList<DepositSpawn> Deposits,
-    IReadOnlyList<Biome>? Biomes = null)
+    IReadOnlyList<Biome>? Biomes = null,
+    Cell? Citadel = null)
 {
     public Biome BiomeAt(Cell cell) => Biomes?[cell.Y * Grid.Width + cell.X] ?? Biome.Meadow;
 }
@@ -43,6 +45,7 @@ public static class MapLoader
         var units = new List<UnitSpawn>();
         var starts = new List<Cell>();
         var deposits = new List<DepositSpawn>();
+        var citadels = new List<Cell>();
         string? section = null;
         int lineNo = 0;
 
@@ -67,7 +70,7 @@ public static class MapLoader
                     rows.Add(line);
                     break;
                 case "objects":
-                    ParseObject(line, lineNo, units, starts, deposits);
+                    ParseObject(line, lineNo, units, starts, deposits, citadels);
                     break;
                 default:
                     throw Error(lineNo, "content before the first section header");
@@ -113,10 +116,13 @@ public static class MapLoader
                 }
             }
         }
-        return new MapDefinition(grid, units, starts, deposits);
+        if (citadels.Count > 1)
+            throw new FormatException("A map has at most one citadel.");
+        return new MapDefinition(grid, units, starts, deposits, Citadel: citadels.Count == 1 ? citadels[0] : null);
     }
 
-    private static void ParseObject(string line, int lineNo, List<UnitSpawn> units, List<Cell> starts, List<DepositSpawn> deposits)
+    private static void ParseObject(string line, int lineNo, List<UnitSpawn> units, List<Cell> starts, List<DepositSpawn> deposits,
+        List<Cell> citadels)
     {
         string[] parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         switch (parts[0])
@@ -141,6 +147,11 @@ public static class MapLoader
                 if (yield <= 0)
                     throw Error(lineNo, "deposit yield must be positive");
                 deposits.Add(new DepositSpawn(ParseCell(parts, 1, lineNo), yield));
+                break;
+            case "citadel":
+                if (parts.Length != 3)
+                    throw Error(lineNo, "expected: citadel <x> <y>");
+                citadels.Add(ParseCell(parts, 1, lineNo));
                 break;
             default:
                 throw Error(lineNo, $"unknown object '{parts[0]}'");

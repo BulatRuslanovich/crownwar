@@ -139,6 +139,15 @@ public sealed record DiplomacyRejected(int FactionId, int OtherFactionId, Diplom
 /// <summary>A monk (<paramref name="HealerId"/>) mended <paramref name="Amount"/> health of <paramref name="TargetId"/> at <paramref name="Position"/>.</summary>
 public sealed record UnitHealed(int FactionId, int HealerId, int TargetId, int Amount, Vector2 Position) : SimEvent(FactionId);
 
+/// <summary>Defense: wave <paramref name="Wave"/> comes in <paramref name="Seconds"/>, from these points by the edge of the map.</summary>
+public sealed record WaveIncoming(int Wave, IReadOnlyList<Vector2> From, float Seconds) : SimEvent(-1);
+
+/// <summary>Defense: wave <paramref name="Wave"/> has come, <paramref name="Units"/> strong.</summary>
+public sealed record WaveStarted(int Wave, int Units, IReadOnlyList<Vector2> From) : SimEvent(-1);
+
+/// <summary>Defense: wave <paramref name="Wave"/> is wiped out; every player got <paramref name="Reward"/> gold.</summary>
+public sealed record WaveCleared(int Wave, int Reward) : SimEvent(-1);
+
 /// <summary>The match is over. <paramref name="WinningTeam"/> is the team that won, or -1 if nobody survived.</summary>
 public sealed record MatchEnded(int WinningTeam) : SimEvent(-1);
 

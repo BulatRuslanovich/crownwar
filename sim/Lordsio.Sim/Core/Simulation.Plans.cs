@@ -86,14 +86,14 @@ public sealed partial class Simulation
         var type = Rules.GetBuildingType(build.BuildingTypeId);
         if (FindBuilder(build.FactionId, type.Id, build.Anchor) is not { } builder)
             return false;
-        if (!faction.Treasury.TrySpend(type.Cost))
+        if (!faction.Treasury.TrySpend(BuildCost(type)))
         {
             _events.Add(new BuildRejected(build.FactionId, build.BuildingTypeId, BuildError.NotEnoughGold));
             return true;
         }
         var center = Building.CenterOf(build.Anchor, type.Size);
         OrderGroupMove(new List<Unit> { builder }, Map.ComponentOf(Cell.FromPosition(builder.Position)), center, UnitOrder.Move);
-        var plan = new BuildPlan(_nextPlanId++, build.FactionId, type, build.Anchor, builder.Id, type.Cost, builder.Destination);
+        var plan = new BuildPlan(_nextPlanId++, build.FactionId, type, build.Anchor, builder.Id, BuildCost(type), builder.Destination);
         _plans.Add(plan);
         _events.Add(new BuildPlanned(build.FactionId, plan.Id, type.Id, builder.Id));
         return true;

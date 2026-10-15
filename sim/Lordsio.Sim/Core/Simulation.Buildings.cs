@@ -32,7 +32,7 @@ public sealed partial class Simulation
         if (!Rules.HasBuildingType(buildingTypeId))
             return BuildError.UnknownType;
         var type = Rules.GetBuildingType(buildingTypeId);
-        if (!type.IsBuildable || GetFaction(factionId) is not { IsEliminated: false } faction)
+        if (!(type.IsBuildable || MayBuildOutpost(factionId, type)) || GetFaction(factionId) is not { IsEliminated: false } faction)
             return BuildError.NotBuildable;
         if (type.MaxCount > 0 && CountBuildings(factionId, type.Id) + PlannedCount(factionId, type.Id) >= type.MaxCount)
             return BuildError.LimitReached;
@@ -66,7 +66,7 @@ public sealed partial class Simulation
         if (!HasUnitNear(factionId, Building.CenterOf(anchor, type.Size), Rules.BuildRadius))
             return BuildError.NoUnitsNearby;
 
-        if (checkGold && !faction.Treasury.CanAfford(type.Cost))
+        if (checkGold && !faction.Treasury.CanAfford(BuildCost(type)))
             return BuildError.NotEnoughGold;
         return BuildError.None;
     }
@@ -146,7 +146,7 @@ public sealed partial class Simulation
     private Building AddBuilding(BuildingType type, int factionId, Cell anchor, int constructionTicks)
     {
         var deposit = type.IsMine ? DepositAt(anchor) : null;
-        var building = new Building(_nextEntityId++, type, factionId, anchor, constructionTicks, deposit) { Invested = type.Cost };
+        var building = new Building(_nextEntityId++, type, factionId, anchor, constructionTicks, deposit) { Invested = BuildCost(type) };
         _buildings.Add(building);
         _entitiesById.Add(building.Id, building);
         if (deposit != null)
@@ -169,14 +169,16 @@ public sealed partial class Simulation
         }
 
         var type = Rules.GetBuildingType(build.BuildingTypeId);
-        GetFaction(build.FactionId)!.Treasury.TrySpend(type.Cost);
+        GetFaction(build.FactionId)!.Treasury.TrySpend(BuildCost(type));
         PlaceSite(type, build.FactionId, build.Anchor);
     }
 
     /// <summary>Lays out a construction site that has been paid for, and tells the views.</summary>
     private Building PlaceSite(BuildingType type, int factionId, Cell anchor)
     {
-        var building = AddBuilding(type, factionId, anchor, Ticks.AtLeastOne(type.BuildTime));
+        var building = AddBuilding(type, factionId, anchor, Ticks.AtLeastOne(BuildSeconds(type)));
+        if (type.IsCapital)
+            GetFaction(factionId)!.CapitalId = building.Id; // a new outpost (Defense)
         _events.Add(new BuildingPlaced(factionId, building.Id));
         return building;
     }

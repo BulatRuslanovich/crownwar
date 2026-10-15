@@ -21,7 +21,8 @@ public sealed class GameRules
         float depositReserveSeconds = 0f, float depositRegenSeconds = 0f, int upkeepAllowance = 0,
         int goldCap = 0, int lootPercent = 0, int demolishRefundPercent = 0,
         float daySeconds = 0f, float nightSeconds = 0f, float nightSightFactor = 1f,
-        float peaceOfferSeconds = DefaultPeaceOfferSeconds, float warWarningSeconds = DefaultWarWarningSeconds)
+        float peaceOfferSeconds = DefaultPeaceOfferSeconds, float warWarningSeconds = DefaultWarWarningSeconds,
+        DefenseRules? defense = null)
     {
         if (startingGold < 0)
             throw new ArgumentOutOfRangeException(nameof(startingGold));
@@ -39,6 +40,10 @@ public sealed class GameRules
             throw new ArgumentOutOfRangeException(nameof(nightSeconds), "Day and night last a non-negative time; night sight is a factor in (0, 1].");
         if (peaceOfferSeconds <= 0f || warWarningSeconds < 0f)
             throw new ArgumentOutOfRangeException(nameof(warWarningSeconds), "An offer of peace must stand a while; the war warning cannot be negative.");
+        Defense = defense ?? DefenseRules.Default;
+        if (Defense.FirstWaveSeconds <= Defense.WarningSeconds || Defense.WaveIntervalSeconds <= Defense.WarningSeconds
+            || Defense.BaseBudget <= 0 || Defense.Growth < 1f || Defense.MaxUnitsPerWave <= 0)
+            throw new ArgumentOutOfRangeException(nameof(defense), "Waves must come after their warning, cost something and not shrink.");
         PeaceOfferSeconds = peaceOfferSeconds;
         WarWarningSeconds = warWarningSeconds;
         StartingGold = startingGold;
@@ -90,6 +95,7 @@ public sealed class GameRules
         }
         Capital = _buildingTypeOrder.SingleOrDefault(t => t.IsCapital)
                   ?? throw new ArgumentException("Exactly one building type must be the capital.");
+        Citadel = _buildingTypeOrder.SingleOrDefault(t => t.IsCitadel);
     }
 
     public int StartingGold { get; }
@@ -138,6 +144,12 @@ public sealed class GameRules
     /// <summary>The building type every faction starts with; losing it eliminates the faction.</summary>
     public BuildingType Capital { get; }
 
+    /// <summary>The Defense mode's shared citadel; null if the rules have none (then that mode cannot be played).</summary>
+    public BuildingType? Citadel { get; }
+
+    /// <summary>The numbers of the Defense mode.</summary>
+    public DefenseRules Defense { get; }
+
     /// <summary>Every building type, in the order of the rules file.</summary>
     public IReadOnlyList<BuildingType> BuildingTypes => _buildingTypeOrder;
 
@@ -167,6 +179,7 @@ public sealed class GameRules
         // Optional sections: no "dayNight" means no night, no "diplomacy" the default timings.
         var dayNight = root.TryGetProperty("dayNight", out var d) ? d : default;
         var diplomacy = root.TryGetProperty("diplomacy", out var p) ? p : default;
+        var defense = root.TryGetProperty("defense", out var w) ? ParseDefense(w) : null;
 
         return new GameRules(
             root.GetProperty("startingGold").GetInt32(),
@@ -184,7 +197,29 @@ public sealed class GameRules
             OptionalSingle(dayNight, "night"),
             OptionalSingle(dayNight, "sightFactor", 1f),
             OptionalSingle(diplomacy, "offerSeconds", DefaultPeaceOfferSeconds),
-            OptionalSingle(diplomacy, "warWarningSeconds", DefaultWarWarningSeconds));
+            OptionalSingle(diplomacy, "warWarningSeconds", DefaultWarWarningSeconds),
+            defense);
+    }
+
+    private static DefenseRules ParseDefense(JsonElement d)
+    {
+        var x = DefenseRules.Default;
+        int Int(string name, int fallback) => d.TryGetProperty(name, out var v) ? v.GetInt32() : fallback;
+        return new DefenseRules(
+            OptionalSingle(d, "firstWaveSeconds", x.FirstWaveSeconds),
+            OptionalSingle(d, "waveIntervalSeconds", x.WaveIntervalSeconds),
+            OptionalSingle(d, "warningSeconds", x.WarningSeconds),
+            Int("baseBudget", x.BaseBudget),
+            OptionalSingle(d, "growth", x.Growth),
+            OptionalSingle(d, "extraPlayerShare", x.ExtraPlayerShare),
+            Int("maxUnitsPerWave", x.MaxUnitsPerWave),
+            Int("rewardBase", x.RewardBase),
+            Int("rewardPerWave", x.RewardPerWave),
+            Int("outpostCost", x.OutpostCost),
+            OptionalSingle(d, "outpostBuildSeconds", x.OutpostBuildSeconds),
+            Int("twoSidesFrom", x.TwoSidesFrom),
+            Int("threeSidesFrom", x.ThreeSidesFrom),
+            d.TryGetProperty("bossUnit", out var boss) && boss.GetString() is { Length: > 0 } bossId ? bossId : x.BossUnit);
     }
 
     private static UnitType ParseUnit(JsonElement u) => new(
@@ -240,7 +275,8 @@ public sealed class GameRules
                 : null,
             SightRange: OptionalSingle(b, "sight"),
             MaxCount: OptionalInt(b, "maxCount"),
-            UnlocksUnits: OptionalBool(b, "unlocksUnits"));
+            UnlocksUnits: OptionalBool(b, "unlocksUnits"),
+            IsCitadel: OptionalBool(b, "citadel"));
         return b.TryGetProperty("tiers", out var tiers) ? WithTiers(type, tiers.EnumerateArray().ToList()) : type;
     }
 
