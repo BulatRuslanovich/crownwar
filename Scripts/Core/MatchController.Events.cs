@@ -29,6 +29,7 @@ public partial class MatchController
                 if (e is AttackLanded hit)
                     _lastFight = hit.Position;
                 _unitsView.OnSimEvent(e);
+                _buildingsView.OnSimEvent(e);
                 _groundEffects.OnSimEvent(e);
                 _airEffects.OnSimEvent(e);
             }
@@ -54,6 +55,7 @@ public partial class MatchController
                 continue; // a fight in the fog makes no sparks or sounds
             ShakeFor(e);
             _unitsView.OnSimEvent(e);
+            _buildingsView.OnSimEvent(e);
             _groundEffects.OnSimEvent(e);
             _airEffects.OnSimEvent(e);
             _sounds.OnSimEvent(e);
@@ -90,5 +92,34 @@ public partial class MatchController
         float distance = SimConvert.ToWorld(at).DistanceTo(screen.GetCenter());
         float nearness = Mathf.Clamp(1f - distance / screen.Size.Length(), 0f, 1f);
         Camera.Shake(amount * nearness);
+        // A castle falling in view freezes the moment: the world slows to a crawl for a breath (single player only:
+        // in a network game every machine must keep stepping in time).
+        if (e is BuildingDestroyed { Size: >= 3 } fallen && Sim.Rules.GetBuildingType(fallen.BuildingTypeId).IsCapital
+            && Net == null && !IsShowcase && nearness > 0f)
+            HitStop(CastleHitStopSeconds, CastleHitStopScale);
+    }
+
+    private const double CastleHitStopSeconds = 0.35;
+    private const double CastleHitStopScale = 0.15;
+    private double? _timeScaleBeforeHitStop;
+
+    /// <summary>Slows time to <paramref name="scale"/> for <paramref name="seconds"/> of real time, then restores it.</summary>
+    private async void HitStop(double seconds, double scale)
+    {
+        if (_timeScaleBeforeHitStop != null)
+            return; // already frozen
+        _timeScaleBeforeHitStop = Engine.TimeScale;
+        Engine.TimeScale *= scale;
+        await ToSignal(GetTree().CreateTimer(seconds, processAlways: true, processInPhysics: false, ignoreTimeScale: true),
+            SceneTreeTimer.SignalName.Timeout);
+        EndHitStop();
+    }
+
+    private void EndHitStop()
+    {
+        if (_timeScaleBeforeHitStop is not { } before)
+            return;
+        Engine.TimeScale = before;
+        _timeScaleBeforeHitStop = null;
     }
 }

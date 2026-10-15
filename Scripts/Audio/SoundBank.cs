@@ -22,6 +22,12 @@ public enum Sound
     Alert,
     Victory,
     Defeat,
+    /// <summary>"Can't do that": a refused order (no gold, a blocked site, a full army).</summary>
+    Deny,
+    /// <summary>A soft acknowledgement of an order.</summary>
+    Order,
+    /// <summary>Coins clinking: gold taken from a fallen enemy building.</summary>
+    Coin,
 }
 
 /// <summary>
@@ -83,6 +89,13 @@ public static class SoundBank
             Soft(Square((int)(t / 0.15f) % 2 == 0 ? 660 : 440, t)) * 0.35f * (1f - t / 0.7f)),
         [Sound.Victory] = Make(1.4f, (t, _) => Notes(t, 0.18f, 523, 659, 784, 1046) * 0.5f),
         [Sound.Defeat] = Make(1.6f, (t, _) => Notes(t, 0.3f, 392, 349, 311, 262) * 0.5f),
+        [Sound.Deny] = Make(0.22f, (t, _) =>
+            Soft(Square(t < 0.09f ? 196 : 147, t)) * Attack(t, 0.005f) * Decay(t, 0.1f) * 0.5f),
+        [Sound.Order] = Make(0.09f, (t, n) =>
+            Sine(620 + 900 * t, t) * Attack(t, 0.004f) * Decay(t, 0.03f) * 0.6f + LowNoise(n) * Decay(t, 0.006f) * 0.25f),
+        [Sound.Coin] = Make(0.45f, (t, _) =>
+            (Sine(2637, t) + 0.5f * Sine(3951, t)) * Decay(t, 0.06f) * 0.5f
+            + (t > 0.08f ? (Sine(3136, t) + 0.4f * Sine(4699, t)) * Decay(t - 0.08f, 0.09f) * 0.45f : 0f)),
     };
 
     /// <summary>Renders <paramref name="seconds"/> of audio from a sample function f(time, white noise).</summary>

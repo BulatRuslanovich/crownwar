@@ -15,7 +15,7 @@ namespace Lordsio.UI;
 /// </summary>
 public partial class Hud : CanvasLayer
 {
-    private const float MessageDuration = 2.5f;
+    private const float MessageDuration = 3f;
     /// <summary>Recruits ordered at once by a Shift+click.</summary>
     private const int ShiftRecruitCount = 5;
 
@@ -61,10 +61,9 @@ public partial class Hud : CanvasLayer
     private Label _upgradeTitle = null!;
     private Button _upgradeButton = null!;
     private ProgressBar _upgradeProgress = null!;
-    private Label _message = null!;
+    private MessageFeed _messages = null!;
     private AlertIndicator _alert = null!;
     private int? _panelBuildingId;
-    private float _messageTimeLeft;
     private Button _diplomacyButton = null!;
 
     /// <summary>Bumped when the language changes, so every cached text is rebuilt.</summary>
@@ -101,11 +100,12 @@ public partial class Hud : CanvasLayer
         GetNode("BuildingPanel/Rows").AddChild(_demolishButton);
         _dayNight = new Label { MouseFilter = Control.MouseFilterEnum.Pass };
         GetNode("ResourceBar/Row").AddChild(_dayNight);
-        _message = GetNode<Label>("Message");
+        _messages = new MessageFeed { Name = "Messages" };
+        AddChild(_messages);
+        _messages.Initialize(GetNode<Label>("Message"), MessageDuration);
         _alert = GetNode<AlertIndicator>("AlertIndicator");
         _alert.Initialize(match);
         _buildingPanel.Visible = false;
-        _message.Visible = false;
         CreateBuildButtons(GetNode<HBoxContainer>("BuildBar/Rows/Buttons"));
         AddResourceIcons();
         GetNode<Minimap>("MinimapPanel/Minimap").Initialize(match);
@@ -125,12 +125,12 @@ public partial class Hud : CanvasLayer
         _selectionTypes = GetNode<Container>("SelectionPanel/Rows/Types");
         _selectionHealth = GetNode<ProgressBar>("SelectionPanel/Rows/Health");
         _selectionPanel.Visible = false;
-        UpdateResourceBar(); // filled from the start, even if the match opens paused
+        UpdateResourceBar(0f); // filled from the start, even if the match opens paused
     }
 
     public override void _Process(double delta)
     {
-        UpdateResourceBar();
+        UpdateResourceBar((float)delta);
         UpdateBuildButtons();
         UpdateRest(delta);
     }
@@ -192,12 +192,7 @@ public partial class Hud : CanvasLayer
         else if (_match.WaitingForPlayers)
             ShowMessage(Tr("NET_WAITING"));
 
-        if (_messageTimeLeft > 0f)
-        {
-            _messageTimeLeft -= (float)delta;
-            _message.Modulate = new Color(1, 1, 1, Mathf.Clamp(_messageTimeLeft / 0.5f, 0f, 1f));
-            _message.Visible = _messageTimeLeft > 0f;
-        }
+
     }
 
     public override void _UnhandledInput(InputEvent @event)

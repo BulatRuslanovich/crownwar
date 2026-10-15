@@ -12,6 +12,7 @@ public partial class SettingsPanel : Control
     private CheckBox _fullscreen = null!;
     private OptionButton _uiScale = null!;
     private CheckBox _edgePan = null!;
+    private HSlider _shake = null!;
     private OptionButton _language = null!;
     private bool _loading;
 
@@ -25,6 +26,7 @@ public partial class SettingsPanel : Control
         _fullscreen = GetNode<CheckBox>("Center/Panel/Rows/Grid/Fullscreen");
         _uiScale = GetNode<OptionButton>("Center/Panel/Rows/Grid/UiScale");
         _edgePan = GetNode<CheckBox>("Center/Panel/Rows/Grid/EdgePan");
+        _shake = GetNode<HSlider>("Center/Panel/Rows/Grid/Shake");
         _language = GetNode<OptionButton>("Center/Panel/Rows/Grid/Language");
 
         foreach (float scale in GameSettings.UiScales)
@@ -38,6 +40,7 @@ public partial class SettingsPanel : Control
         _fullscreen.Toggled += _ => Changed();
         _uiScale.ItemSelected += _ => Changed();
         _edgePan.Toggled += _ => Changed();
+        _shake.ValueChanged += _ => Changed();
         _language.ItemSelected += _ => Changed();
         GetNode<Button>("Center/Panel/Rows/Back").Pressed += Close;
         VisibilityChanged += () =>
@@ -67,6 +70,7 @@ public partial class SettingsPanel : Control
         _fullscreen.ButtonPressed = s.Fullscreen;
         _uiScale.Selected = Math.Max(0, Array.IndexOf(GameSettings.UiScales, s.UiScale));
         _edgePan.ButtonPressed = s.EdgePan;
+        _shake.Value = s.ScreenShake;
         _language.Selected = Math.Max(0, Array.IndexOf(GameSettings.Languages, s.Language));
         _loading = false;
     }
@@ -80,6 +84,7 @@ public partial class SettingsPanel : Control
         s.Fullscreen = _fullscreen.ButtonPressed;
         s.UiScale = GameSettings.UiScales[Math.Max(0, _uiScale.Selected)];
         s.EdgePan = _edgePan.ButtonPressed;
+        s.ScreenShake = (float)_shake.Value;
         s.Language = GameSettings.Languages[Math.Max(0, _language.Selected)];
         s.Apply();
     }

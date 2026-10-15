@@ -111,9 +111,6 @@ public partial class Hud
 
     private void ShowMessage(string text)
     {
-        _message.Text = text;
-        _message.Visible = true;
-        _message.Modulate = Colors.White;
-        _messageTimeLeft = MessageDuration;
+        _messages.Show(text);
     }
 }

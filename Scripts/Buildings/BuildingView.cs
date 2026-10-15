@@ -65,6 +65,16 @@ public partial class BuildingView : Node2D
     private float _time;
     private bool _flickers;
 
+    /// <summary>Struck: a white flash and a quiver, for this long.</summary>
+    private const float HitSeconds = 0.18f;
+    /// <summary>Picked as the target of an attack order: a red pulse, for this long.</summary>
+    private const float MarkSeconds = 0.5f;
+    private static readonly Color HitFlash = new(1.7f, 1.7f, 1.7f);
+    private static readonly Color MarkTint = new(1.7f, 0.55f, 0.5f);
+    private float _hitTime;
+    private float _markTime;
+    private bool _tinted;
+
     /// <param name="additive">Shared material that adds lights onto the picture below.</param>
     /// <param name="halo">Shared soft round glow.</param>
     public void Initialize(Building building, MatchController match, Material additive, Texture2D halo)
@@ -144,6 +154,7 @@ public partial class BuildingView : Node2D
             _lights.Visible = _glow.Visible = false;
             return; // frozen as last seen
         }
+        UpdateFeedback((float)delta);
         var b = _building;
         bool idle = b.Deposit is { IsExhausted: true };
         Animate((float)delta, b, idle);
@@ -163,6 +174,43 @@ public partial class BuildingView : Node2D
         _body.SelfModulate = tint with { A = alpha };
         _team.SelfModulate = tint with { A = alpha };
         _overlay.QueueRedraw();
+    }
+
+    /// <summary>A blow landed: the walls flash and quiver for a moment (visual only).</summary>
+    public void Hit() => _hitTime = HitSeconds;
+
+    /// <summary>The player ordered an attack on it: a short red pulse, so it is clear what was clicked.</summary>
+    public void MarkTarget() => _markTime = MarkSeconds;
+
+    /// <summary>
+    /// Squashed to <paramref name="squash"/> (feet planted: sprites scale about the bottom centre), then springing back
+    /// past its size and settling: a site thumped down, a building finished or raised a level.
+    /// </summary>
+    public void Pop(Vector2 squash)
+    {
+        var tween = CreateTween().SetParallel();
+        foreach (var sprite in new[] { _body, _team, _lights })
+        {
+            sprite.Scale = squash;
+            tween.TweenProperty(sprite, "scale", Vector2.One, 0.42).SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
+        }
+    }
+
+    private void UpdateFeedback(float delta)
+    {
+        if (_hitTime <= 0f && _markTime <= 0f && !_tinted)
+            return;
+        _hitTime = Mathf.Max(0f, _hitTime - delta);
+        _markTime = Mathf.Max(0f, _markTime - delta);
+        float hit = _hitTime / HitSeconds, mark = _markTime / MarkSeconds;
+        // A quick shudder, a pixel or so, dying away; the flash and the pulse fade with it.
+        var quiver = new Vector2(Mathf.Round(Mathf.Sin(_time * 95f) * 1.4f * hit), 0f);
+        var tint = Colors.White.Lerp(HitFlash, hit) * Colors.White.Lerp(MarkTint, mark * (0.6f + 0.4f * Mathf.Sin(_time * 28f)));
+        foreach (var sprite in new[] { _body, _team, _lights })
+            sprite.Position = quiver;
+        _body.Modulate = tint;
+        _team.Modulate = _owner * tint;
+        _tinted = hit > 0f || mark > 0f;
     }
 
     /// <summary>Plays the sheet, lights the windows at night and puffs the smoke.</summary>

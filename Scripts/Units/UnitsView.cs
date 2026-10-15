@@ -37,6 +37,8 @@ public partial class UnitsView : Node2D
                 view.Initialize(unit, _match.UnitSheets.For(FactionColors.Get(unit.FactionId)));
                 _views.Add(unit.Id, view);
                 AddChild(view);
+                if (_started)
+                    view.Pop(); // a recruit (the armies there from the start just stand)
             }
             view.Visible = !_match.IsHidden(unit);
             view.Position = InterpolatedPosition(unit, alpha);
@@ -56,6 +58,7 @@ public partial class UnitsView : Node2D
             _views.Remove(id);
 
         // The routes of selected marching units follow them every frame; once none marches, one more draw clears them.
+        _started = true;
         bool routes = AnySelectedMarching();
         if (routes || _drewRoutes)
             QueueRedraw();
@@ -63,6 +66,15 @@ public partial class UnitsView : Node2D
     }
 
     private bool _drewRoutes;
+    /// <summary>The first frame is over: units appearing from now on are newcomers.</summary>
+    private bool _started;
+
+    /// <summary>The red pulse on a unit the player has just ordered an attack on.</summary>
+    public void MarkTarget(int unitId)
+    {
+        if (_views.TryGetValue(unitId, out var view))
+            view.MarkTarget();
+    }
 
     private bool AnySelectedMarching()
     {

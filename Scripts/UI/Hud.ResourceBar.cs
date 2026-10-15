@@ -9,20 +9,32 @@ public partial class Hud
     /// <summary>The numbers the bar last showed (see <see cref="Changed{T}"/>).</summary>
     private (int Gold, int Capacity, int Net, int Income, int Upkeep, int ArmyUpkeep, int Population, int Cap, bool Night, int Left, int Text) _barShown;
 
-    private void UpdateResourceBar()
+    /// <summary>A change of the treasury at least this big (loot, a purchase) rolls the counter and flashes it.</summary>
+    private const int GoldJump = 25;
+    private const float GoldFlashSeconds = 0.6f;
+    private static readonly Color GoldGained = new(0.55f, 1f, 0.5f);
+    private static readonly Color GoldSpent = new(1f, 0.7f, 0.45f);
+    /// <summary>The sum the counter shows: it rolls towards the treasury rather than jumping.</summary>
+    private float _goldShown = -1f;
+    private float _goldFlash;
+    private Color _goldFlashColor;
+
+    private void UpdateResourceBar(float delta)
     {
         if (_match.Sim.GetFaction(_match.LocalFactionId) is { } faction)
         {
             var treasury = faction.Treasury;
+            int shown = RollGold(treasury.Gold, treasury.IsFull, delta);
             int secondsLeft = Mathf.CeilToInt(_match.Sim.SecondsToDayNightChange);
-            if (!Changed(ref _barShown, (treasury.Gold, treasury.Capacity, faction.NetPerMinute, faction.IncomePerSecond,
+            if (!Changed(ref _barShown, (shown, treasury.Capacity, faction.NetPerMinute, faction.IncomePerSecond,
                     faction.UpkeepPerMinute, faction.ArmyUpkeepPerMinute, faction.Population, faction.ArmyCap, _match.Sim.IsNight,
                     secondsLeft, _textVersion)))
                 return;
             _gold.Text = treasury.Capacity > 0
-                ? string.Format(Tr("HUD_GOLD_CAPPED"), treasury.Gold, treasury.Capacity)
-                : string.Format(Tr("HUD_GOLD"), treasury.Gold);
-            _gold.Modulate = treasury.IsFull ? ProblemColor : Colors.White;
+                ? string.Format(Tr("HUD_GOLD_CAPPED"), shown, treasury.Capacity)
+                : string.Format(Tr("HUD_GOLD"), shown);
+            if (_goldFlash <= 0f)
+                _gold.Modulate = treasury.IsFull ? ProblemColor : Colors.White;
             _gold.TooltipText = treasury.Capacity > 0 ? string.Format(Tr("HUD_GOLD_CAP_TOOLTIP"), treasury.Capacity) : "";
             float net = faction.NetPerMinute / 60f;
             _income.Text = string.Format(Tr("HUD_INCOME"), net);
@@ -56,5 +68,31 @@ public partial class Hud
         row.AddChild(soldier);
         row.MoveChild(soldier, _army.GetIndex());
         ((HBoxContainer)row).AddThemeConstantOverride("separation", 10);
+    }
+
+    /// <summary>
+    /// The gold to show this frame: small changes (the income of a tick) at once, a jump rolled over a few tenths of a
+    /// second, with a green (gain) or orange (spending) flash and a swell of the counter when it starts.
+    /// </summary>
+    private int RollGold(int gold, bool full, float delta)
+    {
+        if (_goldShown < 0f)
+            _goldShown = gold;
+        float jump = gold - _goldShown;
+        if (Mathf.Abs(jump) >= GoldJump)
+        {
+            if (_goldFlash <= 0f)
+                UiMotion.Pulse(_gold);
+            _goldFlash = GoldFlashSeconds;
+            _goldFlashColor = jump > 0f ? GoldGained : GoldSpent;
+        }
+        _goldShown = Mathf.Abs(jump) < 1f ? gold : Mathf.MoveToward(_goldShown, gold, Mathf.Max(60f, Mathf.Abs(jump) * 7f) * delta);
+        if (_goldFlash > 0f)
+        {
+            _goldFlash = Mathf.Max(0f, _goldFlash - delta);
+            var rest = full ? ProblemColor : Colors.White;
+            _gold.Modulate = rest.Lerp(_goldFlashColor, _goldFlash / GoldFlashSeconds);
+        }
+        return Mathf.RoundToInt(_goldShown);
     }
 }

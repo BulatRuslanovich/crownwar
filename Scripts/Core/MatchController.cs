@@ -57,6 +57,7 @@ public partial class MatchController : Node2D
     private EndScreen _endScreen = null!;
     private PauseMenu _pauseMenu = null!;
     private UnitsView _unitsView = null!;
+    private BuildingsView _buildingsView = null!;
     private EffectsView _groundEffects = null!;
     private EffectsView _airEffects = null!;
     private MatchSounds _sounds = null!;
@@ -130,11 +131,11 @@ public partial class MatchController : Node2D
         foreach (var deposit in Sim.Deposits)
             Map.ClearDecor(deposit.Anchor, GoldDeposit.Size);
         GetNode<DepositsView>("DepositsView").Initialize(this);
-        var buildings = GetNode<BuildingsView>("Actors/BuildingsView");
-        buildings.Initialize(this);
+        _buildingsView = GetNode<BuildingsView>("Actors/BuildingsView");
+        _buildingsView.Initialize(this);
         _unitsView = GetNode<UnitsView>("Actors/UnitsView");
         _unitsView.Initialize(this);
-        GetNode<ShadowsView>("Shadows").Initialize(this, _unitsView, buildings);
+        GetNode<ShadowsView>("Shadows").Initialize(this, _unitsView, _buildingsView);
         GetNode<CloudsView>("Clouds").Initialize(this);
         GetNode<WeatherView>("Weather").Initialize(this);
         GetNode<ProjectilesView>("ProjectilesView").Initialize(this);
@@ -230,6 +231,7 @@ public partial class MatchController : Node2D
     /// <summary>Leaving the match (menu, restart, quit): the host's save keeps everything played so far.</summary>
     public override void _ExitTree()
     {
+        EndHitStop();
         Net?.Dispose();
         UnitSheets.Dispose();
     }
@@ -254,6 +256,20 @@ public partial class MatchController : Node2D
         _fogTick = Sim.Tick;
         Fog.Update(Sim, LocalTeam);
     }
+
+    /// <summary>
+    /// Feedback for a player's attack order: the target pulses red and a soft acknowledgement sounds, so the click
+    /// clearly took (the order itself goes through <see cref="Issue"/>).
+    /// </summary>
+    public void AcknowledgeAttack(int targetId)
+    {
+        _unitsView.MarkTarget(targetId);
+        _buildingsView.MarkTarget(targetId);
+        _sounds.PlayOrder();
+    }
+
+    /// <summary>A soft acknowledgement of a move order.</summary>
+    public void AcknowledgeMove() => _sounds.PlayOrder();
 
     /// <summary>The selected building, if it is ours and trains troops (so a right click sets its rally point).</summary>
     public Sim.Buildings.Building? SelectedRallyBuilding() =>

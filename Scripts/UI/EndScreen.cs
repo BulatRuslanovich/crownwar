@@ -132,6 +132,7 @@ public partial class EndScreen : CanvasLayer
         ShowMeasure(_chart.Showing);
         FillTable(sides, winners);
         Visible = true;
+        UiMotion.FadeIn(GetNode<CanvasItem>("Dim"), 0.4);
         FocusFirstButton();
     }
 
@@ -214,6 +215,7 @@ public partial class EndScreen : CanvasLayer
         _watch.Visible = false;
         _restart.Visible = false;
         Visible = true;
+        UiMotion.FadeIn(GetNode<CanvasItem>("Dim"), 0.4);
         _menuButton.GrabFocus();
     }
 

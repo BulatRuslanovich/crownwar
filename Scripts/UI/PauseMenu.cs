@@ -56,6 +56,11 @@ public partial class PauseMenu : CanvasLayer
         _settings.Closed += () => _menu.Visible = true;
         _settings.Visible = false;
         Visible = false;
+        VisibilityChanged += () =>
+        {
+            if (Visible)
+                UiMotion.FadeIn(GetNode<CanvasItem>("Dim"), 0.15);
+        };
     }
 
     public override void _UnhandledInput(InputEvent @event)

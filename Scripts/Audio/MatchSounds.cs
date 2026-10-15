@@ -25,12 +25,17 @@ public partial class MatchSounds : Node
         [Sound.BuildingHit] = 0.12,
         [Sound.UnitDeath] = 0.1,
         [Sound.UnitReady] = 0.6,
+        [Sound.Deny] = 0.25,
+        [Sound.Order] = 0.08,
     };
 
     private readonly List<AudioStreamPlayer2D> _world = new();
     private readonly Dictionary<Sound, double> _lastPlayed = new();
     private readonly RandomNumberGenerator _rng = new();
-    private AudioStreamPlayer _ui = null!;
+    /// <summary>A few interface voices in turn, so a new sound does not cut off the one before it.</summary>
+    private readonly List<AudioStreamPlayer> _ui = new();
+    private int _nextUi;
+    private const int UiVoices = 3;
     private MatchController _match = null!;
     private int _nextVoice;
     private bool _enabled;
@@ -48,8 +53,12 @@ public partial class MatchSounds : Node
         // Without a display (automated runs) nothing is heard: skip audio entirely.
         _enabled = DisplayServer.GetName() != "headless";
         _streams = SoundBank.CreateAll();
-        _ui = new AudioStreamPlayer();
-        AddChild(_ui);
+        for (int i = 0; i < UiVoices; i++)
+        {
+            var voice = new AudioStreamPlayer();
+            AddChild(voice);
+            _ui.Add(voice);
+        }
     }
 
     public void OnSimEvent(SimEvent e)
@@ -93,6 +102,14 @@ public partial class MatchSounds : Node
             case BuildingCompleted completed when completed.FactionId == player:
                 PlayUi(Sound.BuildingCompleted, -4f);
                 break;
+            case RecruitRejected rejected when rejected.FactionId == player:
+            case BuildRejected built when built.FactionId == player:
+            case UpgradeRejected upgrade when upgrade.FactionId == player:
+                PlayUi(Sound.Deny, -10f);
+                break;
+            case GoldLooted loot when loot.FactionId == player:
+                PlayAt(Sound.Coin, loot.Position, -4f, margin: 600f);
+                break;
             case UnitRecruited recruited when recruited.FactionId == player:
                 PlayUi(Sound.UnitReady, -10f);
                 break;
@@ -117,6 +134,9 @@ public partial class MatchSounds : Node
 
     public void PlayAlert() => PlayUi(Sound.Alert, -2f);
 
+    /// <summary>The player gave an order: a soft tick.</summary>
+    public void PlayOrder() => PlayUi(Sound.Order, -16f);
+
     /// <summary>Stops playback and releases the generated streams when the match goes away.</summary>
     public override void _ExitTree()
     {
@@ -125,10 +145,10 @@ public partial class MatchSounds : Node
             voice.Stop();
             voice.Stream = null;
         }
-        if (_ui != null)
+        foreach (var voice in _ui)
         {
-            _ui.Stop();
-            _ui.Stream = null;
+            voice.Stop();
+            voice.Stream = null;
         }
         foreach (var stream in _streams.Values)
             stream.Dispose();
@@ -153,9 +173,11 @@ public partial class MatchSounds : Node
     {
         if (!_enabled || !Throttle(sound))
             return;
-        _ui.Stream = _streams[sound];
-        _ui.VolumeDb = volumeDb;
-        _ui.Play();
+        var voice = _ui[_nextUi];
+        _nextUi = (_nextUi + 1) % _ui.Count;
+        voice.Stream = _streams[sound];
+        voice.VolumeDb = volumeDb;
+        voice.Play();
     }
 
     private bool Throttle(Sound sound)

@@ -18,6 +18,11 @@ public partial class BuildingsView : Node2D
     /// <summary>Night lights are added onto what lies beneath them.</summary>
     private readonly CanvasItemMaterial _additive = new() { BlendMode = CanvasItemMaterial.BlendModeEnum.Add };
     private GradientTexture2D _halo = null!;
+    /// <summary>Pops for buildings whose views are made later this frame (a site placed in the tick just run).</summary>
+    private readonly Dictionary<int, Vector2> _pendingPops = new();
+
+    /// <summary>A site thumped into the ground; a building finished; a level raised.</summary>
+    private static readonly Vector2 PlacedSquash = new(1.25f, 0.7f), CompletedSquash = new(0.86f, 1.16f), UpgradedSquash = new(1.12f, 0.88f);
 
     public void Initialize(MatchController match)
     {
@@ -34,6 +39,41 @@ public partial class BuildingsView : Node2D
         };
     }
 
+    /// <summary>Visual reactions of buildings to what happened in the tick (the damage itself is already done).</summary>
+    public void OnSimEvent(Sim.Core.SimEvent e)
+    {
+        switch (e)
+        {
+            case Sim.Core.AttackLanded hit when _views.TryGetValue(hit.TargetId, out var struck):
+                struck.Hit();
+                break;
+            case Sim.Core.BuildingPlaced placed:
+                PopOrLater(placed.BuildingId, PlacedSquash);
+                break;
+            case Sim.Core.BuildingCompleted completed:
+                PopOrLater(completed.BuildingId, CompletedSquash);
+                break;
+            case Sim.Core.BuildingUpgraded upgraded:
+                PopOrLater(upgraded.BuildingId, UpgradedSquash);
+                break;
+        }
+    }
+
+    /// <summary>The red pulse on a building the player has just ordered an attack on.</summary>
+    public void MarkTarget(int buildingId)
+    {
+        if (_views.TryGetValue(buildingId, out var view))
+            view.MarkTarget();
+    }
+
+    private void PopOrLater(int buildingId, Vector2 squash)
+    {
+        if (_views.TryGetValue(buildingId, out var view))
+            view.Pop(squash);
+        else
+            _pendingPops[buildingId] = squash;
+    }
+
     /// <summary>The building views (for their shadows).</summary>
     public IEnumerable<BuildingView> Views => _views.Values;
 
@@ -47,6 +87,8 @@ public partial class BuildingsView : Node2D
                 view.Initialize(building, _match, _additive, _halo);
                 _views.Add(building.Id, view);
                 AddChild(view);
+                if (_pendingPops.Remove(building.Id, out var squash))
+                    view.Pop(squash);
             }
             bool hidden = _match.IsHidden(building);
             if (!hidden && _seen.Add(building.Id))

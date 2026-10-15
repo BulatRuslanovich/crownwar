@@ -28,6 +28,9 @@ public partial class GameSettings : Node
     public bool EdgePan { get; set; } = true;
     public string Language { get; set; } = "";
 
+    /// <summary>How hard the screen shakes at heavy blows, 0 (never) to 1 (full).</summary>
+    public float ScreenShake { get; set; } = 1f;
+
     /// <summary>Name shown to other players in network games.</summary>
     public string PlayerName { get; set; } = PlayerNames.Sanitize(System.Environment.UserName);
 
@@ -66,6 +69,7 @@ public partial class GameSettings : Node
         config.SetValue(Section, "ui_scale", UiScale);
         config.SetValue(Section, "edge_pan", EdgePan);
         config.SetValue(Section, "language", Language);
+        config.SetValue(Section, "screen_shake", ScreenShake);
         config.SetValue(Section, "player_name", PlayerName);
         var error = config.Save(FilePath);
         if (error != Error.Ok)
@@ -83,6 +87,7 @@ public partial class GameSettings : Node
         UiScale = Mathf.Clamp((float)config.GetValue(Section, "ui_scale", UiScale), 0.5f, 3f);
         EdgePan = (bool)config.GetValue(Section, "edge_pan", EdgePan);
         Language = (string)config.GetValue(Section, "language", Language);
+        ScreenShake = Mathf.Clamp((float)config.GetValue(Section, "screen_shake", ScreenShake), 0f, 1f);
         PlayerName = (string)config.GetValue(Section, "player_name", PlayerName);
     }
 

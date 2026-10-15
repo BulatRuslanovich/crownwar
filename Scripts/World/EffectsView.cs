@@ -37,9 +37,11 @@ public partial class EffectsView : Node2D
         Crater,
         /// <summary>Little green crosses rising from a soldier a monk has mended.</summary>
         Heal,
+        /// <summary>A number floating up and fading (gold taken or given back), in <see cref="Effect.Text"/>.</summary>
+        Text,
     }
 
-    private record struct Effect(Kind Kind, Vector2 Position, float Age, float Duration, float Size, int Seed, Color Color);
+    private record struct Effect(Kind Kind, Vector2 Position, float Age, float Duration, float Size, int Seed, Color Color, string? Text = null);
 
     private static readonly Color SparkColor = new("fff2b0");
     private static readonly Color DustColor = new("b8a789");
@@ -59,6 +61,10 @@ public partial class EffectsView : Node2D
     private const float CraterSeconds = 14f;
     /// <summary>The last seconds in which rubble and craters fade; the share of its time a body lies before it does.</summary>
     private const float RubbleFadeSeconds = 5f, CraterFadeSeconds = 3f, CorpseFadeFrom = 0.75f;
+    /// <summary>A fallen soldier topples over this long before he lies still.</summary>
+    private const float FallSeconds = 0.28f;
+    private const int PopupFontSize = 8;
+    private Font? _font;
 
     /// <summary>True for the layer drawn under units and buildings.</summary>
     [Export] public bool Ground { get; set; }
@@ -78,6 +84,17 @@ public partial class EffectsView : Node2D
     {
         switch (e)
         {
+            case GoldLooted loot when !Ground && loot.FactionId == _match.LocalFactionId:
+                AddText(SimConvert.ToWorld(loot.Position) + new Vector2(0, -16), $"+{loot.Amount}", UiPalette.Gold);
+                break;
+            case BuildingDemolished pulled when !Ground && pulled.FactionId == _match.LocalFactionId && pulled.Refund > 0:
+                AddText(SimConvert.ToWorld(pulled.Position) + new Vector2(0, -16), $"+{pulled.Refund}", UiPalette.Gold);
+                break;
+            case BuildingPlaced placed when !Ground && _match.Sim.GetBuilding(placed.BuildingId) is { } site:
+                // Dust thrown out where the site thumps down.
+                var footing = SimConvert.ToWorld(site.Position + new System.Numerics.Vector2(0f, site.Type.Size / 2f));
+                Add(Kind.Impact, footing, 0.45f, site.Type.Size * SimConvert.TileSize * 0.55f, DustColor);
+                break;
             case SplashLanded splash when !Ground:
                 var landed = SimConvert.ToWorld(splash.Position);
                 Add(Kind.Impact, landed, 0.5f, splash.Radius * SimConvert.TileSize, DustColor);
@@ -171,7 +188,7 @@ public partial class EffectsView : Node2D
     {
         Kind.Rubble => e.Duration - e.Age > RubbleFadeSeconds,
         Kind.Crater => e.Duration - e.Age > CraterFadeSeconds,
-        Kind.Corpse => e.Age < e.Duration * CorpseFadeFrom,
+        Kind.Corpse => e.Age >= FallSeconds && e.Age < e.Duration * CorpseFadeFrom,
         _ => false,
     };
 
@@ -197,6 +214,7 @@ public partial class EffectsView : Node2D
                 case Kind.Rubble: DrawRubble(e, rng); break;
                 case Kind.Sparkle: DrawSparkle(e, t); break;
                 case Kind.Ping: DrawPing(e, t); break;
+                case Kind.Text: DrawText(e, t); break;
             }
         }
     }
@@ -300,6 +318,18 @@ public partial class EffectsView : Node2D
         }
     }
 
+    /// <summary>The number rises quickly then drifts (ease-out), and fades over the last part of its life.</summary>
+    private void DrawText(Effect e, float t)
+    {
+        _font ??= GD.Load<Font>("res://Assets/Fonts/PressStart2P-Regular.ttf");
+        float rise = 1f - (1f - t) * (1f - t);
+        float alpha = t < 0.6f ? 1f : 1f - (t - 0.6f) / 0.4f;
+        var size = _font.GetStringSize(e.Text!, HorizontalAlignment.Left, -1, PopupFontSize);
+        var at = (e.Position + new Vector2(-size.X / 2f, -18f * rise)).Round();
+        DrawStringOutline(_font, at, e.Text!, HorizontalAlignment.Left, -1, PopupFontSize, 3, Colors.Black with { A = alpha });
+        DrawString(_font, at, e.Text!, HorizontalAlignment.Left, -1, PopupFontSize, e.Color with { A = alpha });
+    }
+
     /// <summary>Two rings pulsing out where the player is attacked, as thick on screen at every zoom.</summary>
     private void DrawPing(Effect e, float t)
     {
@@ -367,11 +397,22 @@ public partial class EffectsView : Node2D
         var region = new Rect2(ArtLayout.FrameIdle * w, (int)e.Size * h, w, h);
         float alpha = t < CorpseFadeFrom ? 1f : 1f - (t - CorpseFadeFrom) / (1f - CorpseFadeFrom);
         float side = e.Seed % 2 == 0 ? 1f : -1f;
-        DrawSetTransform(e.Position + new Vector2(0, -3), side * Mathf.Pi / 2f, Vector2.One);
+        // He topples about his feet, gathering speed (ease-in), and lands where he lies from then on.
+        float fall = Mathf.Min(1f, e.Age / FallSeconds);
+        fall *= fall;
+        var feet = e.Position + new Vector2(0, 3f);
+        var lying = e.Position + new Vector2(0, -3);
+        DrawSetTransform(feet.Lerp(lying, fall), side * Mathf.Pi / 2f * fall, Vector2.One);
         var rect = new Rect2(-w / 2f, -h + 2f, w, h);
         var shade = new Color(0.62f, 0.62f, 0.62f, alpha);
         DrawTextureRectRegion(_match.UnitSheets.For(e.Color), rect, region, shade);
         DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+    }
+
+    private void AddText(Vector2 position, string text, Color color)
+    {
+        _effects.Add(new Effect(Kind.Text, position, 0f, 1.3f, 0f, ++_seed, color, text));
+        _added = true;
     }
 
     private void Add(Kind kind, Vector2 position, float duration, float size, Color color)

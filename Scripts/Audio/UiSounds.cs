@@ -3,7 +3,7 @@ using Godot;
 namespace Lordsio.Audio;
 
 /// <summary>
-/// A soft click for every button press and a faint tick on hover, for all screens. Lives under
+/// A soft click for every button press (the button sinks a little under it) and a faint tick on hover, for all screens. Lives under
 /// <see cref="Core.Main"/> and hooks every button as it enters the tree, so no screen needs to know about it.
 /// </summary>
 public partial class UiSounds : Node
@@ -43,6 +43,11 @@ public partial class UiSounds : Node
         if (node is not BaseButton button)
             return;
         button.Pressed += () => _click.Play();
+        if (button is Button pressable)
+        {
+            pressable.ButtonDown += () => UI.UiMotion.Squeeze(pressable, down: true);
+            pressable.ButtonUp += () => UI.UiMotion.Squeeze(pressable, down: false);
+        }
         button.MouseEntered += () =>
         {
             if (!button.Disabled)

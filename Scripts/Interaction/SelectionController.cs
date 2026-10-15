@@ -181,6 +181,7 @@ public partial class SelectionController : Node2D
         if (enemy != null)
         {
             _match.Issue(new AttackCommand(player, ids, enemy.Id));
+            _match.AcknowledgeAttack(enemy.Id);
             _markerPosition = SimConvert.ToWorld(enemy.Position);
             _markerColor = AttackMarkerColor;
         }
@@ -188,6 +189,7 @@ public partial class SelectionController : Node2D
         {
             var mode = advance ? MoveMode.AttackMove : MoveMode.Move;
             _match.Issue(new MoveCommand(player, ids, SimConvert.ToSim(world), mode));
+            _match.AcknowledgeMove();
             _markerPosition = world;
             _markerColor = advance ? AttackMarkerColor : MarkerColor;
         }

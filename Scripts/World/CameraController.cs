@@ -63,13 +63,25 @@ public partial class CameraController : Camera2D
         ClampToBounds();
     }
 
-    /// <summary>Shake strength 0..1, fading by itself; the camera jitters by its square (small knocks stay gentle).</summary>
+    /// <summary>Shake strength 0..1, fading by itself; the camera sways by its square (small knocks stay gentle).</summary>
     private float _trauma;
     private const float MaxShakePixels = 7f;
     private const float TraumaFadePerSecond = 1.8f;
+    /// <summary>How fast the sway swings (radians a second of the slowest wave).</summary>
+    private const float ShakeSpeed = 42f;
+    private float _shakeTime;
+    private float _shakePhase;
 
     /// <summary>A knock to the screen (a stone landing, a building collapsing): adds up, capped at 1.</summary>
-    public void Shake(float amount) => _trauma = Mathf.Min(1f, _trauma + amount);
+    public void Shake(float amount)
+    {
+        float strength = amount * (GameSettings.Instance?.ScreenShake ?? 1f);
+        if (strength <= 0f)
+            return;
+        if (_trauma <= 0f)
+            _shakePhase = GD.Randf() * Mathf.Tau; // each knock sways its own way
+        _trauma = Mathf.Min(1f, _trauma + strength);
+    }
 
     /// <summary>Jitters the view through the offset, which leaves the camera's position and bounds alone.</summary>
     private void UpdateShake(double delta)
@@ -81,7 +93,12 @@ public partial class CameraController : Camera2D
         }
         _trauma = Mathf.Max(0f, _trauma - TraumaFadePerSecond * (float)delta);
         float strength = _trauma * _trauma * MaxShakePixels / ZoomLevel; // the same on screen at every zoom
-        Offset = new Vector2(GD.Randf() * 2f - 1f, GD.Randf() * 2f - 1f) * strength;
+        // A sum of waves at unrelated speeds: a smooth, irregular sway rather than the buzz of a new random point each frame.
+        _shakeTime += (float)delta * ShakeSpeed;
+        float t = _shakeTime + _shakePhase;
+        var sway = new Vector2(Mathf.Sin(t * 1.0f) + 0.5f * Mathf.Sin(t * 2.7f + 1.3f),
+            Mathf.Sin(t * 1.3f + 2.1f) + 0.5f * Mathf.Sin(t * 3.1f)) / 1.5f;
+        Offset = sway * strength;
     }
 
     /// <summary>The part of the world on screen now (at the current zoom), in world pixels.</summary>

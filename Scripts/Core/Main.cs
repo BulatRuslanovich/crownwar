@@ -99,8 +99,12 @@ public partial class Main : Node
         return match;
     }
 
+    /// <summary>Black over everything, faded out whenever a new screen comes up (see <see cref="Replace"/>).</summary>
+    private ColorRect? _curtain;
+
     private void Replace(Node screen)
     {
+        FadeFromBlack();
         if (_screen != null)
         {
             _screen.GetParent().RemoveChild(_screen);
@@ -111,6 +115,23 @@ public partial class Main : Node
             _ui.AddChild(screen);
         else
             AddChild(screen);
+    }
+
+    /// <summary>A new screen does not cut in: it comes out of the dark in a moment (not the very first one, after the splash).</summary>
+    private void FadeFromBlack()
+    {
+        if (_screen == null)
+            return;
+        if (_curtain == null)
+        {
+            var layer = new CanvasLayer { Name = "Curtain", Layer = 100, ProcessMode = ProcessModeEnum.Always };
+            AddChild(layer);
+            _curtain = new ColorRect { Color = Colors.Black, MouseFilter = Control.MouseFilterEnum.Ignore };
+            _curtain.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+            layer.AddChild(_curtain);
+        }
+        _curtain.Modulate = Colors.White;
+        _curtain.CreateTween().TweenProperty(_curtain, "modulate:a", 0f, 0.35).SetEase(Tween.EaseType.Out);
     }
 
     /// <summary>Starts the living backdrop behind the menus, unless one is already playing.</summary>

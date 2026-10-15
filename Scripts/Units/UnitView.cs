@@ -48,6 +48,11 @@ public partial class UnitView : Node2D
     private Vector2 _lungeDirection;
     private float _lungeTime;
     private float _flashTime;
+    /// <summary>Picked as the target of an attack order: a red pulse, for this long.</summary>
+    private const float MarkSeconds = 0.5f;
+    private static readonly Color MarkTint = new(1.8f, 0.5f, 0.45f);
+    private static readonly Color HitFlash = new(2.2f, 2.2f, 2.2f);
+    private float _markTime;
     private Vector2 _knockDirection;
     private float _knockTime;
     private float _walkTime;
@@ -89,6 +94,16 @@ public partial class UnitView : Node2D
         _lungeTime = LungeDuration * 1.5f;
     }
 
+    /// <summary>The player ordered an attack on this unit: a short red pulse, so it is clear who was clicked.</summary>
+    public void MarkTarget() => _markTime = MarkSeconds;
+
+    /// <summary>A recruit steps out: squashed flat, then springing up past its height and settling.</summary>
+    public void Pop()
+    {
+        _sprite.Scale = new Vector2(1.45f, 0.5f);
+        CreateTween().TweenProperty(_sprite, "scale", Vector2.One, 0.32).SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
+    }
+
     /// <summary>Briefly flashes white and staggers away from the blow (visual only).</summary>
     public void Flash(Vector2 fromDirection)
     {
@@ -115,7 +130,11 @@ public partial class UnitView : Node2D
         _lungeTime = Mathf.Max(0f, _lungeTime - dt);
         _flashTime = Mathf.Max(0f, _flashTime - dt);
         _knockTime = Mathf.Max(0f, _knockTime - dt);
-        Modulate = _flashTime > 0f ? new Color(2.2f, 2.2f, 2.2f) : Colors.White;
+        _markTime = Mathf.Max(0f, _markTime - dt);
+        var tint = _flashTime > 0f ? HitFlash : Colors.White;
+        if (_markTime > 0f)
+            tint *= Colors.White.Lerp(MarkTint, _markTime / MarkSeconds * (0.6f + 0.4f * Mathf.Sin(_markTime * 30f)));
+        Modulate = tint;
 
         // Face the way we walk, or the enemy we fight.
         float dx = _unit.Position.X - _unit.PreviousPosition.X;
