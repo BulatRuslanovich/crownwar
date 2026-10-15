@@ -9,7 +9,7 @@ namespace Lordsio.Net;
 /// </summary>
 public static class GameVersion
 {
-    public const string Number = "0.13.0";
+    public const string Number = "1.0.0";
 
     private static string? _current;
 

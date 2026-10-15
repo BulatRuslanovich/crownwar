@@ -11,6 +11,7 @@ config_version=5
 [application]
 
 config/name="Warcrown"
+config/version="1.0.0"
 run/main_scene="res://Scenes/Main/Main.tscn"
 config/features=PackedStringArray("4.7", "C#", "Mobile")
 boot_splash/bg_color=Color(0.08, 0.065, 0.05, 1)
