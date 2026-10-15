@@ -77,8 +77,10 @@ layout_mode = 2
 
 [node name="Title" type="Label" parent="BuildingPanel/Rows"]
 theme_type_variation = &"HeaderSmall"
+custom_minimum_size = Vector2(340, 0)
 layout_mode = 2
 text = "Castle"
+autowrap_mode = 3
 
 [node name="Info" type="Label" parent="BuildingPanel/Rows"]
 layout_mode = 2
@@ -86,12 +88,17 @@ custom_minimum_size = Vector2(340, 0)
 autowrap_mode = 3
 text = "Income"
 
-[node name="RecruitButtons" type="HFlowContainer" parent="BuildingPanel/Rows"]
+[node name="RecruitButtons" type="GridContainer" parent="BuildingPanel/Rows"]
 layout_mode = 2
+columns = 4
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 4
 
 [node name="Queue" type="Label" parent="BuildingPanel/Rows"]
+custom_minimum_size = Vector2(340, 0)
 layout_mode = 2
 text = "Training"
+autowrap_mode = 3
 
 [node name="Progress" type="ProgressBar" parent="BuildingPanel/Rows"]
 custom_minimum_size = Vector2(0, 8)
@@ -99,7 +106,9 @@ layout_mode = 2
 show_percentage = false
 
 [node name="UpgradeTitle" type="Label" parent="BuildingPanel/Rows"]
+custom_minimum_size = Vector2(340, 0)
 layout_mode = 2
+autowrap_mode = 3
 
 [node name="UpgradeButton" type="Button" parent="BuildingPanel/Rows"]
 layout_mode = 2

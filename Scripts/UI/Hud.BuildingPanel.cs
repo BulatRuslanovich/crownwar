@@ -173,6 +173,9 @@ public partial class Hud
             _match.Issue(new UpgradeCommand(_match.LocalFactionId, id));
     }
 
+    /// <summary>Four recruit buttons to a row of the building panel (340 wide, 4 apart).</summary>
+    private const float RecruitButtonWidth = 82f;
+
     private void RebuildRecruitButtons(Building building)
     {
         foreach (var (button, _) in _recruitButtons)
@@ -189,7 +192,13 @@ public partial class Hud
             {
                 FocusMode = Control.FocusModeEnum.None,
                 Icon = Icons.Unit(typeId, FactionColors.Get(_match.LocalFactionId)),
+                // A quarter of the panel each, however many kinds are open: the grid never changes its look.
+                CustomMinimumSize = new Vector2(RecruitButtonWidth, 0),
             };
+            // Compact like the build bar, so four fit in a row of the panel.
+            button.AddThemeConstantOverride("icon_max_width", 22);
+            button.AddThemeConstantOverride("h_separation", 4);
+            button.AddThemeFontSizeOverride("font_size", 13);
             int buildingId = building.Id;
             // Shift orders five at once (the queue has no limit, only the army cap).
             button.Pressed += () =>
