@@ -17,7 +17,7 @@ namespace Lordsio.Sim.Tests;
 public class BalanceBench
 {
     private static GameRules Rules() =>
-        GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
+        TestSim.RealRules();
 
     /// <summary>Gold left standing on side A minus side B after the fight, as a share of the budget (+1: A won untouched).</summary>
     private static (float Score, float Seconds) Fight(GameRules rules, (string Type, int Count)[] a, (string Type, int Count)[] b, int budget)
@@ -126,7 +126,7 @@ public class BalanceBench
     public void BotMatches(int seed)
     {
         var rules = Rules();
-        var map = MapLoader.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Maps", "default.txt")));
+        var map = TestSim.DefaultMap();
         var sim = new Simulation(map, rules, new MatchSetup(4, seed));
         var difficulties = new[] { Lordsio.Sim.AI.BotDifficulty.Hard, Lordsio.Sim.AI.BotDifficulty.Normal, Lordsio.Sim.AI.BotDifficulty.Normal, Lordsio.Sim.AI.BotDifficulty.Easy };
         var bots = Enumerable.Range(0, 4).Select(i => new Lordsio.Sim.AI.BotBrain(sim, i, difficulties[i], seed * 10 + i)).ToList();

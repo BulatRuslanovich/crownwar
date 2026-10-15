@@ -2,6 +2,7 @@ using System.Numerics;
 using Lordsio.Sim.AI;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.Units;
+using static Lordsio.Sim.Tests.TestSim;
 
 namespace Lordsio.Sim.Tests;
 
@@ -13,12 +14,6 @@ public class DiplomacyTests
         new(TestMaps.Parse(TestMaps.Field(32, 14), "start 1 1", "start 27 1", "start 14 9",
                 "unit infantry 0 14 4", "unit infantry 1 15 4"),
             TestMaps.Rules, new MatchSetup(3, ShuffleStarts: false, Teams: teams));
-
-    private static void RunSeconds(Simulation sim, float seconds)
-    {
-        for (int i = 0; i < seconds * Simulation.TicksPerSecond; i++)
-            sim.Step();
-    }
 
     private static void MakePeace(Simulation sim, int a, int b)
     {

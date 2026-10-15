@@ -20,9 +20,8 @@ public class PerformanceBenchmarks
     [TestCase(400)]
     public void TwoArmiesClash(int perSide)
     {
-        string root = TestMaps.ProjectRoot();
-        var map = MapLoader.Parse(File.ReadAllText(Path.Combine(root, "Maps", "default.txt")));
-        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(root, "Data", "rules.json")));
+        var map = TestSim.DefaultMap();
+        var rules = TestSim.RealRules();
         var sim = new Simulation(map, rules, MatchSetup.Sandbox);
 
         // Two armies on open ground east of the river, marching into each other.
@@ -57,9 +56,8 @@ public class PerformanceBenchmarks
     [TestCase(2)]
     public void FourBotMatch(int seed)
     {
-        string root = TestMaps.ProjectRoot();
-        var map = MapLoader.Parse(File.ReadAllText(Path.Combine(root, "Maps", "default.txt")));
-        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(root, "Data", "rules.json")));
+        var map = TestSim.DefaultMap();
+        var rules = TestSim.RealRules();
         var sim = new Simulation(map, rules, new MatchSetup(4, seed));
         var bots = Enumerable.Range(0, 4).Select(i => new AI.BotBrain(sim, i, AI.BotDifficulty.Hard, i)).ToList();
 

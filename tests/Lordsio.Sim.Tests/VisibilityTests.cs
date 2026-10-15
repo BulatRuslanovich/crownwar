@@ -100,7 +100,7 @@ public class VisibilityTests
     [Test]
     public void WatchtowerRulesMatchTheDesign()
     {
-        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
+        var rules = TestSim.RealRules();
         var watchtower = rules.GetBuildingType("watchtower");
         Assert.That((watchtower.Size, watchtower.MaxHealth, watchtower.Cost), Is.EqualTo((3, 2000, 300)));
         Assert.That(watchtower.Attack, Is.Null, "it does not shoot");

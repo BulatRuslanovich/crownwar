@@ -3,27 +3,16 @@ using Lordsio.Sim.AI;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.Units;
 using Lordsio.Sim.World;
+using static Lordsio.Sim.Tests.TestSim;
 
 namespace Lordsio.Sim.Tests;
 
 public class BotTests
 {
-    private static Simulation CreateDefaultMatch(int factions, int seed)
-    {
-        string root = TestMaps.ProjectRoot();
-        var map = MapLoader.Parse(File.ReadAllText(Path.Combine(root, "Maps", "default.txt")));
-        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(root, "Data", "rules.json")));
-        return new Simulation(map, rules, new MatchSetup(factions, seed));
-    }
-
     private static void Run(Simulation sim, IReadOnlyList<BotBrain> bots, float seconds, Func<bool>? stop = null)
     {
         for (int i = 0; i < seconds * Simulation.TicksPerSecond && !sim.IsOver && !(stop?.Invoke() ?? false); i++)
-        {
-            sim.Step();
-            foreach (var bot in bots)
-                bot.Update();
-        }
+            StepWithBots(sim, bots);
     }
 
     [TestCase(BotDifficulty.Easy)]

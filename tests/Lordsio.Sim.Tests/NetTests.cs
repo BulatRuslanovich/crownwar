@@ -181,9 +181,8 @@ public class LockstepEndToEndTests
 
     private static Player CreatePlayer(int faction)
     {
-        string root = TestMaps.ProjectRoot();
-        var map = MapLoader.Parse(File.ReadAllText(Path.Combine(root, "Maps", "default.txt")));
-        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(root, "Data", "rules.json")));
+        var map = TestSim.DefaultMap();
+        var rules = TestSim.RealRules();
         var sim = new Simulation(map, rules, new MatchSetup(4, Seed: 21, Teams: new[] { 0, 1, 0, 1 }));
         // Factions 2 and 3 are bots on every machine.
         var bots = new List<BotBrain> { new(sim, 2, BotDifficulty.Normal, 23), new(sim, 3, BotDifficulty.Normal, 24) };

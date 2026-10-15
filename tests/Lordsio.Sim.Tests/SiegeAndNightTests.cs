@@ -4,6 +4,7 @@ using Lordsio.Sim.Core;
 using Lordsio.Sim.Net;
 using Lordsio.Sim.Units;
 using Lordsio.Sim.World;
+using static Lordsio.Sim.Tests.TestSim;
 
 namespace Lordsio.Sim.Tests;
 
@@ -30,12 +31,6 @@ public class SiegeAndNightTests
     /// <summary>Faction 0 at the west (troops at 8,5), faction 1 at the east.</summary>
     private static Simulation CreateSim() =>
         new(TestMaps.Parse(Field, "start 1 1", "start 26 8", "unit infantry 0 8 5"), Rules, new MatchSetup(2, ShuffleStarts: false));
-
-    private static void RunSeconds(Simulation sim, float seconds, Func<bool>? stop = null)
-    {
-        for (int i = 0; i < seconds * Simulation.TicksPerSecond && !(stop?.Invoke() ?? false); i++)
-            sim.Step();
-    }
 
     private static Building BuildBarracks(Simulation sim, int x, int y)
     {
@@ -170,7 +165,7 @@ public class SiegeAndNightTests
     [Test]
     public void UpgradesCountTowardsTheRefund()
     {
-        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
+        var rules = TestSim.RealRules();
         var sim = new Simulation(MapGenerator.Generate(1), rules, new MatchSetup(2, 1));
         var capital = sim.GetBuilding(sim.GetFaction(0)!.CapitalId)!;
 

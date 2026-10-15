@@ -230,7 +230,7 @@ public class TreasuryAccrualTests
     [Test]
     public void FactionsGetTheGoldCapFromTheRules()
     {
-        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
+        var rules = TestSim.RealRules();
         Assert.That(rules.GoldCap, Is.EqualTo(5000));
         var sim = new Simulation(MapGenerator.Generate(1), rules, new MatchSetup(2, 1));
         Assert.That(sim.GetFaction(0)!.Treasury.Capacity, Is.EqualTo(5000));

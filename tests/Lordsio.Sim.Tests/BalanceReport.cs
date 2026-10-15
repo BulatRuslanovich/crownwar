@@ -17,8 +17,7 @@ public class BalanceReport
 
     private static MatchResult Play(int seed, BotDifficulty[] difficulties)
     {
-        string root = TestMaps.ProjectRoot();
-        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(root, "Data", "rules.json")));
+        var rules = TestSim.RealRules();
         var sim = new Simulation(MapGenerator.Generate(seed), rules, new MatchSetup(difficulties.Length, seed));
         var bots = difficulties.Select((d, i) => new BotBrain(sim, i, d, seed * 31 + i)).ToList();
         var recruited = new Dictionary<string, int>();
@@ -83,8 +82,7 @@ public class BalanceReport
     [Test]
     public void EconomyTimeline()
     {
-        string root = TestMaps.ProjectRoot();
-        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(root, "Data", "rules.json")));
+        var rules = TestSim.RealRules();
         var difficulties = new[] { BotDifficulty.Easy, BotDifficulty.Normal, BotDifficulty.Hard };
         int[] checkpoints = { 30, 60, 120, 180, 300 };
         const int seeds = 8;

@@ -2,6 +2,7 @@ using System.Numerics;
 using Lordsio.Sim.Combat;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.Units;
+using static Lordsio.Sim.Tests.TestSim;
 
 namespace Lordsio.Sim.Tests;
 
@@ -22,12 +23,6 @@ public class CombatTests
     };
 
     private static Simulation EmptySim() => new(TestMaps.Parse(Field), TestMaps.Rules, MatchSetup.Sandbox);
-
-    private static void RunSeconds(Simulation sim, float seconds)
-    {
-        for (int i = 0; i < seconds * Simulation.TicksPerSecond; i++)
-            sim.Step();
-    }
 
     [Test]
     public void MeleeDamageAndDeathFollowCooldown()

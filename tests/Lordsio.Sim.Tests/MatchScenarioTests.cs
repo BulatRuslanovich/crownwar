@@ -2,21 +2,13 @@ using System.Numerics;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.Units;
 using Lordsio.Sim.World;
+using static Lordsio.Sim.Tests.TestSim;
 
 namespace Lordsio.Sim.Tests;
 
 /// <summary>End-to-end scenarios on the real map and rules shipped with the game.</summary>
 public class MatchScenarioTests
 {
-    private static GameRules RealRules() =>
-        GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
-
-    private static Simulation CreateDefaultMatch(int factions, int seed = 1)
-    {
-        var map = MapLoader.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Maps", "default.txt")));
-        return new Simulation(map, RealRules(), new MatchSetup(factions, seed));
-    }
-
     [Test]
     public void CapitalsAreRandomButReproducible()
     {

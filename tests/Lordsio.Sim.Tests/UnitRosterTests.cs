@@ -3,6 +3,7 @@ using Lordsio.Sim.Buildings;
 using Lordsio.Sim.Combat;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.World;
+using static Lordsio.Sim.Tests.TestSim;
 
 namespace Lordsio.Sim.Tests;
 
@@ -13,7 +14,7 @@ namespace Lordsio.Sim.Tests;
 public class UnitRosterTests
 {
     private static readonly GameRules Rules =
-        GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
+        TestSim.RealRules();
 
     /// <summary>Two capitals far apart on open ground, plenty of gold for faction 0.</summary>
     private static Simulation CreateSim()
@@ -23,14 +24,6 @@ public class UnitRosterTests
         sim.GetFaction(0)!.Treasury.Add(4000);
         return sim;
     }
-
-    private static void RunSeconds(Simulation sim, float seconds)
-    {
-        for (int i = 0; i < seconds * Simulation.TicksPerSecond; i++)
-            sim.Step();
-    }
-
-    private static Building Capital(Simulation sim, int faction) => sim.GetBuilding(sim.GetFaction(faction)!.CapitalId)!;
 
     private static Building BuildBarracks(Simulation sim, Cell anchor)
     {
@@ -43,7 +36,7 @@ public class UnitRosterTests
     public void EachBarracksOpensOneMoreKindAndLosingThemClosesIt()
     {
         var sim = CreateSim();
-        var castle = Capital(sim, 0);
+        var castle = CapitalOf(sim, 0);
         Assert.That(sim.CanRecruit(0, castle.Id, "infantry"), Is.EqualTo(RecruitError.None), "spearmen from the start");
         Assert.That(sim.CanRecruit(0, castle.Id, "archer"), Is.EqualTo(RecruitError.Locked));
 
@@ -67,7 +60,7 @@ public class UnitRosterTests
     public void EveryBarracksAddsATrainingPlaceInTheCastle()
     {
         var sim = CreateSim();
-        var castle = Capital(sim, 0);
+        var castle = CapitalOf(sim, 0);
         BuildBarracks(sim, new Cell(6, 2));
         BuildBarracks(sim, new Cell(6, 5));
         Assert.That(sim.TrainingSlots(castle), Is.EqualTo(3));
@@ -136,7 +129,7 @@ public class UnitRosterTests
     public void TrebuchetsBatterWallsFromBeyondTheCastlesReach()
     {
         var sim = CreateSim();
-        var enemyCastle = Capital(sim, 1);
+        var enemyCastle = CapitalOf(sim, 1);
         var trebuchetType = Rules.Units.Get("trebuchet");
         // Just inside its own range, outside the castle's.
         var at = enemyCastle.Position - new Vector2(enemyCastle.Type.Size / 2f + trebuchetType.AttackRange - 0.5f, 0f);

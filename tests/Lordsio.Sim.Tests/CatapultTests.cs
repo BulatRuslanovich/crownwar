@@ -2,6 +2,7 @@ using System.Numerics;
 using Lordsio.Sim.Buildings;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.World;
+using static Lordsio.Sim.Tests.TestSim;
 
 namespace Lordsio.Sim.Tests;
 
@@ -19,12 +20,6 @@ public class CatapultTests
 
     private static Simulation CreateSim() =>
         new(TestMaps.Parse(Field, "start 1 1", "unit dummy 0 6 6"), Rules, new MatchSetup(1, ShuffleStarts: false));
-
-    private static void RunSeconds(Simulation sim, float seconds)
-    {
-        for (int i = 0; i < seconds * Simulation.TicksPerSecond; i++)
-            sim.Step();
-    }
 
     private static Building BuildCatapult(Simulation sim)
     {
@@ -63,7 +58,7 @@ public class CatapultTests
     [Test]
     public void ShippedCatapultHitsWeakerAndCloserThanTheArcherTowerAtEveryLevel()
     {
-        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
+        var rules = TestSim.RealRules();
         var catapult = rules.GetBuildingType("catapult");
         var tower = rules.GetBuildingType("tower");
 

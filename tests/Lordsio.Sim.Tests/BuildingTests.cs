@@ -128,7 +128,7 @@ public class BuildingPlacementTests
     [Test]
     public void BuildingLimitsPerPlayer()
     {
-        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
+        var rules = TestSim.RealRules();
         Assert.That(rules.GetBuildingType("tower").MaxCount, Is.EqualTo(20));
         Assert.That(rules.GetBuildingType("catapult").MaxCount, Is.EqualTo(20));
         Assert.That(rules.GetBuildingType("barracks").MaxCount, Is.EqualTo(10), "seven open every kind of unit, the rest add training places");

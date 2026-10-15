@@ -3,6 +3,7 @@ using Lordsio.Sim.Combat;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.Units;
 using Lordsio.Sim.World;
+using static Lordsio.Sim.Tests.TestSim;
 
 namespace Lordsio.Sim.Tests;
 
@@ -18,12 +19,6 @@ public class BuildPlanTests
     }
 
     private static readonly Cell Far = new(24, 2);
-
-    private static void RunSeconds(Simulation sim, float seconds)
-    {
-        for (int i = 0; i < seconds * Simulation.TicksPerSecond; i++)
-            sim.Step();
-    }
 
     private static Unit Spearman(Simulation sim) => sim.Units.Single(u => u.Type.Id == "infantry");
 
@@ -107,7 +102,7 @@ public class BuildPlanTests
     [Test]
     public void SiegeEnginesDoNotBuild()
     {
-        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
+        var rules = TestSim.RealRules();
         var sim = new Simulation(TestMaps.Parse(TestMaps.Field(30, 12), "start 1 1"), rules, new MatchSetup(1, ShuffleStarts: false));
         foreach (var unit in sim.Units.ToList())
             CombatSystem.ApplyDamage(unit, unit.MaxHealth, ranged: false, attackerFactionId: 1);

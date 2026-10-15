@@ -70,9 +70,8 @@ public class MapLoaderTests
     [Test]
     public void DefaultGameDataLoads()
     {
-        string root = TestMaps.ProjectRoot();
-        var map = MapLoader.Parse(File.ReadAllText(Path.Combine(root, "Maps", "default.txt")));
-        var rules = Core.GameRules.Parse(File.ReadAllText(Path.Combine(root, "Data", "rules.json")));
+        var map = TestSim.DefaultMap();
+        var rules = TestSim.RealRules();
 
         Assert.That(map.StartPositions, Has.Count.GreaterThanOrEqualTo(4));
         Assert.That(map.Deposits, Is.Not.Empty);

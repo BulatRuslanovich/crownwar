@@ -91,19 +91,9 @@ public class LockstepDeterminismTests
 {
     private static (Simulation Sim, List<BotBrain> Bots) CreateBotMatch(int seed)
     {
-        string root = TestMaps.ProjectRoot();
-        var map = MapLoader.Parse(File.ReadAllText(Path.Combine(root, "Maps", "default.txt")));
-        var rules = GameRules.Parse(File.ReadAllText(Path.Combine(root, "Data", "rules.json")));
-        var sim = new Simulation(map, rules, new MatchSetup(4, seed, Teams: new[] { 0, 1, 0, 1 }));
+        var sim = TestSim.CreateDefaultMatch(4, seed, teams: new[] { 0, 1, 0, 1 });
         var bots = Enumerable.Range(0, 4).Select(i => new BotBrain(sim, i, BotDifficulty.Hard, seed + i)).ToList();
         return (sim, bots);
-    }
-
-    private static void Step(Simulation sim, List<BotBrain> bots)
-    {
-        sim.Step();
-        foreach (var bot in bots)
-            bot.Update();
     }
 
     [Test]
@@ -114,8 +104,8 @@ public class LockstepDeterminismTests
 
         for (int i = 0; i < 5 * 60 * Simulation.TicksPerSecond && !a.IsOver; i++)
         {
-            Step(a, botsA);
-            Step(b, botsB);
+            TestSim.StepWithBots(a, botsA);
+            TestSim.StepWithBots(b, botsB);
             if (i % Simulation.TicksPerSecond == 0)
                 Assert.That(b.ComputeChecksum(), Is.EqualTo(a.ComputeChecksum()), $"desync at tick {a.Tick}");
         }
@@ -132,8 +122,8 @@ public class LockstepDeterminismTests
         b.Issue(new MoveCommand(0, new[] { unit.Id }, unit.Position + new Vector2(3f, 0f)));
         for (int i = 0; i < 10; i++)
         {
-            Step(a, botsA);
-            Step(b, botsB);
+            TestSim.StepWithBots(a, botsA);
+            TestSim.StepWithBots(b, botsB);
         }
 
         Assert.That(b.ComputeChecksum(), Is.Not.EqualTo(a.ComputeChecksum()));

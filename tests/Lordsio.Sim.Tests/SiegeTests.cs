@@ -2,6 +2,7 @@ using System.Numerics;
 using Lordsio.Sim.Buildings;
 using Lordsio.Sim.Core;
 using Lordsio.Sim.Units;
+using static Lordsio.Sim.Tests.TestSim;
 
 namespace Lordsio.Sim.Tests;
 
@@ -9,12 +10,6 @@ namespace Lordsio.Sim.Tests;
 public class SiegeTests
 {
     private static readonly string[] Field = TestMaps.Field(24, 12);
-
-    private static void RunSeconds(Simulation sim, float seconds, Func<bool>? stop = null)
-    {
-        for (int i = 0; i < seconds * Simulation.TicksPerSecond && !(stop?.Invoke() ?? false); i++)
-            sim.Step();
-    }
 
     private static Building BuildTower(Simulation sim, int faction, int x, int y)
     {

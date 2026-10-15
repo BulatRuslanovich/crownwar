@@ -6,7 +6,7 @@ namespace Lordsio.Sim.Tests;
 public class MapGeneratorTests
 {
     private static GameRules Rules() =>
-        GameRules.Parse(File.ReadAllText(Path.Combine(TestMaps.ProjectRoot(), "Data", "rules.json")));
+        TestSim.RealRules();
 
     private static string Fingerprint(MapDefinition map)
     {
