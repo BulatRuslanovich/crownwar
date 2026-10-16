@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>Small eased motions that make the interface feel alive: panels fading in, buttons giving under the finger.</summary>
 public static class UiMotion

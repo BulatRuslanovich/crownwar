@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Lordsio.Sim.Core;
-using Lordsio.Sim.Net;
+using Warcrown.Sim.Core;
+using Warcrown.Sim.Net;
 
-namespace Lordsio.Net;
+namespace Warcrown.Net;
 
 /// <summary>
 /// Lockstep for one networked match, on top of <see cref="NetSession"/>. Every machine runs the full

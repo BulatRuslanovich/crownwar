@@ -1,8 +1,8 @@
 using System;
-using Lordsio.Sim.Core;
+using Warcrown.Sim.Core;
 using SimVector2 = System.Numerics.Vector2;
 
-namespace Lordsio.Core;
+namespace Warcrown.Core;
 
 /// <summary>
 /// Decides when to warn the player that they are under attack: an enemy hit on one of the player's

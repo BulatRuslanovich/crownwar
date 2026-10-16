@@ -3,13 +3,13 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using Godot;
-using Lordsio.Net;
-using Lordsio.Sim.AI;
-using Lordsio.Sim.Core;
-using Lordsio.Sim.Net;
-using Lordsio.UI;
+using Warcrown.Net;
+using Warcrown.Sim.AI;
+using Warcrown.Sim.Core;
+using Warcrown.Sim.Net;
+using Warcrown.UI;
 
-namespace Lordsio.Core;
+namespace Warcrown.Core;
 
 /// <summary>Advancing the simulation: fixed ticks in single player, lockstep frames (and the replay after a rejoin) in a network game.</summary>
 public partial class MatchController

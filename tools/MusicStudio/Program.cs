@@ -1,6 +1,6 @@
 using System.Globalization;
-using Lordsio.MusicStudio;
-using Lordsio.MusicStudio.Pieces;
+using Warcrown.MusicStudio;
+using Warcrown.MusicStudio.Pieces;
 
 // Dev-only music studio. Commands:
 //   fetch           download the VSCO 2 CE samples into cache/

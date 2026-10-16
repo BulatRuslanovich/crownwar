@@ -1,4 +1,4 @@
-namespace Lordsio.MusicStudio;
+namespace Warcrown.MusicStudio;
 
 /// <summary>
 /// Deterministic "randomness" for a human touch: a value that depends only on what it is for (a note's time, pitch,

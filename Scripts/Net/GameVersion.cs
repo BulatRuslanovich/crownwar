@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Lordsio.Net;
+namespace Warcrown.Net;
 
 /// <summary>
 /// Identifies a build for network play: lockstep needs every machine to run the same code and the

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Godot;
 
-namespace Lordsio.Audio;
+namespace Warcrown.Audio;
 
 public enum Sound
 {

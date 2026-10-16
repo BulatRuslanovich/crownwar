@@ -1,8 +1,8 @@
 using System;
 using Godot;
-using Lordsio.Sim.Core;
+using Warcrown.Sim.Core;
 
-namespace Lordsio.Core;
+namespace Warcrown.Core;
 
 /// <summary>What the simulation reports each frame, and who gets to know: the fog decides what is seen and heard.</summary>
 public partial class MatchController

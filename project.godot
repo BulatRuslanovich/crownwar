@@ -34,7 +34,7 @@ window/stretch/aspect="expand"
 
 [dotnet]
 
-project/assembly_name="lordsio"
+project/assembly_name="warcrown"
 
 [gui]
 

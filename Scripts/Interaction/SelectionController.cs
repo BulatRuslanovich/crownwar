@@ -2,13 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.Buildings;
-using Lordsio.Sim.Core;
-using Lordsio.Sim.Units;
-using Lordsio.UI;
+using Warcrown.Core;
+using Warcrown.Sim.Buildings;
+using Warcrown.Sim.Core;
+using Warcrown.Sim.Units;
+using Warcrown.UI;
 
-namespace Lordsio.Interaction;
+namespace Warcrown.Interaction;
 
 /// <summary>
 /// Turns mouse and keyboard input into selection changes and simulation commands.

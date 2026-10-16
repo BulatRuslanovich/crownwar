@@ -1,7 +1,7 @@
 using System;
 using Godot;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>Rules in brief and the controls, reachable from the main menu and the pause menu.</summary>
 public partial class HowToPlay : Control

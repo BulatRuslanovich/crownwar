@@ -1,8 +1,8 @@
 using System;
 using Godot;
-using Lordsio.World;
+using Warcrown.World;
 
-namespace Lordsio.Dev;
+namespace Warcrown.Dev;
 
 /// <summary>The interface images: panels, buttons, fields, bars, the logo and the splash screen.</summary>
 public static partial class ArtGenerator

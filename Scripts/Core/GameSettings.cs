@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Lordsio.Core;
+namespace Warcrown.Core;
 
 /// <summary>
 /// Player preferences, saved to user://settings.cfg and applied on start. The project's only autoload:

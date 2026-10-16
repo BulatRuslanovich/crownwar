@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.Core;
-using Lordsio.UI;
+using Warcrown.Core;
+using Warcrown.Sim.Core;
+using Warcrown.UI;
 
-namespace Lordsio.World;
+namespace Warcrown.World;
 
 /// <summary>
 /// Short-lived pixel effects driven by simulation events: hit sparks and what flies off a struck target (blood,

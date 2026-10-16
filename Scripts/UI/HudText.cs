@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 using Godot;
-using Lordsio.Sim.Buildings;
-using Lordsio.Sim.Core;
-using Lordsio.Sim.Units;
-using Lordsio.Sim.World;
+using Warcrown.Sim.Buildings;
+using Warcrown.Sim.Core;
+using Warcrown.Sim.Units;
+using Warcrown.Sim.World;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>
 /// The HUD's descriptions, built from the rules so new kinds and levels describe themselves: building and unit

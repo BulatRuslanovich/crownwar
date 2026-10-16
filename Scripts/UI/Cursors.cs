@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>
 /// Pixel-art mouse cursors drawn in code: a gold arrow for everything, and a sword (on the

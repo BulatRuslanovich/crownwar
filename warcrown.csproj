@@ -1,0 +1,22 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Warcrown</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Godot compiles every *.cs under the project folder by default;
+       the simulation library, tests and dev tools are separate projects. -->
+  <ItemGroup>
+    <Compile Remove="sim/**" />
+    <Compile Remove="tests/**" />
+    <Compile Remove="tools/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="sim\Warcrown.Sim\Warcrown.Sim.csproj" />
+  </ItemGroup>
+
+</Project>

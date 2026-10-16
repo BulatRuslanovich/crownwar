@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Lordsio.Core;
+namespace Warcrown.Core;
 
 /// <summary>
 /// Display colour per faction id. Purely visual, so it lives on the Godot side. A Defense match sets its two extra

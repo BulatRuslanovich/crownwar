@@ -1,4 +1,4 @@
-namespace Lordsio.Core;
+namespace Warcrown.Core;
 
 /// <summary>Player names as the lobby, the network and the scoreboard show them.</summary>
 public static class PlayerNames

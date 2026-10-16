@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using Godot;
-using Lordsio.World;
+using Warcrown.World;
 
-namespace Lordsio.Units;
+namespace Warcrown.Units;
 
 /// <summary>
 /// The unit sheet with a faction's colour baked into its mask, one texture per colour, made on first use. A unit is

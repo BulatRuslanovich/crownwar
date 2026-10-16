@@ -1,12 +1,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.Core;
-using Lordsio.Sim.World;
-using Lordsio.World;
+using Warcrown.Core;
+using Warcrown.Sim.Core;
+using Warcrown.Sim.World;
+using Warcrown.World;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>
 /// The whole map in the corner: terrain, the fog of war, gold, buildings and units the player can see, enemy
@@ -44,7 +44,7 @@ public partial class Minimap : Control
         var image = Image.CreateEmpty(map.Width, map.Height, false, Image.Format.Rgba8);
         for (int y = 0; y < map.Height; y++)
             for (int x = 0; x < map.Width; x++)
-                image.SetPixel(x, y, Lordsio.World.Biomes.MinimapColor(match.BiomeAt(new Cell(x, y)), map.GetTerrain(new Cell(x, y))));
+                image.SetPixel(x, y, Warcrown.World.Biomes.MinimapColor(match.BiomeAt(new Cell(x, y)), map.GetTerrain(new Cell(x, y))));
         _terrain = ImageTexture.CreateFromImage(image);
         _fog = new FogPainter(map.Width, map.Height, Unexplored, Remembered);
         TextureFilter = TextureFilterEnum.Nearest;

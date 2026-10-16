@@ -1,7 +1,7 @@
 using Godot;
-using Lordsio.Sim.World;
+using Warcrown.Sim.World;
 
-namespace Lordsio.World;
+namespace Warcrown.World;
 
 /// <summary>
 /// The fog of war as a texture, one texel per tile: clear where the team sees, <c>remembered</c> over explored ground

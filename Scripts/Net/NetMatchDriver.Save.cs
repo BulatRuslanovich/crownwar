@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Lordsio.Sim.Core;
-using Lordsio.Sim.Net;
+using Warcrown.Sim.Core;
+using Warcrown.Sim.Net;
 
-namespace Lordsio.Net;
+namespace Warcrown.Net;
 
 /// <summary>The host's save of the match, frame by frame, so a crashed game can be brought back.</summary>
 public sealed partial class NetMatchDriver

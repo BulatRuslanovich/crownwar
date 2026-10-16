@@ -1,8 +1,8 @@
 using System;
 using Godot;
-using Lordsio.World;
+using Warcrown.World;
 
-namespace Lordsio.Dev;
+namespace Warcrown.Dev;
 
 /// <summary>
 /// Generates the game's pixel art into Assets/ (run with --export-art). The PNGs are committed and

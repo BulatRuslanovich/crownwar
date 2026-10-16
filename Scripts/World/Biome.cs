@@ -1,7 +1,7 @@
 using Godot;
-using Lordsio.Sim.World;
+using Warcrown.Sim.World;
 
-namespace Lordsio.World;
+namespace Warcrown.World;
 
 /// <summary>How each <see cref="Biome"/> looks: its terrain tileset and its colours on the minimap.</summary>
 public static class Biomes

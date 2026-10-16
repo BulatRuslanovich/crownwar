@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Godot;
 
-namespace Lordsio.World;
+namespace Warcrown.World;
 
 /// <summary>Sheet layout shared by the art generator and the views that cut frames out of the sheets.</summary>
 public static class ArtLayout

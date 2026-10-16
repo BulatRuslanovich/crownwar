@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Lordsio.MusicStudio;
+namespace Warcrown.MusicStudio;
 
 /// <summary>Encodes a .wav to Ogg Vorbis with ffmpeg (from PATH, or where winget puts it).</summary>
 public static class Ogg

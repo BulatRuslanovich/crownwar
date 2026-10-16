@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.Units;
+using Warcrown.Core;
+using Warcrown.Sim.Units;
 
-namespace Lordsio.Units;
+namespace Warcrown.Units;
 
 /// <summary>
 /// Keeps one <see cref="UnitView"/> per simulated unit, positioned with interpolation between ticks,

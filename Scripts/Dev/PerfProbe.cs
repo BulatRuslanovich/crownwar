@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using Godot;
 
-namespace Lordsio.Dev;
+namespace Warcrown.Dev;
 
 /// <summary>
 /// Dev-only (--perf-log=SECONDS): measures frames with vsync off, after a short warm-up, then prints the numbers and

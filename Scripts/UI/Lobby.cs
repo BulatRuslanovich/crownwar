@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
-using Lordsio.Net;
-using Lordsio.Sim.AI;
-using Lordsio.Sim.Core;
-using Lordsio.Sim.Net;
+using Warcrown.Net;
+using Warcrown.Sim.AI;
+using Warcrown.Sim.Core;
+using Warcrown.Sim.Net;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>
 /// The lobby of a network game: four slots, each a player, a bot or open, on one of four teams.

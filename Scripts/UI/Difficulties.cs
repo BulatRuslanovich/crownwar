@@ -1,6 +1,6 @@
-using Lordsio.Sim.AI;
+using Warcrown.Sim.AI;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>The bot difficulties in menu order, with their names in the translation tables.</summary>
 public static class Difficulties

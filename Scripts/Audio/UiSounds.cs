@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Lordsio.Audio;
+namespace Warcrown.Audio;
 
 /// <summary>
 /// A soft click for every button press (the button sinks a little under it) and a faint tick on hover, for all screens. Lives under

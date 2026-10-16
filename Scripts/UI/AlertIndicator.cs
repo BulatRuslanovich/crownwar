@@ -1,8 +1,8 @@
 using Godot;
-using Lordsio.Core;
+using Warcrown.Core;
 using SimVector2 = System.Numerics.Vector2;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>
 /// Points at the latest attack on the player (or, in Defense, at where a wave comes in) for a few seconds: a pulsing

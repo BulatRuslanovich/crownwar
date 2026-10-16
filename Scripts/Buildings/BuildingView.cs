@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.Buildings;
-using Lordsio.UI;
-using Lordsio.World;
+using Warcrown.Core;
+using Warcrown.Sim.Buildings;
+using Warcrown.UI;
+using Warcrown.World;
 
-namespace Lordsio.Buildings;
+namespace Warcrown.Buildings;
 
 /// <summary>
 /// A building drawn from Assets/Sprites/&lt;type&gt;.png plus its faction-colour mask (&lt;type&gt;_team.png),
@@ -343,7 +343,7 @@ public partial class BuildingView : Node2D
     }
 
     /// <summary>Reserve left, or refill progress while exhausted, as 0..1.</summary>
-    private static float DepositFraction(Lordsio.Sim.World.GoldDeposit d) =>
+    private static float DepositFraction(Warcrown.Sim.World.GoldDeposit d) =>
         d.IsExhausted ? d.RegenProgress : (float)d.Reserve / d.Capacity;
 
     private Sprite2D MakeSprite(Color modulate)

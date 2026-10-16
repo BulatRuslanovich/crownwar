@@ -1,11 +1,11 @@
 using System.Linq;
 using Godot;
-using Lordsio.Net;
-using Lordsio.Sim.AI;
-using Lordsio.Sim.Net;
-using Lordsio.UI;
+using Warcrown.Net;
+using Warcrown.Sim.AI;
+using Warcrown.Sim.Net;
+using Warcrown.UI;
 
-namespace Lordsio.Core;
+namespace Warcrown.Core;
 
 /// <summary>Network games: the session from the network menu through the lobby to the match, and what happens when it fails.</summary>
 public partial class Main

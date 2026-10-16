@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
-using Lordsio.Core;
+using Warcrown.Core;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>
 /// Held Tab: every side of the match — colour, name, team, how it stands with the player (ally, peace, war, a war

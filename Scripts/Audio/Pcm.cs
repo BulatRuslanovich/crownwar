@@ -1,6 +1,6 @@
 using System;
 
-namespace Lordsio.Audio;
+namespace Warcrown.Audio;
 
 /// <summary>Synthesised samples turned into the bytes of an <c>AudioStreamWav</c>.</summary>
 internal static class Pcm

@@ -1,4 +1,4 @@
-namespace Lordsio.Core;
+namespace Warcrown.Core;
 
 /// <summary>Frame-rate independent easing towards a target.</summary>
 public static class Smoothing

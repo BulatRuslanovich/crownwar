@@ -1,8 +1,8 @@
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.World;
+using Warcrown.Core;
+using Warcrown.Sim.World;
 
-namespace Lordsio.World;
+namespace Warcrown.World;
 
 /// <summary>
 /// Gold ore patches on the ground (Assets/Sprites/gold.png). Rich deposits get a golden glint so they

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Godot;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>
 /// The HUD's short messages, a few stacked with the newest on top: each fades in, stays a while and fades out, so a

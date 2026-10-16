@@ -1,4 +1,4 @@
-namespace Lordsio.MusicStudio;
+namespace Warcrown.MusicStudio;
 
 /// <summary>Stereo audio as two float channels (−1..1) at a sample rate.</summary>
 public sealed record Stereo(float[] Left, float[] Right, int Rate)

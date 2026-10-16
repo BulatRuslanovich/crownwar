@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Lordsio.Core;
+namespace Warcrown.Core;
 
 /// <summary>
 /// Input actions registered from code so they live next to the code that reads them.

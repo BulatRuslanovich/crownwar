@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>Colours the interface and the markers in the world share, so the same meaning always looks the same.</summary>
 public static class UiPalette

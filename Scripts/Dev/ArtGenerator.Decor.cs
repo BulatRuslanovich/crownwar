@@ -1,8 +1,8 @@
 using System;
 using Godot;
-using Lordsio.World;
+using Warcrown.World;
 
-namespace Lordsio.Dev;
+namespace Warcrown.Dev;
 
 /// <summary>Decor: the small things lying about on open ground, in each biome.</summary>
 public static partial class ArtGenerator

@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.World;
+using Warcrown.Core;
+using Warcrown.Sim.World;
 
-namespace Lordsio.World;
+namespace Warcrown.World;
 
 /// <summary>
 /// Weather over what the camera sees, by the biome under each particle: snow falls and drifts on the wind over the

@@ -1,8 +1,8 @@
 using System;
 using Godot;
-using Lordsio.World;
+using Warcrown.World;
 
-namespace Lordsio.Dev;
+namespace Warcrown.Dev;
 
 /// <summary>The terrain sheet: grass, water, shores, roads and bridges, biome blends.</summary>
 public static partial class ArtGenerator

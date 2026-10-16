@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.Core;
+using Warcrown.Core;
+using Warcrown.Sim.Core;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>
 /// Diplomacy (P, or the button on the top bar in games with other people): every other side, how the player stands

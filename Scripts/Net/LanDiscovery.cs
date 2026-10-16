@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using Godot;
 
-namespace Lordsio.Net;
+namespace Warcrown.Net;
 
 /// <summary>A game announced on the local network. <paramref name="Id"/> tells games apart when one arrives over several adapters.</summary>
 /// <paramref name="InMatch"/>: the match is running; <paramref name="FreeSlots"/> then counts players who dropped out and may rejoin.
@@ -21,7 +21,7 @@ public sealed record LanGame(string Id, string Address, int Port, string HostNam
 public partial class LanDiscovery : Node
 {
     public const int DiscoveryPort = 47801;
-    private const string Magic = "LORDSIO1";
+    private const string Magic = "WARCROWN1";
     private const double AnnounceInterval = 1.0;
     /// <summary>Games not heard from for this long disappear from the list.</summary>
     private const double ForgetAfter = 4.0;

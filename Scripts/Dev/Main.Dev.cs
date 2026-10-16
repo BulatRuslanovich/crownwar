@@ -1,13 +1,13 @@
 using System.Globalization;
 using System.Linq;
 using Godot;
-using Lordsio.Dev;
-using Lordsio.Net;
-using Lordsio.Sim.AI;
-using Lordsio.Sim.Net;
-using Lordsio.UI;
+using Warcrown.Dev;
+using Warcrown.Net;
+using Warcrown.Sim.AI;
+using Warcrown.Sim.Net;
+using Warcrown.UI;
 
-namespace Lordsio.Core;
+namespace Warcrown.Core;
 
 /// <summary>Developer options of the application root (debug builds only): asset export, scripted network tests, smoke runs, screenshots.</summary>
 public partial class Main

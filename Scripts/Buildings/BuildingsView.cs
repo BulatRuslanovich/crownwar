@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using Godot;
-using Lordsio.Core;
+using Warcrown.Core;
 
-namespace Lordsio.Buildings;
+namespace Warcrown.Buildings;
 
 /// <summary>
 /// Keeps one <see cref="BuildingView"/> per building as they are placed and destroyed. Enemy buildings

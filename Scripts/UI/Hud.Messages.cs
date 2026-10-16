@@ -1,7 +1,7 @@
 using Godot;
-using Lordsio.Sim.Core;
+using Warcrown.Sim.Core;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>Short messages in the middle of the screen: what happened to the player, diplomacy news, alerts.</summary>
 public partial class Hud

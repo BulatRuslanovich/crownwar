@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using Godot;
-using Lordsio.Core;
+using Warcrown.Core;
 
-namespace Lordsio.World;
+namespace Warcrown.World;
 
 /// <summary>
 /// Shadows of clouds drifting over the map with the wind: soft-edged blobs of shade, a few hundred pixels across,

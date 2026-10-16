@@ -2,7 +2,7 @@
 
 Версия **1.0.0** (`Scripts/Net/GameVersion.cs`; в сетевой игре совпадать должны версия и `Data/rules.json`).
 
-(Рабочее название проекта и имена кода — Lordsio: `Lordsio.Sim`, `lordsio.sln`; игроку видно только Warcrown.)
+(Код называется так же: `Warcrown.Sim`, `warcrown.sln`, сборка `warcrown`.)
 
 2D-стратегия с захватом территории в духе Lords.io. Godot 4.7 .NET, C#.
 
@@ -13,11 +13,11 @@
 ## Структура
 | Путь | Назначение |
 |---|---|
-| `sim/Lordsio.Sim/` | Игровые правила: карта, поиск пути, юниты, команды. Чистый C#, без зависимостей от Godot |
-| `tests/Lordsio.Sim.Tests/` | NUnit-тесты симуляции |
+| `sim/Warcrown.Sim/` | Игровые правила: карта, поиск пути, юниты, команды. Чистый C#, без зависимостей от Godot |
+| `tests/Warcrown.Sim.Tests/` | NUnit-тесты симуляции |
 | `Scripts/`, `Scenes/` | Godot-сторона: отрисовка, камера, ввод, HUD, звук, сеть. `Scripts/Dev/` — только для разработки (генератор арта, dev-флаги, замер кадров) |
 | `Data/rules.json` | Правила: стартовое золото и армия, радиус стройки, юниты (скорость, цена, бой), здания (размер, цена, время стройки, здоровье, доход, лимит, найм, атака). Строгий JSON без комментариев |
-| `sim/Lordsio.Sim/World/MapGenerator.cs` | Генератор карт: каждый матч — новая карта по номеру (seed) |
+| `sim/Warcrown.Sim/World/MapGenerator.cs` | Генератор карт: каждый матч — новая карта по номеру (seed) |
 | `Maps/*.txt` | Эталонная карта для тестов (в матчах не используется): `.` трава, `f` лес, `=` дорога/мост, `~` вода, `^` горы; секция `[objects]`: `start <x> <y>` (место замка), `gold <x> <y> [доход]` (месторождение 2×2), `unit <тип> <фракция> <x> <y> [кол-во]` |
 
 Состояние мира меняется только через команды (`Simulation.Issue`), которые применяются в начале
@@ -31,7 +31,7 @@
 - Общие помощники вместо копий: `UiPalette` (цвета интерфейса), `UiMotion` (плавные появления и нажатия),
   `TimeFormat`, `Smoothing`, `Sprites`, `PlayerNames`, `Difficulties`, `FogPainter`, `UnitSheets` (листы юнитов в цвете
   фракции), `CameraController.VisibleRect`; в симуляции — `Ticks`, `RouteField` (общие поля путей групповых приказов).
-- `tests/Lordsio.Sim.Tests/GoldenReplayTests.cs` фиксирует ход матча ботов бит в бит: рефакторинг и оптимизации
+- `tests/Warcrown.Sim.Tests/GoldenReplayTests.cs` фиксирует ход матча ботов бит в бит: рефакторинг и оптимизации
   симуляции обязаны его не менять, а осознанное изменение поведения обновляет эталон явно.
 
 ## Правила матча
@@ -129,7 +129,7 @@
   под полупрозрачной пеленой. Враги в тумане не рисуются, их бои не дают эффектов и звуков, по ним нельзя щёлкнуть.
   Увиденные вражеские здания остаются «призраками» в том виде, в каком их видели в последний раз (даже если их
   уже разрушили), пока снова не посмотришь. После поражения туман снимается — можно досмотреть матч.
-  Туман — только отображение (`sim/Lordsio.Sim/World/Visibility.cs`): на правила он не влияет, **боты видят всю карту**.
+  Туман — только отображение (`sim/Warcrown.Sim/World/Visibility.cs`): на правила он не влияет, **боты видят всю карту**.
 - **Казармы** поднимают лимит армии и открывают новые виды войск (нанимаются они в замке). **Башни** стреляют по врагам в радиусе.
 - Строить можно только рядом со своими войсками (радиус `buildRadius`), на траве или в лесу, не на дорогах.
   Здание строится со временем; стройку можно разрушить. Все здания твёрдые — войска их обходят.
@@ -185,7 +185,7 @@
 `render all game` пересобирает все пьесы и кладёт OGG в `Assets/Music` (нужен ffmpeg).
 
 ## Противники (ИИ)
-Боты (`sim/Lordsio.Sim/AI/BotBrain.cs`) играют по тем же правилам: читают публичное состояние симуляции и
+Боты (`sim/Warcrown.Sim/AI/BotBrain.cs`) играют по тем же правилам: читают публичное состояние симуляции и
 действуют только командами (`Simulation.Issue`). Раз в 0.5–2 с бот решает: найм, шахта на ближнем свободном
 месторождении, казармы при упоре в лимит, башни у шахт; армия — оборона / атака / отступление / экспансия / сбор.
 Сложность (`MatchController.Difficulty`: Easy / Normal / Hard) меняет только решения, не ресурсы.
@@ -226,16 +226,16 @@
 - **Пауза по сети.** Esc у любого игрока ставит паузу всем: хост перестаёт выпускать кадры, у всех открывается
   меню паузы «Пауза: <имя>», «Продолжить» у любого снимает её для всех.
 - Версии должны совпадать: в версию входит хеш `rules.json` и карты, иначе подключение отклоняется.
-- Код: `sim/Lordsio.Sim/Net/` (сообщения, кодек, логика lockstep — покрыта тестами), `Scripts/Net/`
+- Код: `sim/Warcrown.Sim/Net/` (сообщения, кодек, логика lockstep — покрыта тестами), `Scripts/Net/`
   (ENet-сессия и лобби, обнаружение в сети, связка с матчем).
 
 ## Команды
 ```sh
-dotnet build lordsio.sln                 # сборка игры, симуляции и тестов
-dotnet test tests/Lordsio.Sim.Tests      # тесты
+dotnet build warcrown.sln                 # сборка игры, симуляции и тестов
+dotnet test tests/Warcrown.Sim.Tests      # тесты
 # по запросу, в Release:
-dotnet test tests/Lordsio.Sim.Tests -c Release --filter "TestCategory=Benchmark" --logger "console;verbosity=normal"
-dotnet test tests/Lordsio.Sim.Tests -c Release --filter "TestCategory=Balance"   --logger "console;verbosity=normal"
+dotnet test tests/Warcrown.Sim.Tests -c Release --filter "TestCategory=Benchmark" --logger "console;verbosity=normal"
+dotnet test tests/Warcrown.Sim.Tests -c Release --filter "TestCategory=Balance"   --logger "console;verbosity=normal"
 ```
 `Benchmark` — время тика и мусор на тик: 100–800 юнитов, полные матчи ботов на эталонной и сгенерированных картах,
 и стресс-сцена у озера (`ArmiesClashOnAGeneratedMap`, печатает худшие тики). `Balance` — серии матчей ботов:
@@ -253,7 +253,7 @@ Godot_v4.7.2-stable_mono_win64_console.exe --path .
 mkdir -p build/windows
 Godot_v4.7.2-stable_mono_win64_console.exe --headless --path . --export-release "Windows Desktop" build/windows/Warcrown.exe
 ```
-Получается `Warcrown.exe` + `Warcrown.pck` + папка `data_lordsio_windows_x86_64` со встроенным .NET (~180 МБ);
+Получается `Warcrown.exe` + `Warcrown.pck` + папка `data_warcrown_windows_x86_64` со встроенным .NET (~180 МБ);
 устанавливать .NET игроку не нужно. В релизной сборке dev-флаги отключены.
 Для друзей: положить рядом `docs/Как запустить.txt` и запаковать папку целиком, например
 `Compress-Archive -Path build/windows/* -DestinationPath build/Warcrown-1.0.0-windows.zip` (≈70 МБ).

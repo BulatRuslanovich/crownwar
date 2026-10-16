@@ -1,4 +1,4 @@
-namespace Lordsio.MusicStudio;
+namespace Warcrown.MusicStudio;
 
 /// <summary>Pitch and onset helpers, used to check that each sample really is the note its file name says.</summary>
 public static class Pitch

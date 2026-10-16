@@ -20,7 +20,7 @@ if (-not (Test-Path $Godot)) {
 
 if (-not $SkipTests) {
     Write-Host "== Tests"
-    dotnet test tests/Lordsio.Sim.Tests
+    dotnet test tests/Warcrown.Sim.Tests
     if ($LASTEXITCODE -ne 0) { throw "Tests failed: nothing was built." }
 }
 

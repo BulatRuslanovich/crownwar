@@ -1,4 +1,4 @@
-namespace Lordsio.MusicStudio;
+namespace Warcrown.MusicStudio;
 
 /// <summary>A stereo buffer that instruments play into, with a beat grid (4/4 by default) for placing notes.</summary>
 public sealed class Mix

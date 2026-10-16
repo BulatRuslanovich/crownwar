@@ -3,19 +3,19 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using Godot;
-using Lordsio.Audio;
-using Lordsio.Interaction;
-using Lordsio.Net;
-using Lordsio.Sim.AI;
-using Lordsio.Sim.Core;
-using Lordsio.Sim.Net;
-using Lordsio.Sim.World;
-using Lordsio.Buildings;
-using Lordsio.UI;
-using Lordsio.Units;
-using Lordsio.World;
+using Warcrown.Audio;
+using Warcrown.Interaction;
+using Warcrown.Net;
+using Warcrown.Sim.AI;
+using Warcrown.Sim.Core;
+using Warcrown.Sim.Net;
+using Warcrown.Sim.World;
+using Warcrown.Buildings;
+using Warcrown.UI;
+using Warcrown.Units;
+using Warcrown.World;
 
-namespace Lordsio.Core;
+namespace Warcrown.Core;
 
 /// <summary>
 /// Owns the simulation for one match, advances it in fixed ticks and wires up the view nodes.

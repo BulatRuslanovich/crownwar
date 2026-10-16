@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Lordsio.Sim.Core;
-using Lordsio.Sim.Net;
+using Warcrown.Sim.Core;
+using Warcrown.Sim.Net;
 
-namespace Lordsio.Net;
+namespace Warcrown.Net;
 
 /// <summary>The link: ping and jitter, and the input delay a client adapts to them and to stalls.</summary>
 public sealed partial class NetMatchDriver

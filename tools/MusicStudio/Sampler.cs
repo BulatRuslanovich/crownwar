@@ -1,4 +1,4 @@
-namespace Lordsio.MusicStudio;
+namespace Warcrown.MusicStudio;
 
 /// <summary>
 /// An instrument built from recorded notes: a note is played from the nearest recorded pitch of the closest

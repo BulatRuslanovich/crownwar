@@ -1,8 +1,8 @@
 using Godot;
-using Lordsio.Core;
-using Lordsio.Interaction;
+using Warcrown.Core;
+using Warcrown.Interaction;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>
 /// Esc menu: resume, restart, settings, leave to the main menu. Runs while the tree is paused

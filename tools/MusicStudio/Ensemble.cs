@@ -1,4 +1,4 @@
-namespace Lordsio.MusicStudio;
+namespace Warcrown.MusicStudio;
 
 /// <summary>A chord: the bass note and four hand tones for the piano (MIDI, low to high).</summary>
 public sealed record Chord(int Bass, int[] Hand)

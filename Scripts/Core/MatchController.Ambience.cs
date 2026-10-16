@@ -1,8 +1,8 @@
 using System;
 using Godot;
-using Lordsio.Sim.Core;
+using Warcrown.Sim.Core;
 
-namespace Lordsio.Core;
+namespace Warcrown.Core;
 
 /// <summary>The mood of the world: night falling, the wind, and how hard the local team is fighting (for the music).</summary>
 public partial class MatchController

@@ -1,9 +1,9 @@
 using System.Linq;
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.Buildings;
+using Warcrown.Core;
+using Warcrown.Sim.Buildings;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>
 /// The build bar: a button per building kind, with its price, hotkey and how many stand. In Defense a player whose

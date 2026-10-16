@@ -1,8 +1,8 @@
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.World;
+using Warcrown.Core;
+using Warcrown.Sim.World;
 
-namespace Lordsio.World;
+namespace Warcrown.World;
 
 /// <summary>
 /// Draws the terrain of a <see cref="TileGrid"/>, each cell from its biome's tileset (Assets/Tilesets/terrain*.png,

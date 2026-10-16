@@ -2,13 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using Lordsio.Core;
-using Lordsio.Sim.Buildings;
-using Lordsio.Sim.Core;
-using Lordsio.Sim.World;
+using Warcrown.Core;
+using Warcrown.Sim.Buildings;
+using Warcrown.Sim.Core;
+using Warcrown.Sim.World;
 using SimVector2 = System.Numerics.Vector2;
 
-namespace Lordsio.Dev;
+namespace Warcrown.Dev;
 
 /// <summary>
 /// Developer command-line options (passed after "--"), used for automated screenshots and smoke runs.

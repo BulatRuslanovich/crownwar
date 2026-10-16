@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
-using Lordsio.Core;
-using Lordsio.Net;
+using Warcrown.Core;
+using Warcrown.Net;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>
 /// Network game screen: pick a name, host a game, or join one found on the local network

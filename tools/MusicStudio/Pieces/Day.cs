@@ -1,4 +1,4 @@
-namespace Lordsio.MusicStudio.Pieces;
+namespace Warcrown.MusicStudio.Pieces;
 
 /// <summary>
 /// The day, in three versions the game crossfades between by how hot the fighting is. A Dorian in 7/8 (eighths

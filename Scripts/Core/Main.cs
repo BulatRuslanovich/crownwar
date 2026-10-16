@@ -1,13 +1,13 @@
 using System.Globalization;
 using System.Linq;
 using Godot;
-using Lordsio.Dev;
-using Lordsio.Net;
-using Lordsio.Sim.AI;
-using Lordsio.Sim.Net;
-using Lordsio.UI;
+using Warcrown.Dev;
+using Warcrown.Net;
+using Warcrown.Sim.AI;
+using Warcrown.Sim.Net;
+using Warcrown.UI;
 
-namespace Lordsio.Core;
+namespace Warcrown.Core;
 
 /// <summary>
 /// Application root and screen switcher: main menu ↔ match, and for network games

@@ -1,7 +1,7 @@
 using Godot;
 using SimVector2 = System.Numerics.Vector2;
 
-namespace Lordsio.Core;
+namespace Warcrown.Core;
 
 /// <summary>Conversion between simulation tile units and Godot world pixels.</summary>
 public static class SimConvert

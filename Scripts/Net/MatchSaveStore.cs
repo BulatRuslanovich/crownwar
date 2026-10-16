@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using System.IO;
 using Godot;
-using Lordsio.Sim.Net;
+using Warcrown.Sim.Net;
 
-namespace Lordsio.Net;
+namespace Warcrown.Net;
 
 /// <summary>
 /// The host's running network match on disk (user://netmatch.save, see <see cref="MatchSave"/>): written while the

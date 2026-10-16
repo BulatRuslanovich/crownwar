@@ -1,9 +1,9 @@
 using Godot;
-using Lordsio.Buildings;
-using Lordsio.Core;
-using Lordsio.Units;
+using Warcrown.Buildings;
+using Warcrown.Core;
+using Warcrown.Units;
 
-namespace Lordsio.World;
+namespace Warcrown.World;
 
 /// <summary>
 /// Shadows of buildings and units cast by the sun: each picture's silhouette laid on the ground behind it and sheared

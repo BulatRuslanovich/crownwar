@@ -1,4 +1,4 @@
-namespace Lordsio.MusicStudio;
+namespace Warcrown.MusicStudio;
 
 /// <summary>
 /// Freeverb (Jezar at Dreampoint, public domain): eight damped comb filters and four all-pass filters per channel,

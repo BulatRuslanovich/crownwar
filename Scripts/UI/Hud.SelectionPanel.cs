@@ -1,8 +1,8 @@
 using System.Linq;
 using Godot;
-using Lordsio.Core;
+using Warcrown.Core;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>The selected troops: how many of each kind, how many veterans and how healthy they are.</summary>
 public partial class Hud

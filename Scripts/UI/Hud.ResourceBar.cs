@@ -1,7 +1,7 @@
 using Godot;
-using Lordsio.Core;
+using Warcrown.Core;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>
 /// The top bar: gold (and the treasury limit), net income, army size, the day/night clock; in Defense also the next

@@ -1,7 +1,7 @@
 using Godot;
-using Lordsio.Sim.Buildings;
+using Warcrown.Sim.Buildings;
 
-namespace Lordsio.World;
+namespace Warcrown.World;
 
 /// <summary>Where the sprite sheets are (Assets/Sprites, written by the art generator) and which one a building uses.</summary>
 public static class Sprites

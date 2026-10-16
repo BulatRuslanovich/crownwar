@@ -1,7 +1,7 @@
 using Godot;
-using Lordsio.World;
+using Warcrown.World;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>
 /// Small textures for the interface, made from the game sprites: a unit's idle frame or a building,

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Lordsio.Interaction;
+namespace Warcrown.Interaction;
 
 /// <summary>
 /// What the local player has selected: either a set of units or one building.

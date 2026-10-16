@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.Core;
+using Warcrown.Core;
+using Warcrown.Sim.Core;
 using SimVector2 = System.Numerics.Vector2;
 
-namespace Lordsio.Audio;
+namespace Warcrown.Audio;
 
 /// <summary>
 /// Turns simulation events into sounds. World sounds play positionally and only near the screen;

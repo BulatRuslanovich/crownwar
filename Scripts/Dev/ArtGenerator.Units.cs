@@ -1,8 +1,8 @@
 using System;
 using Godot;
-using Lordsio.World;
+using Warcrown.World;
 
-namespace Lordsio.Dev;
+namespace Warcrown.Dev;
 
 /// <summary>The unit sheet: every kind in every pose, with its faction-colour mask.</summary>
 public static partial class ArtGenerator

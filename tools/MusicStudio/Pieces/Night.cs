@@ -1,4 +1,4 @@
-namespace Lordsio.MusicStudio.Pieces;
+namespace Warcrown.MusicStudio.Pieces;
 
 /// <summary>
 /// The night, in the same three versions as <see cref="Day"/>. E minor in a slow 4/4 at 66 bpm: 40 bars, 145 s, five

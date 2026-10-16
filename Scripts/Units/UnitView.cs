@@ -1,11 +1,11 @@
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.Core;
-using Lordsio.Sim.Units;
-using Lordsio.UI;
-using Lordsio.World;
+using Warcrown.Core;
+using Warcrown.Sim.Core;
+using Warcrown.Sim.Units;
+using Warcrown.UI;
+using Warcrown.World;
 
-namespace Lordsio.Units;
+namespace Warcrown.Units;
 
 /// <summary>
 /// A unit drawn from Assets/Sprites/units.png: a body sprite plus a faction-colour mask sprite tinted

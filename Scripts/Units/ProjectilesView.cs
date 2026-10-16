@@ -1,7 +1,7 @@
 using Godot;
-using Lordsio.Core;
+using Warcrown.Core;
 
-namespace Lordsio.Units;
+namespace Warcrown.Units;
 
 /// <summary>
 /// Draws arrows in flight as short strokes pointing at their target, and catapult stones as small rocks flying

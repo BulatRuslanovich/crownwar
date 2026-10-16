@@ -1,4 +1,4 @@
-namespace Lordsio.MusicStudio.Pieces;
+namespace Warcrown.MusicStudio.Pieces;
 
 /// <summary>
 /// The main menu: the game's theme, unhurried and welcoming. D Dorian at 80 bpm in straight eighths, a two-minute

@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Lordsio.Core;
+namespace Warcrown.Core;
 
 /// <summary>Clock texts for the interface.</summary>
 public static class TimeFormat

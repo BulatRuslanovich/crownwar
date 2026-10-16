@@ -4,12 +4,12 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.Core;
-using Lordsio.Sim.Units;
-using Lordsio.Sim.World;
+using Warcrown.Core;
+using Warcrown.Sim.Core;
+using Warcrown.Sim.Units;
+using Warcrown.Sim.World;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>Developer overlay: frame/tick info, the tile under the cursor and the selected unit's state.</summary>
 public partial class DebugHud : CanvasLayer

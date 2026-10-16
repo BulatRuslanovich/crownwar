@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
-using Lordsio.Core;
+using Warcrown.Core;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>
 /// The end screen's graph: one line per side in its colour over the match's time, for the chosen measure (army value,

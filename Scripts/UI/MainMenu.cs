@@ -1,10 +1,10 @@
 using System;
 using System.Globalization;
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.AI;
+using Warcrown.Core;
+using Warcrown.Sim.AI;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>Title screen with match setup (opponents, difficulty, seed), settings and quit.</summary>
 public partial class MainMenu : Control

@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Lordsio.Dev;
+namespace Warcrown.Dev;
 
 /// <summary>
 /// Drawing surface for the art generator: a colour layer plus a faction-colour mask layer of the

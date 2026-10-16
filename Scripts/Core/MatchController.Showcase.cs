@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using Godot;
 
-namespace Lordsio.Core;
+namespace Warcrown.Core;
 
 /// <summary>The menu backdrop: bots play on their own while the camera drifts between points of interest.</summary>
 public partial class MatchController

@@ -1,10 +1,10 @@
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.AI;
-using Lordsio.Sim.Buildings;
-using Lordsio.Sim.Units;
+using Warcrown.Core;
+using Warcrown.Sim.AI;
+using Warcrown.Sim.Buildings;
+using Warcrown.Sim.Units;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>
 /// Display names for rule data. The rules carry English names; the translation tables may override them

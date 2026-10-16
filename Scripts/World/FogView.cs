@@ -1,8 +1,8 @@
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.World;
+using Warcrown.Core;
+using Warcrown.Sim.World;
 
-namespace Lordsio.World;
+namespace Warcrown.World;
 
 /// <summary>
 /// The fog of war over the map: black where the player has never looked, a dark veil over explored ground

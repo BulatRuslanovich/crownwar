@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Lordsio.Net;
+namespace Warcrown.Net;
 
 /// <summary>
 /// The rejoin key of the last network match, kept in user://rejoin.cfg so that it survives a crash:

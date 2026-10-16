@@ -1,12 +1,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
-using Lordsio.Core;
-using Lordsio.Interaction;
-using Lordsio.Sim.Buildings;
-using Lordsio.Sim.Core;
+using Warcrown.Core;
+using Warcrown.Interaction;
+using Warcrown.Sim.Buildings;
+using Warcrown.Sim.Core;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>
 /// Player HUD: resources, the build bar, the selected building's panel and short messages.

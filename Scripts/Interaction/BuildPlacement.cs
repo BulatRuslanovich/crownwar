@@ -1,11 +1,11 @@
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.Buildings;
-using Lordsio.Sim.Core;
-using Lordsio.Sim.World;
-using Lordsio.World;
+using Warcrown.Core;
+using Warcrown.Sim.Buildings;
+using Warcrown.Sim.Core;
+using Warcrown.Sim.World;
+using Warcrown.World;
 
-namespace Lordsio.Interaction;
+namespace Warcrown.Interaction;
 
 /// <summary>
 /// Placement mode for a building: a ghost footprint follows the cursor, coloured by the simulation's own

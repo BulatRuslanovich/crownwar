@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
-using Lordsio.Sim.AI;
-using Lordsio.Sim.Core;
+using Warcrown.Sim.AI;
+using Warcrown.Sim.Core;
 
-namespace Lordsio.Core;
+namespace Warcrown.Core;
 
 public enum SlotKind
 {

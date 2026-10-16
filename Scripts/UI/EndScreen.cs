@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.Core;
+using Warcrown.Core;
+using Warcrown.Sim.Core;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>
 /// Victory / defeat panel with the match in review: how long it lasted and who won, awards for the best general,

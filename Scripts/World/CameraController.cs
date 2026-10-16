@@ -1,7 +1,7 @@
 using Godot;
-using Lordsio.Core;
+using Warcrown.Core;
 
-namespace Lordsio.World;
+namespace Warcrown.World;
 
 /// <summary>
 /// RTS camera: keyboard / screen-edge panning, middle-mouse drag, wheel zoom towards the cursor.

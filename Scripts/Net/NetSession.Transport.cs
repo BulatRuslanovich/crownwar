@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.AI;
-using Lordsio.Sim.Net;
+using Warcrown.Core;
+using Warcrown.Sim.AI;
+using Warcrown.Sim.Net;
 
-namespace Lordsio.Net;
+namespace Warcrown.Net;
 
 /// <summary>Sending: ordered reliable packets, the dev lag simulation, flushing, and what ENet knows of each link.</summary>
 public partial class NetSession

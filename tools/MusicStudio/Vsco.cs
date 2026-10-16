@@ -2,7 +2,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace Lordsio.MusicStudio;
+namespace Warcrown.MusicStudio;
 
 /// <summary>One recorded note of an instrument, as named by its file.</summary>
 /// <param name="Midi">The note in the file name (scientific pitch: C4 = 60), before any per-instrument correction.</param>
@@ -35,7 +35,7 @@ public static partial class Vsco
     public static async Task Fetch(string cache)
     {
         using var http = new HttpClient();
-        http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("lordsio-music-studio", "1.0"));
+        http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("warcrown-music-studio", "1.0"));
         string tree = await http.GetStringAsync($"https://api.github.com/repos/sgossner/VSCO-2-CE/git/trees/{Commit}?recursive=1");
         var paths = JsonDocument.Parse(tree).RootElement.GetProperty("tree").EnumerateArray()
             .Where(e => e.GetProperty("type").GetString() == "blob")

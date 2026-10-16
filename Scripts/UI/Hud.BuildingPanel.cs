@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
-using Lordsio.Core;
-using Lordsio.Sim.Buildings;
-using Lordsio.Sim.Core;
+using Warcrown.Core;
+using Warcrown.Sim.Buildings;
+using Warcrown.Sim.Core;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>The selected building's panel: health, recruiting, its training queue, upgrades and demolition.</summary>
 public partial class Hud

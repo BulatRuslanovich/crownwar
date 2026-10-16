@@ -1,8 +1,8 @@
 using System;
 using Godot;
-using Lordsio.World;
+using Warcrown.World;
 
-namespace Lordsio.Dev;
+namespace Warcrown.Dev;
 
 /// <summary>The buildings, every level, with faction-colour masks and night lights; and the gold ore.</summary>
 public static partial class ArtGenerator

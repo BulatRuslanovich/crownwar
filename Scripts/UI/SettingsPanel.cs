@@ -1,8 +1,8 @@
 using System;
 using Godot;
-using Lordsio.Core;
+using Warcrown.Core;
 
-namespace Lordsio.UI;
+namespace Warcrown.UI;
 
 /// <summary>Edits <see cref="GameSettings"/>; changes apply immediately and are saved on Back.</summary>
 public partial class SettingsPanel : Control
