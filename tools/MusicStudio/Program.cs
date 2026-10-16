@@ -1,11 +1,13 @@
 using System.Globalization;
 using Lordsio.MusicStudio;
+using Lordsio.MusicStudio.Pieces;
 
 // Dev-only music studio. Commands:
 //   fetch           download the VSCO 2 CE samples into cache/
 //   analyze         detect the pitch of every sample and compare it with the note in its name
 //   check           play notes across each instrument's range and verify the pitch that comes out
-//   demo [dir]      render the test fragment of the quartet to dir (default out/) as .wav and .ogg
+//   levels <file.wav> <seconds>  RMS per chunk of that many seconds, and how smoothly the loop's end meets its start
+//   render <piece|all> [dir]  render a piece (menu) to dir (default out/) as .wav and .ogg
 string root = AppContext.BaseDirectory;
 while (!File.Exists(Path.Combine(root, "MusicStudio.csproj")))
     root = Path.GetDirectoryName(root.TrimEnd(Path.DirectorySeparatorChar)) ?? throw new InvalidOperationException("MusicStudio.csproj not found");
@@ -37,11 +39,37 @@ switch (args.FirstOrDefault())
         }
         break;
     }
-    case "demo":
-        Save(Demo.Render(cache), args.ElementAtOrDefault(1) ?? Path.Combine(root, "out"), "demo");
+    case "levels":
+    {
+        var audio = Wav.Read(args[1]);
+        double chunk = double.Parse(args[2], CultureInfo.InvariantCulture);
+        var mix = new Mix(120, audio.Length / (double)audio.Rate);
+        mix.Load(audio.Left, audio.Right);
+        for (double t = 0; t < audio.Length / (double)audio.Rate - 0.01; t += chunk)
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"  {t,6:F1} s  {mix.Rms(t, t + chunk),6:F1} dBFS"));
+        int n = audio.Length;
+        float jump = Math.Max(Math.Abs(audio.Left[0] - audio.Left[n - 1]), Math.Abs(audio.Right[0] - audio.Right[n - 1]));
+        float step = 0;
+        for (int i = 1; i < n; i++)
+            step = Math.Max(step, Math.Abs(audio.Left[i] - audio.Left[i - 1]));
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"  seam: last 50 ms {mix.Rms((n - audio.Rate / 20) / (double)audio.Rate):F1} dBFS, first 50 ms {mix.Rms(0, 0.05):F1} dBFS; jump across it {jump:F3} (largest step inside {step:F3})"));
         break;
+    }
+    case "render":
+    {
+        var pieces = new Dictionary<string, Func<string, Stereo>> { ["menu"] = Menu.Render };
+        string which = args.ElementAtOrDefault(1) ?? "all";
+        string dir = args.ElementAtOrDefault(2) ?? Path.Combine(root, "out");
+        foreach (var (name, render) in pieces.Where(p => which == "all" || p.Key == which))
+        {
+            Console.WriteLine($"rendering {name}");
+            Save(render(cache), dir, name);
+        }
+        break;
+    }
     default:
-        Console.WriteLine("usage: dotnet run -- fetch | analyze | check | demo [dir]");
+        Console.WriteLine("usage: dotnet run -- fetch | analyze | check | render <piece|all> [dir]");
         return 1;
 }
 return 0;
@@ -64,6 +92,7 @@ static bool Check(string cache)
         (new Sampler("piano", cache, Vsco.UprightPiano), 33, 88),
         (new Sampler("violin", cache, Vsco.ViolinArco), 55, 91),
         (new Sampler("bass", cache, Vsco.BassPizz, octaveShift: 12), 28, 47),
+        (new Sampler("bass arco", cache, Vsco.BassArco, octaveShift: 12), 28, 47),
     };
     bool ok = true;
     foreach (var (sampler, low, high) in instruments)

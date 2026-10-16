@@ -23,6 +23,16 @@ public sealed class Mix
 
     public double BeatSeconds => 60.0 / Bpm;
 
+    /// <summary>Length in frames.</summary>
+    public int Length => _left.Length;
+
+    /// <summary>Replaces the contents (both channels the same length).</summary>
+    public void Load(float[] left, float[] right)
+    {
+        _left = left;
+        _right = right;
+    }
+
     /// <summary>Seconds at a bar and a beat within it (both from 0).</summary>
     public double Time(int bar, double beat) => (bar * BeatsPerBar + beat) * BeatSeconds;
 
@@ -91,6 +101,26 @@ public sealed class Mix
             _left[i] *= gain;
             _right[i] *= gain;
         }
+    }
+
+    /// <summary>
+    /// Rounds off peaks above <paramref name="threshold"/> (tanh knee, never past 0.95) instead of clipping them;
+    /// returns how many samples it touched.
+    /// </summary>
+    public int SoftLimit(float threshold)
+    {
+        float room = 0.95f - threshold;
+        int touched = 0;
+        foreach (var channel in new[] { _left, _right })
+            for (int i = 0; i < channel.Length; i++)
+            {
+                float a = MathF.Abs(channel[i]);
+                if (a <= threshold)
+                    continue;
+                channel[i] = MathF.CopySign(threshold + room * MathF.Tanh((a - threshold) / room), channel[i]);
+                touched++;
+            }
+        return touched;
     }
 
     public Stereo ToStereo() => new(_left, _right, Rate);
