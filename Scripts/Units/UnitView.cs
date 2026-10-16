@@ -12,7 +12,7 @@ namespace Lordsio.Units;
 /// with the owner's colour, animated and turned towards where it goes. Standing, it breathes; marching, it steps
 /// through a four-frame stride; fighting, it winds up as its next blow comes due (timed by the simulation's attack
 /// cooldown), strikes, and an archer's bow recoils after the shot. A hit unit flashes white and is knocked back a
-/// pixel. The selection ring is drawn below, the health bar above (the ground shadow is drawn by
+/// pixel. The selection ring is drawn below, the health bar above with a veteran's stars over it (the ground shadow is drawn by
 /// <see cref="World.ShadowsView"/>). The node origin is the unit's feet. All animation is cosmetic: hits are decided
 /// by the simulation.
 /// </summary>
@@ -53,6 +53,13 @@ public partial class UnitView : Node2D
     private static readonly Color MarkTint = new(1.8f, 0.5f, 0.45f);
     private static readonly Color HitFlash = new(2.2f, 2.2f, 2.2f);
     private float _markTime;
+    /// <summary>Just promoted: a golden glow fading for this long.</summary>
+    private const float PromoteSeconds = 0.8f;
+    private static readonly Color PromoteTint = new(2f, 1.7f, 0.6f);
+    private static readonly Color StarColor = UiPalette.Gold;
+    private static readonly Color StarOutline = new(0.15f, 0.1f, 0f, 0.9f);
+    private float _promoteTime;
+    private int _drawnRank;
     private Vector2 _knockDirection;
     private float _knockTime;
     private float _walkTime;
@@ -102,6 +109,14 @@ public partial class UnitView : Node2D
     /// <summary>The player ordered an attack on this unit: a short red pulse, so it is clear who was clicked.</summary>
     public void MarkTarget() => _markTime = MarkSeconds;
 
+    /// <summary>Earned a rank: a golden glow and a proud hop up past its height.</summary>
+    public void Promote()
+    {
+        _promoteTime = PromoteSeconds;
+        _sprite.Scale = new Vector2(0.8f, 1.35f) * _scale;
+        CreateTween().TweenProperty(_sprite, "scale", Vector2.One * _scale, 0.4).SetTrans(Tween.TransitionType.Elastic).SetEase(Tween.EaseType.Out);
+    }
+
     /// <summary>A recruit steps out: squashed flat, then springing up past its height and settling.</summary>
     public void Pop()
     {
@@ -136,7 +151,8 @@ public partial class UnitView : Node2D
         _flashTime = Mathf.Max(0f, _flashTime - dt);
         _knockTime = Mathf.Max(0f, _knockTime - dt);
         _markTime = Mathf.Max(0f, _markTime - dt);
-        var tint = _flashTime > 0f ? HitFlash : Colors.White;
+        _promoteTime = Mathf.Max(0f, _promoteTime - dt);
+        var tint = _flashTime > 0f ? HitFlash : Colors.White.Lerp(PromoteTint, _promoteTime / PromoteSeconds);
         if (_markTime > 0f)
             tint *= Colors.White.Lerp(MarkTint, _markTime / MarkSeconds * (0.6f + 0.4f * Mathf.Sin(_markTime * 30f)));
         Modulate = tint;
@@ -159,9 +175,10 @@ public partial class UnitView : Node2D
         _sprite.FlipH = _facingLeft;
         _sprite.Position = SpriteOffset;
 
-        if (_unit.Health != _drawnHealth)
+        if (_unit.Health != _drawnHealth || _unit.Rank != _drawnRank)
         {
             _drawnHealth = _unit.Health;
+            _drawnRank = _unit.Rank;
             _overlay.QueueRedraw();
         }
     }
@@ -208,13 +225,41 @@ public partial class UnitView : Node2D
 
     private void DrawOverlay()
     {
-        if (_unit.Health >= _unit.Type.MaxHealth && !_selected)
-            return;
-        float fraction = Mathf.Clamp((float)_unit.Health / _unit.Type.MaxHealth, 0f, 1f);
-        var fill = new Color(1f - fraction, 0.3f + 0.6f * fraction, 0.2f);
         float y = -ArtLayout.UnitFeet.Y - 2;
+        DrawStars(y - 3);
+        if (_unit.Health >= _unit.MaxHealth && !_selected)
+            return;
+        float fraction = Mathf.Clamp((float)_unit.Health / _unit.MaxHealth, 0f, 1f);
+        var fill = new Color(1f - fraction, 0.3f + 0.6f * fraction, 0.2f);
         _overlay.DrawRect(new Rect2(-6, y, 12, 3), BarBack);
         _overlay.DrawRect(new Rect2(-5, y + 1, 10 * fraction, 1), fill);
+    }
+
+    /// <summary>A veteran's rank: one small golden star (a pixel cross with a dark rim) per rank, in a row centred over the bar.</summary>
+    private void DrawStars(float y)
+    {
+        int stars = _unit.Rank;
+        if (stars <= 0)
+            return;
+        const int spacing = 4;
+        float x0 = -(stars - 1) * spacing / 2f;
+        for (int pass = 0; pass < 2; pass++) // all the rims first, so a neighbour's rim never cuts into a star
+        {
+            for (int i = 0; i < stars; i++)
+            {
+                var c = new Vector2(Mathf.Floor(x0 + i * spacing), y);
+                if (pass == 0)
+                {
+                    _overlay.DrawRect(new Rect2(c.X - 2, c.Y - 1, 5, 3), StarOutline);
+                    _overlay.DrawRect(new Rect2(c.X - 1, c.Y - 2, 3, 5), StarOutline);
+                }
+                else
+                {
+                    _overlay.DrawRect(new Rect2(c.X - 1, c.Y, 3, 1), StarColor);
+                    _overlay.DrawRect(new Rect2(c.X, c.Y - 1, 1, 3), StarColor);
+                }
+            }
+        }
     }
 
     private Sprite2D MakeSprite(Texture2D sheet)

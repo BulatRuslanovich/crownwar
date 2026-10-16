@@ -30,6 +30,8 @@ public enum Sound
     Coin,
     /// <summary>A low war horn, two long notes: a wave of the horde is coming (Defense).</summary>
     Horn,
+    /// <summary>A bright little fanfare: one of yours earned a veteran's rank.</summary>
+    Promotion,
 }
 
 /// <summary>
@@ -99,6 +101,8 @@ public static class SoundBank
             (Sine(2637, t) + 0.5f * Sine(3951, t)) * Decay(t, 0.06f) * 0.5f
             + (t > 0.08f ? (Sine(3136, t) + 0.4f * Sine(4699, t)) * Decay(t - 0.08f, 0.09f) * 0.45f : 0f)),
         [Sound.Horn] = Make(2.1f, Horn),
+        [Sound.Promotion] = Make(0.55f, (t, _) =>
+            Notes(t, 0.08f, 784, 988, 1568) * 0.4f + Sine(2349, t) * Attack(t, 0.16f) * Decay(t, 0.12f) * 0.12f),
     };
 
     /// <summary>

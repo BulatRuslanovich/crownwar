@@ -101,6 +101,12 @@ public partial class EffectsView : Node2D
                 Add(Kind.Flash, landed + new Vector2(0, -3), 0.16f, 9f, FlashColor);
                 Add(Kind.Chunks, landed, 1.1f, 1f, RockChunk);
                 break;
+            case UnitPromoted promoted when !Ground:
+                var hero = SimConvert.ToWorld(promoted.Position);
+                Add(Kind.Sparkle, hero + new Vector2(0, -8), 0.8f, 8f, SparkleColor);
+                if (promoted.FactionId == _match.LocalFactionId)
+                    AddText(hero + new Vector2(0, -22), Tr(HudText.RankKey(promoted.Rank)), UiPalette.Gold);
+                break;
             case UnitHealed healed when !Ground && healed.Amount > 0:
                 Add(Kind.Heal, SimConvert.ToWorld(healed.Position) + new Vector2(0, -8), 0.9f, 1f, HealColor);
                 break;

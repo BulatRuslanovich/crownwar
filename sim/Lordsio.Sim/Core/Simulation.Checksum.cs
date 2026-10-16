@@ -19,6 +19,7 @@ public sealed partial class Simulation
             hash.Add(BitConverter.SingleToInt32Bits(unit.Position.X));
             hash.Add(BitConverter.SingleToInt32Bits(unit.Position.Y));
             hash.Add(unit.Health);
+            hash.Add(unit.Experience);
             hash.Add((int)unit.Order);
             hash.Add(unit.Target?.Id ?? 0);
             hash.Add(unit.PathIndex);

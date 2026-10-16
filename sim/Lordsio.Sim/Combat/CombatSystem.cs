@@ -244,7 +244,7 @@ internal sealed class CombatSystem
                     Splash(p, units);
                 else
                 {
-                    ApplyDamage(p.Target, p.Damage, ranged: true, p.FactionId, p.ArmorPiercing);
+                    ApplyDamage(p.Target, p.Damage, ranged: true, p.FactionId, p.ArmorPiercing, p.SourceId);
                     _emit(new AttackLanded(p.FactionId, p.SourceId, p.Target.Id, p.Target.FactionId, p.Position, Ranged: true));
                 }
                 _projectiles.RemoveAt(i);
@@ -267,13 +267,14 @@ internal sealed class CombatSystem
         {
             if (!unit.IsAlive || !_areEnemies(p.FactionId, unit.FactionId) || unit.SurfaceDistance(impact) > p.SplashRadius)
                 continue;
-            ApplyDamage(unit, p.Damage, ranged: true, p.FactionId);
+            ApplyDamage(unit, p.Damage, ranged: true, p.FactionId, attackerId: p.SourceId);
             _emit(new AttackLanded(p.FactionId, p.SourceId, unit.Id, unit.FactionId, unit.Position, Ranged: true, Splash: true));
         }
     }
 
     /// <param name="armorPiercing">Share of the target's ranged armour the missile ignores.</param>
-    public static void ApplyDamage(Entity target, int damage, bool ranged, int attackerFactionId, float armorPiercing = 0f)
+    /// <param name="attackerId">The unit or building that struck (for the killer's experience).</param>
+    public static void ApplyDamage(Entity target, int damage, bool ranged, int attackerFactionId, float armorPiercing = 0f, int attackerId = -1)
     {
         if (!target.IsAlive)
             return;
@@ -281,7 +282,10 @@ internal sealed class CombatSystem
         int dealt = ranged ? Math.Max(1, (int)MathF.Round(damage * (1f - armor))) : damage;
         target.Health -= dealt;
         if (!target.IsAlive)
+        {
             target.KilledByFactionId = attackerFactionId;
+            target.KilledById = attackerId;
+        }
     }
 
     private bool IsStillValidTarget(Unit unit, Entity target)
@@ -337,7 +341,7 @@ internal sealed class CombatSystem
     private void Attack(Unit attacker, Entity target)
     {
         attacker.AttackCooldownTicks = Ticks.AtLeastOne(attacker.Type.AttackCooldown);
-        int damage = attacker.Type.DamageAgainst(target);
+        int damage = attacker.DamageAgainst(target);
         if (attacker.Type.IsRanged)
         {
             Fire(attacker.Id, attacker.FactionId, damage, attacker.Type.ProjectileSpeed, attacker.Position, target,
@@ -345,7 +349,7 @@ internal sealed class CombatSystem
         }
         else
         {
-            ApplyDamage(target, damage, ranged: false, attacker.FactionId);
+            ApplyDamage(target, damage, ranged: false, attacker.FactionId, attackerId: attacker.Id);
             _emit(new AttackLanded(attacker.FactionId, attacker.Id, target.Id, target.FactionId, target.Position, Ranged: false));
         }
     }

@@ -32,6 +32,11 @@ public static class HudText
         return string.Join("\n", lines);
     }
 
+    /// <summary>The translation key of veteran rank <paramref name="rank"/> (1 and up); ranks beyond the named ones keep the top name.</summary>
+    public static string RankKey(int rank) => $"VETERAN_RANK_{Mathf.Clamp(rank, 1, NamedRanks)}";
+
+    private const int NamedRanks = 3;
+
     public static string Describe(UpgradeError error) => T(error switch
     {
         UpgradeError.NotEnoughGold => "ERR_NOT_ENOUGH_GOLD",

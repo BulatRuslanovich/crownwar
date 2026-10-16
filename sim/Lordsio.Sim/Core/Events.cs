@@ -100,6 +100,9 @@ public sealed record BuildingDestroyed(int FactionId, int BuildingId, string Bui
 /// <summary><see cref="SimEvent.FactionId"/> is the dead unit's faction; the killer may be -1 (unknown).</summary>
 public sealed record UnitDied(int FactionId, int UnitId, int KillerFactionId, Vector2 Position, string UnitTypeId = "") : SimEvent(FactionId);
 
+/// <summary>A unit's kills earned it veteran rank <paramref name="Rank"/> (1 and up).</summary>
+public sealed record UnitPromoted(int FactionId, int UnitId, int Rank, Vector2 Position) : SimEvent(FactionId);
+
 /// <summary>The faction's capital fell: its army disbands and its buildings collapse.</summary>
 public sealed record FactionEliminated(int FactionId) : SimEvent(FactionId);
 

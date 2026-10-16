@@ -27,6 +27,7 @@ public partial class MatchSounds : Node
         [Sound.UnitReady] = 0.6,
         [Sound.Deny] = 0.25,
         [Sound.Order] = 0.08,
+        [Sound.Promotion] = 0.3,
     };
 
     private readonly List<AudioStreamPlayer2D> _world = new();
@@ -109,6 +110,9 @@ public partial class MatchSounds : Node
                 break;
             case GoldLooted loot when loot.FactionId == player:
                 PlayAt(Sound.Coin, loot.Position, -4f, margin: 600f);
+                break;
+            case UnitPromoted promoted when promoted.FactionId == player:
+                PlayAt(Sound.Promotion, promoted.Position, -6f, margin: 600f);
                 break;
             case UnitRecruited recruited when recruited.FactionId == player:
                 PlayUi(Sound.UnitReady, -10f);

@@ -91,6 +91,8 @@ public partial class UnitsView : Node2D
     {
         if (e is Sim.Core.UnitHealed healed && _views.TryGetValue(healed.HealerId, out var healer))
             healer.Bless();
+        if (e is Sim.Core.UnitPromoted promoted && _views.TryGetValue(promoted.UnitId, out var veteran))
+            veteran.Promote();
         if (e is not Sim.Core.AttackLanded hit)
             return;
         if (!hit.Ranged && _views.TryGetValue(hit.AttackerId, out var attacker))

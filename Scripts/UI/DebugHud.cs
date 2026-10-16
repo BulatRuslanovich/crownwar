@@ -84,7 +84,7 @@ public partial class DebugHud : CanvasLayer
         var inv = CultureInfo.InvariantCulture;
         int waypoints = unit.Path.Count - unit.PathIndex;
         _text.Append(inv, $"\nUnit #{unit.Id} {unit.Type.Name}  faction {unit.FactionId}\n");
-        _text.Append(inv, $"  health {unit.Health}/{unit.Type.MaxHealth}, state {unit.State}, order {unit.Order} ({unit.LastOrder})\n");
+        _text.Append(inv, $"  health {unit.Health}/{unit.MaxHealth}, rank {unit.Rank} ({unit.Experience} xp), state {unit.State}, order {unit.Order} ({unit.LastOrder})\n");
         if (unit.Target is { } target)
         {
             string name = target switch { Unit u => u.Type.Name, Sim.Buildings.Building b => b.Type.Name, _ => "?" };

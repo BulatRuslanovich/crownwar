@@ -125,6 +125,12 @@ public static class DevTools
             match.Selection.SelectBuilding(building.Id);
             match.Camera.CenterOn(SimConvert.ToWorld(building.Position));
         }
+        else
+        {
+            // No such building: select every own unit of that kind instead (the selection panel, veterans' stars).
+            var ids = match.Sim.Units.Where(u => u.FactionId == match.LocalFactionId && u.Type.Id == typeId).Select(u => u.Id).ToList();
+            match.Selection.Select(ids, additive: false);
+        }
     }
 
     public static string? Arg(string[] args, string name)

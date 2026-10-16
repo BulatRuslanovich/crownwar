@@ -70,6 +70,7 @@ public partial class MatchController
         SplashLanded splash => Fog.IsVisible(splash.Position),
         ProjectileFired shot => Fog.IsVisible(shot.Position),
         UnitDied died => IsFriendly(died.FactionId) || Fog.IsVisible(died.Position),
+        UnitPromoted promoted => IsFriendly(promoted.FactionId) || Fog.IsVisible(promoted.Position),
         BuildingDestroyed destroyed => IsFriendly(destroyed.FactionId) || Fog.IsVisible(destroyed.Position),
         BuildingDemolished demolished => IsFriendly(demolished.FactionId) || Fog.IsVisible(demolished.Position),
         BuildingCompleted completed => IsFriendly(completed.FactionId),

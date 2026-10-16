@@ -54,8 +54,40 @@ public sealed class Unit : Entity
 
     /// <summary>What kind of unit this is (its stats come from the rules).</summary>
     public UnitType Type { get; }
-    public override int MaxHealth => Type.MaxHealth;
+    public override int MaxHealth => _rank == null ? Type.MaxHealth : (int)MathF.Round(Type.MaxHealth * _rank.HealthFactor);
     public override float RangedArmor => Type.RangedArmor;
+
+    /// <summary>Experience from enemies it struck down (each worth what it cost).</summary>
+    public int Experience { get; private set; }
+
+    /// <summary>Veteran rank: 0 for a recruit, then 1, 2… as experience earns them.</summary>
+    public int Rank { get; private set; }
+
+    private VeteranRank? _rank;
+
+    /// <summary>What one blow of this unit does to <paramref name="target"/>, a veteran's rank included.</summary>
+    public int DamageAgainst(Entity target)
+    {
+        int damage = Type.DamageAgainst(target);
+        return _rank == null ? damage : (int)MathF.Round(damage * _rank.DamageFactor);
+    }
+
+    /// <summary>
+    /// Adds experience; returns true if it earned a new rank. The toughness gained comes on top of the health it has,
+    /// like a building's upgrade: wounds stay wounds.
+    /// </summary>
+    internal bool GainExperience(int amount, VeterancyRules veterancy)
+    {
+        Experience += amount;
+        int rank = veterancy.RankFor(Experience);
+        if (rank <= Rank)
+            return false;
+        int before = MaxHealth;
+        Rank = rank;
+        _rank = veterancy.Ranks[rank - 1];
+        Health += MaxHealth - before;
+        return true;
+    }
 
     public override float SurfaceDistance(Vector2 point) =>
         MathF.Max(0f, Vector2.Distance(Position, point) - Type.Radius);

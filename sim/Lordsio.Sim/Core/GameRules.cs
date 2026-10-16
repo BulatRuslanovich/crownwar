@@ -22,7 +22,7 @@ public sealed class GameRules
         int goldCap = 0, int lootPercent = 0, int demolishRefundPercent = 0,
         float daySeconds = 0f, float nightSeconds = 0f, float nightSightFactor = 1f,
         float peaceOfferSeconds = DefaultPeaceOfferSeconds, float warWarningSeconds = DefaultWarWarningSeconds,
-        DefenseRules? defense = null)
+        DefenseRules? defense = null, VeterancyRules? veterancy = null)
     {
         if (startingGold < 0)
             throw new ArgumentOutOfRangeException(nameof(startingGold));
@@ -44,6 +44,8 @@ public sealed class GameRules
         if (Defense.FirstWaveSeconds <= Defense.WarningSeconds || Defense.WaveIntervalSeconds <= Defense.WarningSeconds
             || Defense.BaseBudget <= 0 || Defense.Growth < 1f || Defense.MaxUnitsPerWave <= 0)
             throw new ArgumentOutOfRangeException(nameof(defense), "Waves must come after their warning, cost something and not shrink.");
+        Veterancy = veterancy ?? VeterancyRules.None;
+        Veterancy.Validate();
         PeaceOfferSeconds = peaceOfferSeconds;
         WarWarningSeconds = warWarningSeconds;
         StartingGold = startingGold;
@@ -150,6 +152,9 @@ public sealed class GameRules
     /// <summary>The numbers of the Defense mode.</summary>
     public DefenseRules Defense { get; }
 
+    /// <summary>The ranks units climb by killing enemies (none if the rules have no "veterancy").</summary>
+    public VeterancyRules Veterancy { get; }
+
     /// <summary>Every building type, in the order of the rules file.</summary>
     public IReadOnlyList<BuildingType> BuildingTypes => _buildingTypeOrder;
 
@@ -180,6 +185,7 @@ public sealed class GameRules
         var dayNight = root.TryGetProperty("dayNight", out var d) ? d : default;
         var diplomacy = root.TryGetProperty("diplomacy", out var p) ? p : default;
         var defense = root.TryGetProperty("defense", out var w) ? ParseDefense(w) : null;
+        var veterancy = root.TryGetProperty("veterancy", out var v) ? ParseVeterancy(v) : null;
 
         return new GameRules(
             root.GetProperty("startingGold").GetInt32(),
@@ -198,8 +204,16 @@ public sealed class GameRules
             OptionalSingle(dayNight, "sightFactor", 1f),
             OptionalSingle(diplomacy, "offerSeconds", DefaultPeaceOfferSeconds),
             OptionalSingle(diplomacy, "warWarningSeconds", DefaultWarWarningSeconds),
-            defense);
+            defense,
+            veterancy);
     }
+
+    private static VeterancyRules ParseVeterancy(JsonElement v) => new(v.GetProperty("ranks").EnumerateArray()
+        .Select(r => new VeteranRank(
+            r.GetProperty("experience").GetInt32(),
+            OptionalSingle(r, "health", 1f),
+            OptionalSingle(r, "damage", 1f)))
+        .ToArray());
 
     private static DefenseRules ParseDefense(JsonElement d)
     {

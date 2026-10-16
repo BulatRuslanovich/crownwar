@@ -4,10 +4,10 @@ using Lordsio.Core;
 
 namespace Lordsio.UI;
 
-/// <summary>The selected troops: how many of each kind and how healthy they are.</summary>
+/// <summary>The selected troops: how many of each kind, how many veterans and how healthy they are.</summary>
 public partial class Hud
 {
-    private (int Selection, int Count, int Text) _selectionShown = (-1, -1, -1);
+    private (int Selection, int Count, int Veterans, int Text) _selectionShown = (-1, -1, -1, -1);
 
     /// <summary>
     /// Selected troops: how many of each type (a click keeps only that type) and how healthy they are.
@@ -16,12 +16,14 @@ public partial class Hud
     private void UpdateSelectionPanel()
     {
         // Counted without building lists: this runs every frame.
-        int count = 0, health = 0, maxHealth = 0;
+        int count = 0, veterans = 0, health = 0, maxHealth = 0;
         foreach (int id in _match.Selection.Ids)
         {
             if (_match.Sim.GetUnit(id) is not { } unit)
                 continue;
             count++;
+            if (unit.Rank > 0)
+                veterans++;
             health += unit.Health;
             maxHealth += unit.MaxHealth;
         }
@@ -32,10 +34,12 @@ public partial class Hud
             return;
         }
         _selectionHealth.Value = 100.0 * health / System.Math.Max(1, maxHealth);
-        // Who is selected changes with the selection, or when one of them falls.
-        if (!Changed(ref _selectionShown, (_match.Selection.Version, count, _textVersion)))
+        // Who is selected changes with the selection, or when one of them falls or earns a rank.
+        if (!Changed(ref _selectionShown, (_match.Selection.Version, count, veterans, _textVersion)))
             return;
-        _selectionTitle.Text = string.Format(Tr("HUD_SELECTED"), count);
+        _selectionTitle.Text = veterans > 0
+            ? string.Format(Tr("HUD_SELECTED_VETERANS"), count, veterans)
+            : string.Format(Tr("HUD_SELECTED"), count);
         var units = _match.Selection.Ids.Select(id => _match.Sim.GetUnit(id)).OfType<Sim.Units.Unit>().ToList();
 
         var groups = units.GroupBy(u => u.Type.Id).OrderBy(g => g.Key).Select(g => (Id: g.Key, Count: g.Count())).ToList();

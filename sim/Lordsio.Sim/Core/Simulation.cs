@@ -235,7 +235,18 @@ public sealed partial class Simulation
             _units.RemoveAt(i);
             _entitiesById.Remove(unit.Id);
             _events.Add(new UnitDied(unit.FactionId, unit.Id, unit.KilledByFactionId, unit.Position, unit.Type.Id));
+            RewardKiller(unit);
             OnHordeUnitGone(unit);
         }
+    }
+
+    /// <summary>The unit that struck <paramref name="fallen"/> down, if it still stands, gains experience worth what the fallen cost.</summary>
+    private void RewardKiller(Unit fallen)
+    {
+        if (fallen.KilledById < 0 || GetUnit(fallen.KilledById) is not { IsAlive: true } killer
+            || !AreEnemies(killer.FactionId, fallen.FactionId) || Rules.Veterancy.Ranks.Count == 0)
+            return;
+        if (killer.GainExperience(fallen.Type.Cost, Rules.Veterancy))
+            _events.Add(new UnitPromoted(killer.FactionId, killer.Id, killer.Rank, killer.Position));
     }
 }

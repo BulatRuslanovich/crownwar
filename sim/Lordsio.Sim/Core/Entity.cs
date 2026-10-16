@@ -36,4 +36,7 @@ public abstract class Entity
 
     /// <summary>Faction that dealt the killing blow, for the death / destruction event.</summary>
     internal int KilledByFactionId { get; set; } = -1;
+
+    /// <summary>The unit or building that dealt the killing blow, or -1; a unit earns experience by it.</summary>
+    internal int KilledById { get; set; } = -1;
 }
