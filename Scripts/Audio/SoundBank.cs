@@ -40,6 +40,9 @@ public enum Sound
 /// </summary>
 public static class SoundBank
 {
+    /// <summary>The bus every game sound plays on (its own volume in the settings, apart from the music).</summary>
+    public const string Bus = "Sounds";
+
     private const int Rate = 22050;
 
     /// <summary>

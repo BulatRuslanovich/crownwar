@@ -23,6 +23,9 @@ public partial class GameSettings : Node
 
     /// <summary>Music volume relative to the master volume.</summary>
     public float MusicVolume { get; set; } = 0.6f;
+
+    /// <summary>Volume of the game's sounds (battle, alerts, buttons) relative to the master volume.</summary>
+    public float SoundVolume { get; set; } = 0.5f;
     public bool Fullscreen { get; set; }
     public float UiScale { get; set; } = 1f;
     public bool EdgePan { get; set; } = true;
@@ -52,9 +55,8 @@ public partial class GameSettings : Node
     {
         AudioServer.SetBusVolumeDb(0, Mathf.LinearToDb(Mathf.Max(MasterVolume, 0.0001f)));
         AudioServer.SetBusMute(0, MasterVolume <= 0.001f);
-        int music = MusicBus();
-        AudioServer.SetBusVolumeDb(music, Mathf.LinearToDb(Mathf.Max(MusicVolume, 0.0001f)));
-        AudioServer.SetBusMute(music, MusicVolume <= 0.001f);
+        SetBusVolume(Bus(Audio.MusicPlayer.Bus), MusicVolume);
+        SetBusVolume(Bus(Audio.SoundBank.Bus), SoundVolume);
         DisplayServer.WindowSetMode(Fullscreen ? DisplayServer.WindowMode.Fullscreen : DisplayServer.WindowMode.Windowed);
         GetTree().Root.ContentScaleFactor = UiScale;
         TranslationServer.SetLocale(Language == "" ? OS.GetLocaleLanguage() : Language);
@@ -65,6 +67,7 @@ public partial class GameSettings : Node
         var config = new ConfigFile();
         config.SetValue(Section, "master_volume", MasterVolume);
         config.SetValue(Section, "music_volume", MusicVolume);
+        config.SetValue(Section, "sound_volume", SoundVolume);
         config.SetValue(Section, "fullscreen", Fullscreen);
         config.SetValue(Section, "ui_scale", UiScale);
         config.SetValue(Section, "edge_pan", EdgePan);
@@ -83,6 +86,7 @@ public partial class GameSettings : Node
             return; // first run: keep defaults
         MasterVolume = Mathf.Clamp((float)config.GetValue(Section, "master_volume", MasterVolume), 0f, 1f);
         MusicVolume = Mathf.Clamp((float)config.GetValue(Section, "music_volume", MusicVolume), 0f, 1f);
+        SoundVolume = Mathf.Clamp((float)config.GetValue(Section, "sound_volume", SoundVolume), 0f, 1f);
         Fullscreen = (bool)config.GetValue(Section, "fullscreen", Fullscreen);
         UiScale = Mathf.Clamp((float)config.GetValue(Section, "ui_scale", UiScale), 0.5f, 3f);
         EdgePan = (bool)config.GetValue(Section, "edge_pan", EdgePan);
@@ -92,19 +96,25 @@ public partial class GameSettings : Node
     }
 
     /// <summary>
-    /// The music bus (created on first use, feeding the master bus), so music has its own volume. No effects: the
-    /// recordings carry their own room.
+    /// A bus by name (created on first use, feeding the master bus): the music and the sounds each get one, so each
+    /// has its own volume. No effects: the music recordings carry their own room.
     /// </summary>
-    private static int MusicBus()
+    private static int Bus(string name)
     {
-        int index = AudioServer.GetBusIndex(Audio.MusicPlayer.Bus);
+        int index = AudioServer.GetBusIndex(name);
         if (index < 0)
         {
             AudioServer.AddBus();
             index = AudioServer.BusCount - 1;
-            AudioServer.SetBusName(index, Audio.MusicPlayer.Bus);
+            AudioServer.SetBusName(index, name);
             AudioServer.SetBusSend(index, "Master");
         }
         return index;
+    }
+
+    private static void SetBusVolume(int bus, float volume)
+    {
+        AudioServer.SetBusVolumeDb(bus, Mathf.LinearToDb(Mathf.Max(volume, 0.0001f)));
+        AudioServer.SetBusMute(bus, volume <= 0.001f);
     }
 }

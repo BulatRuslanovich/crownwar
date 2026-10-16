@@ -47,7 +47,7 @@ public partial class MatchSounds : Node
         _match = match;
         for (int i = 0; i < WorldVoices; i++)
         {
-            var player = new AudioStreamPlayer2D { MaxDistance = 1400f, Attenuation = 1.5f };
+            var player = new AudioStreamPlayer2D { MaxDistance = 1400f, Attenuation = 1.5f, Bus = SoundBank.Bus };
             AddChild(player);
             _world.Add(player);
         }
@@ -56,7 +56,7 @@ public partial class MatchSounds : Node
         _streams = SoundBank.CreateAll();
         for (int i = 0; i < UiVoices; i++)
         {
-            var voice = new AudioStreamPlayer();
+            var voice = new AudioStreamPlayer { Bus = SoundBank.Bus };
             AddChild(voice);
             _ui.Add(voice);
         }

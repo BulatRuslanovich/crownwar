@@ -14,8 +14,8 @@ public partial class UiSounds : Node
     public override void _EnterTree()
     {
         ProcessMode = ProcessModeEnum.Always; // menus also work while the game is paused
-        _click = new AudioStreamPlayer { Stream = SoundBank.UiClick(), VolumeDb = -12f };
-        _hover = new AudioStreamPlayer { Stream = SoundBank.UiHover(), VolumeDb = -22f };
+        _click = new AudioStreamPlayer { Stream = SoundBank.UiClick(), VolumeDb = -12f, Bus = SoundBank.Bus };
+        _hover = new AudioStreamPlayer { Stream = SoundBank.UiHover(), VolumeDb = -22f, Bus = SoundBank.Bus };
         AddChild(_click);
         AddChild(_hover);
         GetTree().NodeAdded += OnNodeAdded;
