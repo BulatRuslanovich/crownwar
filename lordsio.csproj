@@ -8,10 +8,11 @@
   </PropertyGroup>
 
   <!-- Godot compiles every *.cs under the project folder by default;
-       the simulation library and tests are separate projects. -->
+       the simulation library, tests and dev tools are separate projects. -->
   <ItemGroup>
     <Compile Remove="sim/**" />
     <Compile Remove="tests/**" />
+    <Compile Remove="tools/**" />
   </ItemGroup>
 
   <ItemGroup>
