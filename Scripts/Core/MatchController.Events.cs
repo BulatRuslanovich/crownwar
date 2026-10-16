@@ -39,8 +39,8 @@ public partial class MatchController
 
         foreach (var e in Sim.TakeEvents())
         {
-            if (e is AttackLanded hit && (IsFriendly(hit.FactionId) || IsFriendly(hit.TargetFactionId)))
-                _battleHeat = MathF.Min(BattleHeatMax, _battleHeat + 1f);
+            if (e is AttackLanded hit)
+                HeatUp(hit);
             Stats.OnSimEvent(e);
             if (Net is { LogChecksums: true } && e is PeaceOffered or PeaceRefused or PeaceMade or WarDeclared or WarBegan or DiplomacyRejected)
                 GD.Print($"[net] tick {Sim.Tick}: {e}"); // both copies' logs must agree on these

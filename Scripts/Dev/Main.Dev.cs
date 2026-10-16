@@ -33,7 +33,6 @@ public partial class Main
         if (DevTools.Arg(args, "--export-sounds") is { } soundDirectory)
         {
             Audio.SoundBank.ExportAll(soundDirectory);
-            Audio.MusicPlayer.ExportAll(soundDirectory);
             GetTree().Quit();
             return true;
         }

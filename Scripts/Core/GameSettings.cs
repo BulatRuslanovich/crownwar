@@ -92,8 +92,8 @@ public partial class GameSettings : Node
     }
 
     /// <summary>
-    /// The music bus (created on first use, feeding the master bus), so music has its own volume, with a hall reverb
-    /// that gives the synthesised instruments a room to play in.
+    /// The music bus (created on first use, feeding the master bus), so music has its own volume. No effects: the
+    /// recordings carry their own room.
     /// </summary>
     private static int MusicBus()
     {
@@ -104,19 +104,6 @@ public partial class GameSettings : Node
             index = AudioServer.BusCount - 1;
             AudioServer.SetBusName(index, Audio.MusicPlayer.Bus);
             AudioServer.SetBusSend(index, "Master");
-        }
-        if (AudioServer.GetBusEffectCount(index) == 0)
-        {
-            AudioServer.AddBusEffect(index, new AudioEffectReverb
-            {
-                RoomSize = 0.7f,
-                Damping = 0.45f,
-                Spread = 1f,
-                PredelayMsec = 25f,
-                Hipass = 0.15f,
-                Dry = 0.9f,
-                Wet = 0.24f,
-            });
         }
         return index;
     }

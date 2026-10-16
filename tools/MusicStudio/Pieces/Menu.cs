@@ -67,7 +67,7 @@ public static class Menu
     public static Stereo Render(string cache)
     {
         const int intro = 0, a = 4, b = 12, c = 20, d = 28, coda = 36, bars = 40;
-        var q = new Ensemble(cache, bpm: 80, bars, seed: 11);
+        var q = new Ensemble(cache, bpm: 80, bars);
 
         for (int bar = intro; bar < a; bar++)
             q.PianoBar(bar, Loop[bar % 4], 0.52f, Quarters, QuarterAccents, step: 1);

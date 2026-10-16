@@ -1,24 +1,28 @@
 using System;
 using Godot;
+using Lordsio.Sim.Core;
 
 namespace Lordsio.Core;
 
-/// <summary>The mood of the world: night falling, the wind, and whether the local team is in a battle (for the music).</summary>
+/// <summary>The mood of the world: night falling, the wind, and how hard the local team is fighting (for the music).</summary>
 public partial class MatchController
 {
     /// <summary>
-    /// The local team is in a real fight: enough blows landed on or by its units and buildings lately.
-    /// With hysteresis, so the battle music neither starts on a stray arrow nor flickers off mid-fight.
+    /// How tense the music should be: 0 calm, 1 tension (a skirmish), 2 battle (a real fight, the buildings under
+    /// attack, at once when the castle is). From the battle heat, with hysteresis, so the music neither rises on a
+    /// stray arrow nor flickers between levels mid-fight.
     /// </summary>
-    public bool InBattle { get; private set; }
+    public int MusicLevel { get; private set; }
 
-    /// <summary>Blows involving the local team, decaying over a few seconds.</summary>
+    /// <summary>Blows involving the local team (more for one on its buildings), decaying over a few seconds.</summary>
     private float _battleHeat;
     public float BattleHeat => _battleHeat;
     private const float BattleHeatHalfLife = 4f;
-    private const float BattleStarts = 6f;
-    private const float BattleEnds = 1f;
-    /// <summary>Caps the heat, so peace returns within some 15 seconds even after a huge battle.</summary>
+    /// <summary>The heat at which the music rises to tension and battle, and at which it falls back from them.</summary>
+    private const float TensionStarts = 3f, BattleStarts = 10f, BattleEnds = 5f, TensionEnds = 1.5f;
+    /// <summary>A blow on a building of the local team counts this much more than one between units.</summary>
+    private const float BuildingHitHeat = 3f;
+    /// <summary>Caps the heat, so calm returns within some 15 seconds even after a huge battle.</summary>
     private const float BattleHeatMax = 15f;
 
     /// <summary>The world dims to this at night (the interface, on its own layers, stays as it is).</summary>
@@ -54,13 +58,33 @@ public partial class MatchController
         _battleHeat *= MathF.Pow(0.5f, delta / BattleHeatHalfLife);
     }
 
+    /// <summary>Warms the battle heat by a blow that involves the local team.</summary>
+    private void HeatUp(AttackLanded hit)
+    {
+        if (!IsFriendly(hit.FactionId) && !IsFriendly(hit.TargetFactionId))
+            return;
+        float heat = 1f;
+        if (IsFriendly(hit.TargetFactionId) && Sim.GetBuilding(hit.TargetId) is { } building)
+        {
+            if (building.Type.IsCapital || building.Type.IsCitadel)
+                heat = BattleHeatMax; // the castle under attack: full battle at once
+            else
+                heat = BuildingHitHeat;
+        }
+        _battleHeat = MathF.Min(BattleHeatMax, _battleHeat + heat);
+    }
+
     private void UpdateBattleMood()
     {
         if (Sim.IsOver)
-            InBattle = false;
+            MusicLevel = 0;
         else if (_battleHeat >= BattleStarts)
-            InBattle = true;
-        else if (_battleHeat <= BattleEnds)
-            InBattle = false;
+            MusicLevel = 2;
+        else if (MusicLevel == 2 && _battleHeat <= BattleEnds)
+            MusicLevel = 1;
+        else if (MusicLevel == 0 && _battleHeat >= TensionStarts)
+            MusicLevel = 1;
+        else if (MusicLevel == 1 && _battleHeat <= TensionEnds)
+            MusicLevel = 0;
     }
 }

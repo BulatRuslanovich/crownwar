@@ -4,7 +4,8 @@ namespace Lordsio.MusicStudio;
 /// An instrument built from recorded notes: a note is played from the nearest recorded pitch of the closest
 /// dynamic layer, resampled to the exact pitch, and stopped with a short release. Every recording is trimmed to its
 /// onset, tuned by its measured pitch (when the measurement agrees with its name) and levelled so the dynamic layers
-/// join smoothly; takes of the same note and layer alternate.
+/// join smoothly; which take of a note plays depends only on the note and its time, so the same note renders the
+/// same in every version of a piece (the layers of a piece must match where they share notes).
 /// </summary>
 public sealed class Sampler
 {
@@ -13,7 +14,6 @@ public sealed class Sampler
 
     private readonly List<Zone> _zones = new();
     private readonly int _layers;
-    private readonly Dictionary<(int Midi, int Layer), int> _takes = new();
 
     public string Name { get; }
 
@@ -37,7 +37,7 @@ public sealed class Sampler
         {
             var raw = Wav.Read(file.Path);
             int named = file.Midi + octaveShift;
-            double measured = MeasuredMidi(raw, named);
+            double measured = MeasuredMidi(raw, named, file.Path);
             var audio = Trim(raw, Pitch.Onset(raw, 0.01f), maxSeconds);
             loaded.Add((audio, measured, ranks.IndexOf(file.Dynamic), Rms(audio, 0.3)));
         }
@@ -64,7 +64,7 @@ public sealed class Sampler
                      double attack = 0, double skip = 0, double? release = null)
     {
         int layer = Math.Clamp((int)MathF.Ceiling(velocity * _layers) - 1, 0, _layers - 1);
-        var zone = Nearest(midi, layer);
+        var zone = Nearest(midi, layer, Human.Hash(Math.Round(start * 1000), Math.Round(midi * 100), 7));
         float gain = Volume * zone.Gain * MathF.Pow(velocity / LayerVelocity(layer), 1.6f);
         double ratio = Math.Pow(2, (midi - zone.Midi) / 12) * zone.Audio.Rate / mix.Rate;
         double rel = release ?? Release;
@@ -90,7 +90,7 @@ public sealed class Sampler
     /// <summary>Exponential-ish damper: −40 dB by the end of the release.</summary>
     private static float Damp(int i, int length) => MathF.Exp(-4.6f * i / length) * (1f - i / (float)length);
 
-    private Zone Nearest(double midi, int layer)
+    private Zone Nearest(double midi, int layer, int pick)
     {
         Zone? best = null;
         double bestCost = double.MaxValue;
@@ -105,21 +105,26 @@ public sealed class Sampler
                 best = z;
             }
         }
-        // Alternate the takes of that note and layer.
+        // One of the takes of that note and layer.
         var takes = _zones.Where(z => Math.Abs(z.Midi - best!.Midi) < 0.5 && z.Layer == best.Layer).ToList();
-        var key = ((int)Math.Round(best!.Midi), best.Layer);
-        _takes.TryGetValue(key, out int n);
-        _takes[key] = n + 1;
-        return takes[n % takes.Count];
+        return takes[(pick & int.MaxValue) % takes.Count];
     }
 
     /// <summary>
     /// The pitch measured near the name (at the moment the recording is most clearly periodic: a pizzicato settles
-    /// after its attack), or the name itself if the recording is too noisy to measure.
+    /// after its attack), or the name itself if the recording is too noisy to measure. A few VSCO files are an octave
+    /// above their names; such a file is moved up only when both a free search and the half-period test say so (a low
+    /// note with a strong second harmonic passes one of them, never both).
     /// </summary>
-    private static double MeasuredMidi(Stereo audio, int named)
+    private static double MeasuredMidi(Stereo audio, int named, string file)
     {
         var best = Pitch.Clearest(audio, named);
+        double free = Pitch.DetectMidi(audio);
+        if (best.OctaveUpDip < 0.06 && Math.Abs(free - (named + 12)) < 0.5)
+        {
+            Console.WriteLine($"    {System.IO.Path.GetFileName(file)} sounds an octave above its name");
+            return free;
+        }
         return best.Dip < 0.2 ? best.Midi : named;
     }
 

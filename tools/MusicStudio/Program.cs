@@ -7,7 +7,9 @@ using Lordsio.MusicStudio.Pieces;
 //   analyze         detect the pitch of every sample and compare it with the note in its name
 //   check           play notes across each instrument's range and verify the pitch that comes out
 //   levels <file.wav> <seconds>  RMS per chunk of that many seconds, and how smoothly the loop's end meets its start
-//   render <piece|all> [dir]  render a piece (menu) to dir (default out/) as .wav and .ogg
+//   render <piece|all> [game]  render a piece (menu, day, night) to out/ as .wav and .ogg, and with "game" put
+//                              the .ogg into the game's Assets/Music; day and night come in three layers each:
+//                              <piece>_calm, _tension, _battle
 string root = AppContext.BaseDirectory;
 while (!File.Exists(Path.Combine(root, "MusicStudio.csproj")))
     root = Path.GetDirectoryName(root.TrimEnd(Path.DirectorySeparatorChar)) ?? throw new InvalidOperationException("MusicStudio.csproj not found");
@@ -58,28 +60,42 @@ switch (args.FirstOrDefault())
     }
     case "render":
     {
-        var pieces = new Dictionary<string, Func<string, Stereo>> { ["menu"] = Menu.Render };
+        var pieces = new Dictionary<string, Func<string, Stereo[]>>
+        {
+            ["menu"] = c => new[] { Menu.Render(c) },
+            ["day"] = Day.Render,
+            ["night"] = Night.Render,
+        };
+        string[] layers = { "calm", "tension", "battle" };
         string which = args.ElementAtOrDefault(1) ?? "all";
-        string dir = args.ElementAtOrDefault(2) ?? Path.Combine(root, "out");
+        string dir = Path.Combine(root, "out");
+        string? game = args.ElementAtOrDefault(2) == "game" ? Path.GetFullPath(Path.Combine(root, "..", "..", "Assets", "Music")) : null;
         foreach (var (name, render) in pieces.Where(p => which == "all" || p.Key == which))
         {
             Console.WriteLine($"rendering {name}");
-            Save(render(cache), dir, name);
+            var versions = render(cache);
+            for (int i = 0; i < versions.Length; i++)
+                Save(versions[i], dir, versions.Length == 1 ? name : $"{name}_{layers[i]}", game);
         }
         break;
     }
     default:
-        Console.WriteLine("usage: dotnet run -- fetch | analyze | check | render <piece|all> [dir]");
+        Console.WriteLine("usage: dotnet run -- fetch | analyze | check | render <piece|all> [game]");
         return 1;
 }
 return 0;
 
-static void Save(Stereo audio, string dir, string name)
+static void Save(Stereo audio, string dir, string name, string? game)
 {
     Directory.CreateDirectory(dir);
     string wav = Path.Combine(dir, name + ".wav"), ogg = Path.Combine(dir, name + ".ogg");
     Wav.Write(wav, audio);
     Ogg.Encode(wav, ogg);
+    if (game != null)
+    {
+        Directory.CreateDirectory(game);
+        File.Copy(ogg, Path.Combine(game, name + ".ogg"), overwrite: true);
+    }
     Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
         $"{wav} ({new FileInfo(wav).Length / 1024} KB), {ogg} ({new FileInfo(ogg).Length / 1024} KB), {audio.Length / (double)audio.Rate:F1} s"));
 }
@@ -92,7 +108,10 @@ static bool Check(string cache)
         (new Sampler("piano", cache, Vsco.UprightPiano), 33, 88),
         (new Sampler("violin", cache, Vsco.ViolinArco), 55, 91),
         (new Sampler("bass", cache, Vsco.BassPizz, octaveShift: 12), 28, 47),
-        (new Sampler("bass arco", cache, Vsco.BassArco, octaveShift: 12), 28, 47),
+        (new Sampler("bass arco", cache, Vsco.BassArco, octaveShift: 12), 30, 47),
+        (new Sampler("bass spiccato", cache, Vsco.BassSpiccato, octaveShift: 12), 28, 47),
+        (new Sampler("violin spiccato", cache, Vsco.ViolinSpiccato, octaveShift: 12), 55, 88),
+        (new Sampler("violin tremolo", cache, Vsco.ViolinTremolo, octaveShift: 12), 55, 88),
     };
     bool ok = true;
     foreach (var (sampler, low, high) in instruments)

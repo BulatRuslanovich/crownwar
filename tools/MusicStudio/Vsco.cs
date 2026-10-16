@@ -24,8 +24,12 @@ public static partial class Vsco
     public const string ViolinPizz = "Strings/Solo Violin/Pizz";
     public const string BassPizz = "Strings/Solo Contrabass/Pizz";
     public const string BassArco = "Strings/Solo Contrabass/SusVib";
+    public const string ViolinSpiccato = "Strings/Solo Violin/spic";
+    public const string ViolinTremolo = "Strings/Solo Violin/Trem";
+    public const string BassSpiccato = "Strings/Solo Contrabass/Spic";
 
-    public static readonly string[] Folders = { UprightPiano, ViolinArco, ViolinPizz, BassPizz, BassArco };
+    public static readonly string[] Folders =
+        { UprightPiano, ViolinArco, ViolinPizz, BassPizz, BassArco, ViolinSpiccato, ViolinTremolo, BassSpiccato };
 
     /// <summary>Downloads every .wav of <see cref="Folders"/> that the cache does not have yet.</summary>
     public static async Task Fetch(string cache)

@@ -59,11 +59,13 @@ public partial class Main : Node
 
     public override void _Process(double delta)
     {
-        // Menus get the menu theme; a match plays battle music in a fight, otherwise the day's or the night's.
+        // Menus get the menu theme; a match plays the day's or the night's piece, as tense as the fighting.
         if (_music != null)
-            _music.Track = _screen is MatchController match
-                ? match.InBattle ? Audio.MusicTrack.Battle : match.Sim.IsNight ? Audio.MusicTrack.Night : Audio.MusicTrack.Peace
-                : Audio.MusicTrack.Menu;
+        {
+            var match = _screen as MatchController;
+            _music.Track = match == null ? Audio.MusicTrack.Menu : match.Sim.IsNight ? Audio.MusicTrack.Night : Audio.MusicTrack.Day;
+            _music.Intensity = match?.MusicLevel ?? 0;
+        }
     }
 
     public void ShowMenu()

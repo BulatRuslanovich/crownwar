@@ -21,3 +21,5 @@ Warcrown v1.0.0 — стратегия: стройте шахты, собира�
   и управление вернётся вам. (Если вылетел тот, кто создал игру, матч закончится у всех.)
 
 Шрифт заголовков — Press Start 2P (SIL Open Font License, лицензия внутри игры).
+Музыка сыграна на сэмплах VSCO 2 Community Edition (Versilian Studios / Sam Gossner, CC0):
+https://github.com/sgossner/VSCO-2-CE
