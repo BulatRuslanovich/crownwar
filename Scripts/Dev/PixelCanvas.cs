@@ -325,7 +325,14 @@ public sealed class PixelCanvas
     /// A stroke <paramref name="width"/> pixels thick from (x0, y0) to (x1, y1), shaded across like a rod (spear shafts,
     /// limbs, timbers), with round ends.
     /// </summary>
-    public void Stroke(float x0, float y0, float x1, float y1, float width, Ramp ramp, float bias = 0f)
+    public void Stroke(float x0, float y0, float x1, float y1, float width, Ramp ramp, float bias = 0f) =>
+        Taper(x0, y0, x1, y1, width, width, ramp, bias);
+
+    /// <summary>
+    /// A rod thinning from <paramref name="w0"/> at (x0, y0) to <paramref name="w1"/> at (x1, y1), shaded across (a limb:
+    /// a thigh into the knee, an upper arm into the elbow), its ends rounded.
+    /// </summary>
+    public void Taper(float x0, float y0, float x1, float y1, float w0, float w1, Ramp ramp, float bias = 0f)
     {
         var a = new Vector2(x0, y0);
         var b = new Vector2(x1, y1);
@@ -335,15 +342,16 @@ public sealed class PixelCanvas
         // Turn the normal to face the sun (up-left), so the lit side of the rod is that one.
         if (normal.X + normal.Y > 0f)
             normal = -normal;
-        float r = width / 2f;
-        int minX = (int)Mathf.Floor(Mathf.Min(x0, x1) - r - 1), maxX = (int)Mathf.Ceil(Mathf.Max(x0, x1) + r + 1);
-        int minY = (int)Mathf.Floor(Mathf.Min(y0, y1) - r - 1), maxY = (int)Mathf.Ceil(Mathf.Max(y0, y1) + r + 1);
+        float rMax = Mathf.Max(w0, w1) / 2f;
+        int minX = (int)Mathf.Floor(Mathf.Min(x0, x1) - rMax - 1), maxX = (int)Mathf.Ceil(Mathf.Max(x0, x1) + rMax + 1);
+        int minY = (int)Mathf.Floor(Mathf.Min(y0, y1) - rMax - 1), maxY = (int)Mathf.Ceil(Mathf.Max(y0, y1) + rMax + 1);
         for (int y = minY; y <= maxY; y++)
             for (int x = minX; x <= maxX; x++)
             {
                 var p = new Vector2(x + 0.5f, y + 0.5f);
                 float t = Mathf.Clamp((p - a).Dot(ab) / len2, 0f, 1f);
                 var offset = p - (a + ab * t);
+                float r = Mathf.Lerp(w0, w1, t) / 2f;
                 if (offset.Length() > r + 0.15f)
                     continue;
                 float side = r > 0.6f ? offset.Dot(normal) / r : 0f; // 1 on the lit side

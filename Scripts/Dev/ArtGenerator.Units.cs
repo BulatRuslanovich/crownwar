@@ -88,7 +88,7 @@ public static partial class ArtGenerator
             {
                 DrawKind(sheet, kind, pose, feet);
                 sheet.Origin = Vector2I.Zero;
-                sheet.RimLight(new Rect2I(cell, cellSize), SkyRim, 0.7f);
+                sheet.RimLight(new Rect2I(cell, cellSize), SkyRim, 0.45f);
             }
             sheet.Origin = Vector2I.Zero;
             sheet.SelOut(SilhouetteRim, new Rect2I(cell, cellSize));
@@ -102,9 +102,7 @@ public static partial class ArtGenerator
 
     private static void DrawKind(PixelCanvas c, string kind, Pose pose, Vector2I feet)
     {
-        // Those on foot are drawn lanky: long legs, broad shoulders, a small head (riders and beasts as they are).
-        bool onFoot = kind is "infantry" or "archer" or "heavy" or "crossbowman" or "monk" or "warlord";
-        var f = new Figure(c, feet, kind == "warlord" ? 1.45f : 1f) { Lanky = onFoot };
+        var f = new Figure(c, feet, kind == "warlord" ? 1.45f : 1f);
         switch (kind)
         {
             case "infantry": Infantry(f, pose); break;
@@ -223,66 +221,25 @@ public static partial class ArtGenerator
         public float Scale { get; }
         public Vector2 Shift { get; set; }
 
-        /// <summary>
-        /// Drawn with heroic proportions: the rig's coordinates are warped so the legs (below the hips at 29) stretch by
-        /// a third, the torso shortens a little and the head (above the neck at 17) shrinks — so every helmet, hood and
-        /// weapon drawn on the rig follows.
-        /// </summary>
-        public bool Lanky { get; init; }
+        public Vector2 P(float x, float y) => new(Feet.X + (x + Shift.X - 16f) * Scale, Feet.Y + (y + Shift.Y - 39f) * Scale);
 
-        private const float HipY = 29f, NeckY = 17f, LegStretch = 1.3f, HeadShrink = 0.85f;
-        private const float WarpedHip = 39f - (39f - HipY) * LegStretch, TorsoShrink = (WarpedHip - 15f) / (HipY - NeckY);
+        /// <summary>The rig's coordinates of a canvas pixel (the inverse of <see cref="P"/>).</summary>
+        private Vector2 Unproject(float px, float py) => new((px - Feet.X) / Scale + 16f - Shift.X, (py - Feet.Y) / Scale + 39f - Shift.Y);
 
-        private static float WarpY(float y) => y >= HipY ? 39f - (39f - y) * LegStretch
-            : y >= NeckY ? WarpedHip - (HipY - y) * TorsoShrink
-            : 15f - (NeckY - y) * HeadShrink;
-
-        private static float UnwarpY(float y) => y >= WarpedHip ? 39f - (39f - y) / LegStretch
-            : y >= 15f ? HipY - (WarpedHip - y) / TorsoShrink
-            : NeckY - (15f - y) / HeadShrink;
-
-        /// <summary>How much narrower the drawing is at (unwarped) height y: the head, eased in over the neck.</summary>
-        private static float WidthAt(float y) => 1f - (1f - 0.88f) * Mathf.Clamp((NeckY - y) / 4f, 0f, 1f);
-
-        public Vector2 P(float x, float y)
-        {
-            x += Shift.X;
-            y += Shift.Y;
-            if (Lanky)
-            {
-                x = 17f + (x - 17f) * WidthAt(y);
-                y = WarpY(y);
-            }
-            return new(Feet.X + (x - 16f) * Scale, Feet.Y + (y - 39f) * Scale);
-        }
-
-        /// <summary>The rig's coordinates of a canvas pixel (the inverse of <see cref="P"/>, without the shift).</summary>
-        private Vector2 Unwarp(float px, float py)
-        {
-            float x = (px - Feet.X) / Scale + 16f, y = (py - Feet.Y) / Scale + 39f;
-            if (Lanky)
-            {
-                y = UnwarpY(y);
-                x = 17f + (x - 17f) / WidthAt(y);
-            }
-            return new Vector2(x - Shift.X, y - Shift.Y);
-        }
-
-        /// <summary>Radii scale with the head where it is shrunk.</summary>
-        private Vector2 Radii(float cx, float cy, float rx, float ry)
-        {
-            if (!Lanky)
-                return new Vector2(rx, ry) * Scale;
-            float y = cy + Shift.Y;
-            float sy = y >= HipY ? LegStretch : y >= NeckY ? TorsoShrink : HeadShrink;
-            return new Vector2(rx * WidthAt(y), ry * sy) * Scale;
-        }
+        private Vector2 Radii(float rx, float ry) => new Vector2(rx, ry) * Scale;
 
         public void Stroke(float x0, float y0, float x1, float y1, float w, Ramp r, float bias = 0f)
         {
             var a = P(x0, y0);
             var b = P(x1, y1);
             C.Stroke(a.X, a.Y, b.X, b.Y, w * Scale, r, bias);
+        }
+
+        public void Taper(float x0, float y0, float x1, float y1, float w0, float w1, Ramp r, float bias = 0f)
+        {
+            var a = P(x0, y0);
+            var b = P(x1, y1);
+            C.Taper(a.X, a.Y, b.X, b.Y, w0 * Scale, w1 * Scale, r, bias);
         }
 
         public void TeamStroke(float x0, float y0, float x1, float y1, float w, float bias = 0f)
@@ -295,14 +252,14 @@ public static partial class ArtGenerator
         public void Ball(float cx, float cy, float rx, float ry, Ramp r, float bias = 0f, float flat = 0f)
         {
             var p = P(cx, cy);
-            var radii = Radii(cx, cy, rx, ry);
+            var radii = Radii(rx, ry);
             C.Ball(p.X, p.Y, radii.X, radii.Y, r, bias, flat);
         }
 
         public void TeamBall(float cx, float cy, float rx, float ry, float bias = 0f, float flat = 0f)
         {
             var p = P(cx, cy);
-            var radii = Radii(cx, cy, rx, ry);
+            var radii = Radii(rx, ry);
             C.TeamBall(p.X, p.Y, radii.X, radii.Y, bias, flat);
         }
 
@@ -314,7 +271,7 @@ public static partial class ArtGenerator
                 points[i] = P(xy[2 * i], xy[2 * i + 1]);
             C.Polygon(points, r, (px, py) =>
             {
-                var q = Unwarp(px + 0.5f, py + 0.5f);
+                var q = Unproject(px + 0.5f, py + 0.5f);
                 return light(q.X, q.Y);
             });
         }
@@ -370,21 +327,22 @@ public static partial class ArtGenerator
         }
     }
 
-    // ---- The soldier's rig ----------------------------------------------------------------------------------------
+    // ---- Materials and gear shared by everyone ----------------------------------------------------------------------
 
     // Materials of the Empire's soldiery, grim and worn: blackened and dull steel, brass trim, dark wool and leather,
     // quilted linen, parchment and wax. The faction's colour is kept for the accents only.
     private static readonly Ramp PlateR = Ramp.Of(new Color("7f8794"), mood: FigureMood);
     private static readonly Ramp BlackSteelR = Ramp.Of(new Color("4c515c"), mood: FigureMood);
     private static readonly Ramp BrassR = Ramp.Of(new Color("b88f3e"), mood: FigureMood);
-    private static readonly Ramp DoubletR = Ramp.Of(new Color("4d3a3d"), mood: FigureMood);
+    private static readonly Ramp DoubletR = Ramp.Of(new Color("3e2e33"), mood: FigureMood);
     private static readonly Ramp GambesonR = Ramp.Of(new Color("8c7b5c"), mood: FigureMood);
     private static readonly Ramp CloakR = Ramp.Of(new Color("3a3437"), mood: FigureMood);
-    private static readonly Ramp OliveR = Ramp.Of(new Color("3f4733"), mood: FigureMood);
+    private static readonly Ramp OliveR = Ramp.Of(new Color("38402c"), mood: FigureMood);
     private static readonly Ramp ParchmentR = Ramp.Of(new Color("d4c296"), mood: FigureMood);
     private static readonly Ramp PriestRobeR = Ramp.Of(new Color("4a3427"), mood: FigureMood);
     private static readonly Ramp SkullR = Ramp.Of(new Color("d8ceb4"), mood: FigureMood);
-    private static readonly Color Wax = new("8e1b1b");
+    private static readonly Ramp WaxR = Ramp.Of(new Color("9a1e1e"), mood: FigureMood);
+    private static readonly Ramp PaviseR = Ramp.Of(new Color("5a4632"), mood: FigureMood);
 
     /// <summary>Lit like a cylinder across x from <paramref name="left"/> to <paramref name="right"/> (bright left of centre).</summary>
     private static Func<float, float, float> Round(float left, float right, float bias = 0f) => (x, _) =>
@@ -393,151 +351,7 @@ public static partial class ArtGenerator
         return 1.3f - 3.4f * Mathf.Abs(across - 0.28f) + bias;
     };
 
-    /// <summary>Both legs (the far one darker), then the bob, sink and lean for the upper body that follows.</summary>
-    private static void Legs(Figure f, Pose pose, Ramp trousers, float width = 3.4f, Ramp? boots = null)
-    {
-        f.Shift = Vector2.Zero;
-        f.Shadow(16f, 8f);
-        int hip = 29 + Math.Min(0, pose.Bob) + pose.Sink;
-        Leg(f, pose.Far, pose.FarLift, hip, pose.Sink, trousers, boots ?? BootR, -1f, width);
-        Leg(f, pose.Near, pose.NearLift, hip, pose.Sink, trousers, boots ?? BootR, 0.1f, width);
-        f.Shift = new Vector2(pose.Lean, pose.Bob + pose.Sink);
-    }
-
-    /// <summary>A leg from the hip through the knee (bent forward as the foot lifts or the body sinks) to the boot.</summary>
-    private static void Leg(Figure f, float foot, float lift, int hip, int sink, Ramp trousers, Ramp boots, float bias, float width)
-    {
-        float hipX = 16f + (foot - 16f) * 0.3f;
-        float ankleY = 36.5f - lift;
-        float bend = lift * 0.9f + sink * 0.7f;
-        float kneeX = (hipX + foot) / 2f + bend, kneeY = (hip + ankleY) / 2f;
-        f.Stroke(hipX, hip, kneeX, kneeY, width, trousers, bias);
-        f.Stroke(kneeX, kneeY, foot, ankleY, width - 0.4f, trousers, bias - 0.2f);
-        // The boot, its toe forward, turned down at the top.
-        f.Stroke(foot - 0.5f, ankleY + 0.5f, foot + 1.8f, ankleY + 1f, 2.8f, boots, bias);
-        f.Stroke(foot - 1.2f, ankleY - 1.5f, foot + 0.8f, ankleY - 1.5f, 1f, boots, bias + 0.6f);
-    }
-
-    /// <summary>The torso: shoulders 12 wide narrowing to the waist, in <paramref name="r"/> or faction colour.</summary>
-    private static void Torso(Figure f, Ramp? r, float top = 18f, float bottom = 30f, float bias = 0f) =>
-        f.Poly(r, Round(10f, 22f, bias), 11f, top, 21f, top, 22.5f, top + 2.5f, 20.5f, bottom, 11.5f, bottom, 9.5f, top + 2.5f);
-
-    private static void Belt(Figure f, float y = 27f)
-    {
-        f.Stroke(11.5f, y, 20.5f, y, 1.8f, LeatherR, -0.5f);
-        f.Dot(17f, y - 1f, BrassR.Light, 2f, 2f);
-        f.Dot(17.5f, y - 0.5f, BrassR.Deep, 1f, 1f);
-    }
-
-    /// <summary>A breastplate over the torso: a central ridge catching the light, a brass-edged neckline, rivets at the sides.</summary>
-    private static void Cuirass(Figure f, Ramp metal, float top = 18.5f, float bottom = 27.5f)
-    {
-        f.Poly(metal, Round(10.5f, 21.5f, 0.2f), 11.5f, top, 20.5f, top, 21.8f, top + 2.2f, 20f, bottom, 12.5f, bottom, 10.8f, top + 2.2f);
-        f.Stroke(16.6f, top + 1.5f, 16.2f, bottom - 1f, 0.8f, metal, 1.6f);
-        f.Stroke(11.8f, top + 0.3f, 20.2f, top + 0.3f, 0.9f, BrassR, 0.4f);
-        f.Dot(12f, top + 3f, BrassR.Light);
-        f.Dot(20.5f, top + 3f, BrassR.Shade);
-        f.Dot(12.8f, bottom - 1.5f, BrassR.Light);
-    }
-
-    /// <summary>The plate skirt below a breastplate: two lames, each lit along its top.</summary>
-    private static void Fauld(Figure f, Ramp metal, float y = 27.5f)
-    {
-        f.Stroke(12f, y + 0.5f, 20.5f, y + 0.5f, 1.4f, metal, 0.4f);
-        f.Stroke(12.3f, y + 2f, 20.2f, y + 2f, 1.4f, metal, -0.3f);
-    }
-
-    /// <summary>A shoulder guard of lames, brass-rimmed; with a purity seal hanging from it if <paramref name="seal"/>.</summary>
-    private static void Pauldron(Figure f, Ramp metal, float x, float y, float size = 3.2f, bool seal = false)
-    {
-        f.Ball(x, y, size, size * 0.75f, metal, 0.4f);
-        f.Stroke(x - size + 0.5f, y + size * 0.55f, x + size - 0.5f, y + size * 0.55f, 0.9f, BrassR, 0f);
-        f.Stroke(x - size * 0.7f, y - 0.2f, x + size * 0.7f, y - 0.2f, 0.6f, metal, -0.8f);
-        if (seal)
-            Seal(f, x + 0.5f, y + size * 0.6f);
-    }
-
-    /// <summary>A seal of red wax with a strip of parchment hanging from it, scrawled with a prayer.</summary>
-    private static void Seal(Figure f, float x, float y)
-    {
-        f.Stroke(x + 0.3f, y + 1f, x + 0.8f, y + 4.5f, 1.4f, ParchmentR, 0.2f);
-        f.Dot(x + 0.3f, y + 2.5f, ParchmentR.Deep, 1f, 1f);
-        f.Ball(x, y + 0.6f, 1.2f, 1.1f, Ramp.Of(Wax, mood: FigureMood), 0.6f);
-    }
-
-    /// <summary>A sash in the faction's colours across the chest, from the near shoulder to the far hip.</summary>
-    private static void Sash(Figure f, float top = 18.5f, float bottom = 26.5f)
-    {
-        f.TeamStroke(19.5f, top, 12.5f, bottom, 1.8f, 0.2f);
-        f.TeamDot(11.5f, bottom, 0.7f, 1.5f, 2f); // the knot
-    }
-
-    /// <summary>A plume in the faction's colours from (x, y), curling back and stirring with the cycle.</summary>
-    private static void Plume(Figure f, Pose pose, float x, float y, float length = 6f)
-    {
-        float stir = Mathf.Sin(pose.Phase * Mathf.Tau) * 0.8f + (pose.Act == Act.Walk ? 0.8f : 0f);
-        f.TeamStroke(x, y, x - length * 0.45f, y - 1.6f, 2.2f, 0.6f);
-        f.TeamStroke(x - length * 0.45f, y - 1.6f, x - length, y + 0.8f + stir, 1.6f, 0f);
-        f.TeamStroke(x - length * 0.85f, y + 0.4f + stir, x - length * 1.1f, y + 2.5f + stir, 1f, -0.5f);
-    }
-
-    /// <summary>A puffed, slashed sleeve's top: the faction's colour showing through two slashes.</summary>
-    private static void Slashes(Figure f, float x, float y)
-    {
-        f.TeamDot(x - 0.5f, y, 1f, 1f, 2f);
-        f.TeamDot(x + 1f, y + 0.5f, 0.85f, 1f, 2f);
-    }
-
-    /// <summary>
-    /// A head facing right, its face lost in the shadow of the hood or helmet drawn over it — only the jaw catches a
-    /// little light; turned back a little when struck.
-    /// </summary>
-    private static void Head(Figure f, Pose pose, float cx = 17f, float cy = 12.5f, float r = 4.4f)
-    {
-        if (pose.Hurt)
-            cx -= 1f;
-        f.Ball(cx, cy, r, r * 1.05f, FaceShadowR, -0.6f);
-        f.Dot(cx + r * 0.4f, cy + r * 0.75f, SkinR.Shade, 2f, 1f); // the jaw at the shadow's edge
-    }
-
-    /// <summary>A morion: a round crown with a tall comb, a brim sweeping up to points front and back, brass rivets.</summary>
-    private static void Morion(Figure f, Pose pose, Ramp metal)
-    {
-        float hx = pose.Hurt ? -1f : 0f;
-        f.Ball(17f + hx, 9.5f, 4.6f, 3.3f, metal, 0.8f);
-        f.Poly(metal, (x, y) => 1.3f - (x - 14f) * 0.25f, 13.5f + hx, 8.5f, 16f + hx, 4.6f, 19f + hx, 5.5f, 20.6f + hx, 8.5f);
-        f.Poly(metal, (x, y) => 0.6f - (y - 10f) * 0.4f, 9.5f + hx, 8.8f, 11.5f + hx, 11.5f, 22.5f + hx, 11.5f, 24.5f + hx, 8.8f,
-            23f + hx, 10.4f, 11f + hx, 10.4f);
-        f.Dot(14f + hx, 9.5f, BrassR.Light);
-        f.Dot(17f + hx, 10f, BrassR.Light);
-        f.Dot(20f + hx, 9.5f, BrassR.Shade);
-    }
-
-    /// <summary>A sallet: a rounded bowl drawn out into a long tail behind, a visor slit in front.</summary>
-    private static void Sallet(Figure f, Pose pose, Ramp metal)
-    {
-        float hx = pose.Hurt ? -1f : 0f;
-        f.Poly(metal, (x, y) => 1.9f - (x - 12f) * 0.16f - (y - 7f) * 0.1f,
-            12.5f + hx, 12.5f, 12.5f + hx, 8.5f, 15f + hx, 6.5f, 19.5f + hx, 6.8f, 21.8f + hx, 9f, 22.2f + hx, 12.5f, 19f + hx, 12.5f,
-            19f + hx, 11f, 14f + hx, 11f, 9f + hx, 13.5f);
-        f.Dot(17.5f + hx, 10f, Eye, 5f, 1f);
-        f.Stroke(13f + hx, 8f, 19f + hx, 7f, 0.7f, metal, 1.5f);
-    }
-
-    /// <summary>A knight's great helm: flat-topped, a brass cross over the face round the eye slit, breaths below.</summary>
-    private static void GreatHelm(Figure f, Pose pose, Ramp metal)
-    {
-        float hx = pose.Hurt ? -1f : 0f;
-        f.Poly(metal, (x, y) => 1.4f - (x - 12f) * 0.2f, 12f + hx, 16f, 12f + hx, 8.5f, 13.5f + hx, 6.8f, 20.5f + hx, 6.8f, 22.2f + hx, 8.5f, 22.6f + hx, 16f);
-        f.Dot(15.5f + hx, 10.5f, Eye, 7f, 1.5f);
-        f.Stroke(19.5f + hx, 7.2f, 19.5f + hx, 15.5f, 1.2f, BrassR, 0.3f);
-        f.Stroke(15.8f + hx, 12.6f, 22.4f + hx, 12.6f, 1.1f, BrassR, 0f);
-        f.Dot(21f + hx, 14f, BlackSteelR.Deep);
-        f.Dot(21f + hx, 15f, BlackSteelR.Deep);
-        f.Stroke(12.3f + hx, 7.2f, 22f + hx, 7.2f, 0.8f, metal, 1.6f);
-    }
-
-    /// <summary>An arm from the shoulder to the hand (the far one darker), the hand at its end in a glove.</summary>
+    /// <summary>A rider's arm from the shoulder to the gauntleted hand (the far one darker).</summary>
     private static void Arm(Figure f, float sx, float sy, float hx, float hy, Ramp? sleeve, float bias = 0f)
     {
         if (sleeve is { } r)
@@ -547,7 +361,7 @@ public static partial class ArtGenerator
         f.Ball(hx, hy, 1.6f, 1.6f, LeatherR, bias + 0.2f);
     }
 
-    /// <summary>A dark, weather-worn cloak from the shoulders, its ragged hem streaming back and waving through the cycle.</summary>
+    /// <summary>A dark, weather-worn cloak from (x, y) at the shoulders, its ragged hem streaming back and waving through the cycle.</summary>
     private static void Cape(Figure f, Pose pose, float x, float y, float length, float width = 5f)
     {
         float wave = Mathf.Sin(pose.Phase * Mathf.Tau) * 1.5f;
@@ -571,7 +385,7 @@ public static partial class ArtGenerator
         if (front.X < 0f)
             front = -front;
         var head = new Vector2(x1, y1) - dir * 3f;
-        f.Stroke(head.X - dir.X * 2f, head.Y - dir.Y * 2f, head.X + dir.X * 2f, head.Y + dir.Y * 2f, 2f, PlateR, 0.3f); // the socket
+        f.Stroke(head.X - dir.X * 2f, head.Y - dir.Y * 2f, head.X + dir.X * 2f, head.Y + dir.Y * 2f, 2f, PlateR, 0.3f);
         f.Poly(PlateR, (x, y) => 1.2f - ((x - head.X) * front.X + (y - head.Y) * front.Y) * 0.35f,
             head.X - dir.X * 2.5f, head.Y - dir.Y * 2.5f,
             head.X + front.X * 4.5f - dir.X * 3.5f, head.Y + front.Y * 4.5f - dir.Y * 3.5f,
@@ -606,114 +420,9 @@ public static partial class ArtGenerator
         var dir = new Vector2(x1 - x0, y1 - y0).Normalized();
         var side = new Vector2(-dir.Y, dir.X);
         f.Stroke(x0 + dir.X * 2f, y0 + dir.Y * 2f, x1, y1, 2f, PlateR, 0.6f);
-        f.Stroke(x0 + dir.X * 3f, y0 + dir.Y * 3f, x1 - dir.X * 2f, y1 - dir.Y * 2f, 0.6f, PlateR, -0.8f); // the fuller
         f.Stroke(x0 + side.X * 2.5f, y0 + side.Y * 2.5f, x0 - side.X * 2.5f, y0 - side.Y * 2.5f, 1.4f, BrassR);
         f.Stroke(x0, y0, x0 - dir.X * 2f, y0 - dir.Y * 2f, 1.6f, LeatherR);
         f.Ball(x0 - dir.X * 2.6f, y0 - dir.Y * 2.6f, 1f, 1f, BrassR, 0.4f);
-    }
-
-    // ---- The soldiers ---------------------------------------------------------------------------------------------
-
-    /// <summary>
-    /// Halberdier of the state troops: a morion with a plume in his colours, a breastplate over a slashed doublet, a
-    /// sash, a dark cloak; the halberd thrusts with a streak.
-    /// </summary>
-    private static void Infantry(Figure f, Pose pose)
-    {
-        Legs(f, pose, TrousersR);
-        Cape(f, pose, 13f, 18f, 11f, 4.5f);
-        Arm(f, 13f, 20f, pose.Strike ? 18f : pose.Windup ? 11f : 14f, pose.Strike ? 24f : 25f, DoubletR, -1f);
-        Torso(f, DoubletR);
-        Cuirass(f, PlateR);
-        Sash(f);
-        Belt(f, 27.5f);
-        Fauld(f, PlateR, 27.8f);
-        Head(f, pose);
-        Morion(f, pose, PlateR);
-        Plume(f, pose, 14f + (pose.Hurt ? -1f : 0f), 7f, 5f);
-        if (pose.Strike)
-        {
-            float reach = pose.Follow ? 2f : 0f;
-            Halberd(f, 8f + reach, 24f, 25f + reach, 20.5f);
-            Arm(f, 19f, 20f, 21f + reach, 21.5f, DoubletR);
-            if (!pose.Follow)
-                f.Streak(6f, 21f, 30f, 19f, 3f, SteelSmear);
-        }
-        else if (pose.Windup)
-        {
-            float back = pose.Index == 1 ? 2f : 0f;
-            Halberd(f, 3f - back, 23.5f, 21f - back, 22.5f);
-            Arm(f, 19f, 20f, 15f - back, 23f, DoubletR);
-        }
-        else if (pose.Hurt)
-        {
-            Halberd(f, 26f, 34f, 22f, 7f);
-            Arm(f, 19f, 20f, 22f, 22f, DoubletR);
-        }
-        else
-        {
-            int rock = pose.Act == Act.Walk && pose.Step is 1 or 3 ? 1 : 0;
-            Halberd(f, 24f, 36f, 24f + rock, 6f);
-            Arm(f, 19f, 20f, 23.5f, 23f + (pose.Passing ? 1 : 0), DoubletR);
-        }
-        Slashes(f, 19.5f, 19.5f);
-    }
-
-    /// <summary>
-    /// A huntsman-archer in a dark hood and a riveted leather jack, a scarf in his colours at the throat, a quiver and a
-    /// longbow; the loosed arrow leaves a streak.
-    /// </summary>
-    private static void Archer(Figure f, Pose pose)
-    {
-        Legs(f, pose, TrousersR);
-        Cape(f, pose, 12.5f, 18f, 12f, 4f);
-        // Quiver with fletchings.
-        f.Stroke(10f, 26f, 13f, 16f, 3.4f, LeatherR, -0.4f);
-        f.Stroke(10.2f, 25f, 12.8f, 17.5f, 0.6f, BrassR, -0.4f);
-        f.Dot(12f, 14f, FeatherR.Base, 1f, 2f);
-        f.Dot(13.5f, 14.5f, FeatherR.Shade, 1f, 2f);
-        Arm(f, 13f, 20f, 13f, 26f, OliveR, -1f);
-        Torso(f, LeatherR, bias: -0.3f);
-        // Rivets studding the jack.
-        for (int row = 0; row < 3; row++)
-            for (int col = 0; col < 3; col++)
-                f.Dot(13f + col * 2.8f + row % 2, 19.5f + row * 2.5f, BrassR.Shade);
-        Belt(f);
-        Head(f, pose);
-        // The hood, dark and deep, its point falling behind; the scarf at the throat.
-        f.Poly(OliveR, (x, y) => 1.1f - (x - 12f) * 0.15f - (y - 8f) * 0.1f,
-            12f, 16f, 11.5f, 11f, 13f, 8f, 16f, 6.8f, 19.5f, 7.5f, 21.5f, 10f, 18f, 9.5f, 15.5f, 11f, 14.5f, 16f);
-        f.Poly(OliveR, (x, y) => -0.2f, 12f, 9f, 8f, 13f, 12f, 12f);
-        f.TeamStroke(13.5f, 17f, 20f, 17.2f, 1.6f, 0.3f);
-        f.TeamStroke(13.5f, 17.5f, 11.5f, 20.5f + (pose.Act == Act.Walk ? 0.5f : 0f), 1.2f, -0.3f);
-        if (pose.Windup)
-        {
-            float pull = pose.Index == 1 ? 2f : 0f;
-            Bow(f, 25f, 11f, 25f, 31f, 4f + pull * 0.5f);
-            f.Stroke(25f, 11f, 18f - pull, 19f, 0.8f, RopeR);
-            f.Stroke(18f - pull, 19f, 25f, 31f, 0.8f, RopeR);
-            f.Stroke(18f - pull, 19.5f, 30f, 19.5f, 1.1f, WoodR, 0.6f);
-            f.Dot(30f, 19f, PlateR.Glint, 2f, 1f);
-            Arm(f, 19f, 20f, 18f - pull, 19.5f, OliveR);
-            Arm(f, 19f, 20.5f, 27f, 21f, OliveR, -0.3f);
-        }
-        else if (pose.Strike)
-        {
-            Bow(f, 26f, 11f, 26f, 31f, 3.5f);
-            float quiver = pose.Follow ? 0.5f : -0.5f;
-            f.Stroke(25.5f, 11f, 24.5f + quiver, 21f, 0.8f, RopeR);
-            f.Stroke(24.5f + quiver, 21f, 25.5f, 31f, 0.8f, RopeR);
-            Arm(f, 19f, 20.5f, 28f, 21f, OliveR, -0.3f);
-            Arm(f, 19f, 20f, 15f, 21f, OliveR);
-            if (!pose.Follow)
-                f.Streak(22f, 19.5f, 31f, 19.5f, 2f, SteelSmear);
-        }
-        else
-        {
-            Bow(f, 23f, 11f, 23f, 31f, 3f);
-            f.Stroke(22.5f, 11f, 22.5f, 31f, 0.8f, RopeR);
-            Arm(f, 19f, 20f, 23.5f, 22f + (pose.Passing ? 1 : 0), OliveR);
-        }
     }
 
     /// <summary>A bow from (x0, y0) to (x1, y1), its belly bulging <paramref name="bulge"/> pixels forward.</summary>
@@ -725,133 +434,622 @@ public static partial class ArtGenerator
         f.Stroke(mx, my + 4f, x1, y1, 1.6f, DarkWoodR, 0.5f);
     }
 
-    /// <summary>
-    /// A knight of a templar order in blackened plate trimmed with brass: a great helm with a brass cross and a short
-    /// plume in his colours, a great pauldron with a purity seal, a dark cloak, a heater shield bearing his colours'
-    /// charge, and a sword that cleaves an arc of light.
-    /// </summary>
-    private static void Heavy(Figure f, Pose pose)
-    {
-        Legs(f, pose, BlackSteelR, 4f, BlackSteelR);
-        Cape(f, pose, 12.5f, 17.5f, 14f, 5.5f);
-        if (pose.Windup)
-            Sword(f, 15f, 18f, pose.Index == 1 ? 5f : 7f, pose.Index == 1 ? 5f : 4f);
-        else if (!pose.Strike && !pose.Hurt)
-            Sword(f, 11f, 27f + (pose.Passing ? 1 : 0), 9f, 13f);
-        Arm(f, 13f, 20f, pose.Windup ? 14f : 11f, pose.Windup ? 17f : 26f, BlackSteelR, -0.9f);
-        Torso(f, BlackSteelR, 17f, 31f);
-        Cuirass(f, PlateR, 17.5f, 28f);
-        Belt(f, 28.3f);
-        Fauld(f, BlackSteelR, 28.6f);
-        Pauldron(f, BlackSteelR, 12f, 18.5f, 3.6f, seal: true);
-        GreatHelm(f, pose, BlackSteelR);
-        Plume(f, pose, 15f + (pose.Hurt ? -1f : 0f), 6.5f, 4.5f);
-        // The heater shield: blackened steel rimmed in brass, the faction's charge (a cross) on it.
-        f.Poly(BrassR, (x, y) => 0.6f, 19.5f, 16.5f, 28.5f, 16.5f, 28.5f, 24f, 24f, 31.5f, 19.5f, 24f);
-        f.Poly(BlackSteelR, (x, y) => 1f - (x - 20.5f) * 0.28f - (y - 17.5f) * 0.05f, 20.5f, 17.5f, 27.5f, 17.5f, 27.5f, 23.8f, 24f, 30f, 20.5f, 23.8f);
-        f.TeamStroke(24f, 18.5f, 24f, 27f, 1.6f, 0.4f);
-        f.TeamStroke(21.5f, 21.5f, 26.5f, 21.5f, 1.6f, 0.4f);
-        if (pose.Strike)
-        {
-            if (pose.Follow)
-                Sword(f, 20f, 22f, 30f, 28f);
-            else
-            {
-                f.Smear(17f, 20f, 13f, -120f, 25f, 3.5f, SteelSmear);
-                Sword(f, 19f, 17f, 30f, 10f);
-            }
-        }
-    }
-
-    /// <summary>
-    /// A crossbowman in a sallet and a quilted gambeson, a sash in his colours; winding up he shoulders the crossbow and
-    /// aims, loosing he rocks back with the string snapped forward and the bolt streaking away.
-    /// </summary>
-    private static void Crossbowman(Figure f, Pose pose)
-    {
-        Legs(f, pose, TrousersR);
-        Arm(f, 13f, 20f, 15f, 25f, GambesonR, -1f);
-        Torso(f, GambesonR, bias: -0.2f);
-        // The quilting: rows of stitches across.
-        for (float y = 20f; y < 29f; y += 2.2f)
-            f.Stroke(11f, y, 21f, y, 0.5f, GambesonR, -1.4f);
-        Sash(f, 18.5f, 27f);
-        Belt(f);
-        Head(f, pose);
-        Sallet(f, pose, PlateR);
-        float y0 = pose.Windup ? 17f : pose.Strike ? 20f : 22f;
-        float x = pose.Strike ? 18f : 20f;
-        f.Stroke(x - 6f, y0, x + 6f, y0 - 0.5f, 2.2f, DarkWoodR, 0.4f);
-        f.Stroke(x + 6f, y0 - 5f, x + 6f, y0 + 4f, 1.8f, IronR, 0.5f);
-        f.Dot(x - 1f, y0 - 1f, BrassR.Light); // the trigger plate
-        if (pose.Windup)
-        {
-            f.Stroke(x + 6f, y0 - 5f, x + 1f, y0, 0.8f, RopeR);
-            f.Stroke(x + 1f, y0, x + 6f, y0 + 4f, 0.8f, RopeR);
-            f.Stroke(x + 1f, y0 - 1f, x + 9f, y0 - 1f, 1.2f, WoodR, 0.7f);
-            f.Dot(x + 9f, y0 - 1.5f, PlateR.Glint, 2f, 1f);
-        }
-        else
-        {
-            f.Stroke(x + 5f, y0 - 5f, x + 5f, y0 + 4f, 0.8f, RopeR);
-            if (pose.Strike && !pose.Follow)
-                f.Streak(x + 6f, y0 - 1f, 31f, y0 - 1.5f, 2f, SteelSmear);
-        }
-        Arm(f, 19f, 20f, x - 2f, y0 + 1.5f, GambesonR);
-    }
-
-    /// <summary>
-    /// A warrior priest in a dark habit and cowl, a stole in his colours, a skull and a chained book at his belt, a
-    /// staff crowned with a gilded twin-tailed comet; his hem sways as he walks. To mend he raises the staff, the comet
-    /// blazing with holy light.
-    /// </summary>
-    private static void Monk(Figure f, Pose pose)
-    {
-        f.Shift = Vector2.Zero;
-        f.Shadow(16f, 8f);
-        f.Stroke(pose.Far - 1f, 38f - pose.FarLift * 0.5f, pose.Far + 1f, 38f - pose.FarLift * 0.5f, 1.8f, BootR, -0.5f);
-        f.Stroke(pose.Near - 1f, 38f - pose.NearLift * 0.5f, pose.Near + 1f, 38f - pose.NearLift * 0.5f, 1.8f, BootR);
-        f.Shift = new Vector2(pose.Lean, pose.Bob + pose.Sink);
-        float sway = Mathf.Sin(pose.Phase * Mathf.Tau) * 1.5f;
-        f.Poly(PriestRobeR, Round(9f, 23f), 12f, 17f, 21f, 17f, 23f + sway, 37f - pose.Sink, 9f + sway, 37f - pose.Sink);
-        f.Stroke(10f + sway, 36.5f - pose.Sink, 22f + sway, 36.5f - pose.Sink, 1.2f, PriestRobeR, -1.2f);
-        // The stole: two strips in his colours down the front.
-        f.TeamStroke(18.5f, 18f, 19f + sway * 0.4f, 33f - pose.Sink, 1.4f, 0.3f);
-        f.TeamStroke(16.5f, 18f, 16.8f + sway * 0.4f, 31f - pose.Sink, 1.2f, -0.4f);
-        f.Stroke(11.5f, 26.5f, 20.5f, 26.5f, 1.4f, LeatherR, -0.3f);
-        // A skull and a chained book at the belt.
-        f.Ball(12.5f, 28.5f, 1.6f, 1.5f, SkullR, 0.3f);
-        f.Dot(12f, 28.5f, Eye, 1f, 1f);
-        f.Stroke(14.5f, 27f, 14.5f, 29f, 0.6f, IronR);
-        f.Poly(LeatherR, (x, y) => 0.2f, 13.5f, 29f, 16f, 29f, 16f, 32f, 13.5f, 32f);
-        f.Stroke(13.6f, 29.2f, 13.6f, 31.8f, 0.6f, ParchmentR, 0.5f);
-        Head(f, pose, 17f, 12f);
-        f.Poly(CloakR, (x, y) => 1f - (x - 11f) * 0.12f - (y - 7f) * 0.05f,
-            11f, 19f, 11f, 11f, 13f, 7.5f, 17f, 6.5f, 20.5f, 8f, 21f, 10f, 17.5f, 9.5f, 15f, 12f, 15f, 17f, 22f, 18f, 21f, 20.5f, 11.5f, 20.5f);
-        if (pose.Windup || pose.Strike)
-        {
-            float lift = pose.Windup && pose.Index == 0 ? 3f : 0f;
-            f.Stroke(23f, 26f + lift, 23f, 2f + lift, 1.6f, DarkWoodR);
-            Comet(f, 23f, 1.5f + lift, pose.Strike ? 1.8f : 0.6f);
-            if (pose.Strike && !pose.Follow)
-                f.Smear(23f, 2f, 4.5f, 0f, 360f, 1.5f, Holy, 0.7f);
-            Arm(f, 19f, 19.5f, 23f, 14f + lift, PriestRobeR);
-            Arm(f, 13f, 19.5f, 9f, 13f, PriestRobeR, -0.6f);
-        }
-        else
-        {
-            f.Stroke(24f, 38f, 24f, 5f, 1.6f, DarkWoodR);
-            Comet(f, 24f, 4f, 0.3f);
-            Arm(f, 19f, 19.5f, 23.5f, 22f, PriestRobeR);
-        }
-    }
-
     /// <summary>A gilded twin-tailed comet crowning a staff: a bright head, two tails streaming down behind.</summary>
     private static void Comet(Figure f, float x, float y, float glow)
     {
-        f.Stroke(x - 0.5f, y + 1f, x - 3f, y + 5f, 1f, BrassR, glow - 0.4f);
-        f.Stroke(x + 0.5f, y + 1f, x + 2.5f, y + 5.5f, 1f, BrassR, glow - 0.6f);
-        f.Ball(x, y, 1.9f, 1.9f, GoldR, glow);
+        f.Stroke(x - 0.5f, y + 1f, x - 3f, y + 5f, 1.2f, BrassR, glow - 0.4f);
+        f.Stroke(x + 0.5f, y + 1f, x + 2.5f, y + 5.5f, 1.2f, BrassR, glow - 0.6f);
+        f.Ball(x, y, 2.1f, 2.1f, GoldR, glow);
+    }
+
+    /// <summary>A great axe from the haft's foot (x0, y0) to its head.</summary>
+    private static void Axe(Figure f, float x0, float y0, float x1, float y1)
+    {
+        f.Stroke(x0, y0, x1, y1, 1.8f, LeatherR);
+        var dir = new Vector2(x1 - x0, y1 - y0).Normalized();
+        var side = new Vector2(dir.Y, -dir.X);
+        if (side.X < 0f)
+            side = -side;
+        var a = new Vector2(x1, y1) - dir * 1f;
+        f.Poly(PlateR, (x, y) => 1.2f - ((x - a.X) * side.X + (y - a.Y) * side.Y) * 0.25f,
+            a.X - dir.X * 3f, a.Y - dir.Y * 3f, a.X + side.X * 5f - dir.X * 5f, a.Y + side.Y * 5f - dir.Y * 5f,
+            a.X + side.X * 6f + dir.X * 1f, a.Y + side.Y * 6f + dir.Y * 1f, a.X + side.X * 5f + dir.X * 4f, a.Y + side.Y * 5f + dir.Y * 4f,
+            a.X + dir.X * 1f, a.Y + dir.Y * 1f);
+    }
+
+    // ---- The soldiers' bodies --------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// How a kind of soldier is built (in the 32×40 cell's pixels): half the width of the shoulders and of the waist,
+    /// the length of the legs and of the torso, the head's radius, how far the shoulders hunch forward, how heavily the
+    /// body sinks into each step, how long the stride is, and how thick the limbs are.
+    /// </summary>
+    private readonly record struct Build(float Shoulder, float Waist, float Leg, float Torso, float HeadR, float Hunch,
+        float Weight, float Stride, float Limb);
+
+    private static readonly Build Trooper = new(5.3f, 3.8f, 12.8f, 10.5f, 3.6f, 0.2f, 1f, 1f, 1.1f);
+    private static readonly Build Hunter = new(4.7f, 3.3f, 13.2f, 10f, 3.5f, 1.1f, 0.8f, 1.15f, 1f);
+    private static readonly Build Knight = new(6.4f, 4.8f, 12f, 11f, 3.9f, 0f, 1.6f, 0.8f, 1.35f);
+    private static readonly Build Stocky = new(5.7f, 4.7f, 11.2f, 10f, 3.7f, 0.5f, 1.25f, 0.9f, 1.25f);
+    private static readonly Build Priest = new(4.9f, 4.3f, 13f, 10.5f, 3.6f, 1.3f, 0.9f, 0.9f, 1.1f);
+    private static readonly Build Brute = new(6.4f, 5.2f, 12f, 11.5f, 3.9f, 1.4f, 1.8f, 0.85f, 1.45f);
+
+    /// <summary>
+    /// A soldier's skeleton in one frame: hips, neck, head and shoulders placed by the build and the pose, the feet by the
+    /// stride, and the knees and elbows found between them (they bend the way joints bend), so arms and legs keep their
+    /// length however hands and feet are placed. Draws the body's masses on its <see cref="Figure"/>.
+    /// </summary>
+    private sealed class Body
+    {
+        public Body(Figure f, Pose pose, Build build)
+        {
+            F = f;
+            Pose = pose;
+            B = build;
+            var p = pose;
+            float a = p.Phase * Mathf.Tau;
+            bool walk = p.Act == Act.Walk;
+            float stride = 5.5f * B.Stride;
+            float near = walk ? 16f + stride * Mathf.Cos(a) : p.Near;
+            float far = walk ? 16f - stride * Mathf.Cos(a) : p.Far;
+            float lift = 3.6f / Mathf.Sqrt(B.Weight);
+            float nearLift = walk ? Mathf.Max(0f, -Mathf.Sin(a)) * lift : p.NearLift;
+            float farLift = walk ? Mathf.Max(0f, Mathf.Sin(a)) * lift : p.FarLift;
+            // The body is lowest as a foot strikes the ground (the feet apart) and rises as they pass; the heavy sink deeper.
+            float bob = walk ? (1f - Mathf.Abs(Mathf.Sin(a))) * 1.3f * B.Weight - 0.4f : p.Bob;
+            float breathe = p.Act == Act.Idle ? Mathf.Sin(a) * 0.6f : 0f;
+            float lean = p.Lean + (walk ? 0.9f : 0f) + B.Hunch;
+            float hipY = 37.2f - B.Leg + 0.3f + bob + p.Sink;
+            Hip = new Vector2(16f - p.Lean * 0.25f, hipY);
+            Neck = new Vector2(Hip.X + lean, hipY - B.Torso - breathe);
+            Head = Neck + new Vector2(p.Hurt ? -0.8f : 0.6f, -B.HeadR * 0.95f + (walk ? 0.3f * (1f - Mathf.Abs(Mathf.Sin(a - 0.5f))) : 0f));
+            // The arms swing against the legs: the near arm forward as the near leg goes back.
+            Swing = walk ? -Mathf.Cos(a) : 0f;
+            NearShoulder = Neck + new Vector2(0.6f + Swing * 0.4f, 1.8f);
+            FarShoulder = Neck + new Vector2(-1.8f - Swing * 0.3f, 1.8f);
+            NearAnkle = new Vector2(near, 37.2f - nearLift);
+            FarAnkle = new Vector2(far, 37.2f - farLift);
+        }
+
+        public Figure F { get; }
+        public Pose Pose { get; }
+        public Build B { get; }
+        public Vector2 Hip { get; }
+        public Vector2 Neck { get; }
+        public Vector2 Head { get; }
+        public Vector2 NearShoulder { get; }
+        public Vector2 FarShoulder { get; }
+        public Vector2 NearAnkle { get; }
+        public Vector2 FarAnkle { get; }
+
+        /// <summary>The near arm's swing on the march: 1 fully forward, -1 fully back.</summary>
+        public float Swing { get; }
+
+        private float ArmSegment => B.Torso * 0.5f;
+        private float LegSegment => B.Leg / 2f;
+
+        /// <summary>The point <paramref name="target"/>, or as near it as a limb of <paramref name="length"/> from <paramref name="from"/> reaches.</summary>
+        private static Vector2 Reach(Vector2 from, Vector2 target, float length)
+        {
+            var d = target - from;
+            float l = d.Length();
+            return l <= length || l < 1e-4f ? target : from + d / l * length;
+        }
+
+        /// <summary>The joint between two segments from <paramref name="a"/> to <paramref name="b"/>, bending forward (a knee) or back (an elbow).</summary>
+        private static Vector2 Joint(Vector2 a, Vector2 b, float l1, float l2, bool forward)
+        {
+            var d = b - a;
+            float dist = Mathf.Clamp(d.Length(), 0.01f, l1 + l2 - 0.01f);
+            var dir = d.Length() > 1e-4f ? d.Normalized() : Vector2.Down;
+            float along = (l1 * l1 - l2 * l2 + dist * dist) / (2f * dist);
+            float across = Mathf.Sqrt(Mathf.Max(0f, l1 * l1 - along * along));
+            var perp = new Vector2(-dir.Y, dir.X);
+            var j1 = a + dir * along + perp * across;
+            var j2 = a + dir * along - perp * across;
+            return forward == (j1.X > j2.X) ? j1 : j2;
+        }
+
+        public void Shadow() => F.Shadow(16f, 5f + B.Shoulder * 0.8f);
+
+        /// <summary>A leg: a thigh tapering into the knee, a shin into the ankle, and a boot, its toe forward.</summary>
+        public void Leg(bool near, Ramp trousers, Ramp boots)
+        {
+            float bias = near ? 0.1f : -1f;
+            var hip = Hip + new Vector2(near ? 0.9f : -0.9f, 0f);
+            var ankle = Reach(hip, near ? NearAnkle : FarAnkle, LegSegment * 2f);
+            var knee = Joint(hip, ankle, LegSegment, LegSegment, forward: true);
+            float w = B.Limb;
+            F.Taper(hip.X, hip.Y, knee.X, knee.Y, 4f * w, 3.1f * w, trousers, bias);
+            F.Taper(knee.X, knee.Y, ankle.X, ankle.Y, 3.1f * w, 2.4f * w, trousers, bias - 0.2f);
+            F.Poly(boots, (x, y) => (y < ankle.Y ? 0.6f : -0.2f) + bias,
+                ankle.X - 1.4f, ankle.Y - 1.6f, ankle.X + 1.2f, ankle.Y - 1.6f, ankle.X + 1.6f, ankle.Y + 0.2f, ankle.X + 3.4f, ankle.Y + 0.9f,
+                ankle.X + 3.4f, ankle.Y + 1.8f, ankle.X - 1.6f, ankle.Y + 1.8f);
+        }
+
+        /// <summary>
+        /// The torso's mass: square shoulders, the chest swelling forward, the back drawing in to the waist and widening
+        /// again at the hips; in <paramref name="r"/> or faction colour.
+        /// </summary>
+        public void Torso(Ramp? r, float bias = 0f)
+        {
+            float w = B.Shoulder, wa = B.Waist, t = B.Torso;
+            var n = Neck;
+            var h = Hip;
+            F.Poly(r, Round(n.X - w, n.X + w, bias),
+                n.X - w * 0.8f, n.Y + 0.4f, n.X + w * 0.5f, n.Y + 0.3f, n.X + w * 0.85f, n.Y + t * 0.3f, h.X + wa * 0.75f, h.Y - t * 0.25f,
+                h.X + wa * 0.9f, h.Y + 1.4f, h.X - wa * 0.95f, h.Y + 1.4f, h.X - wa * 0.85f, h.Y - t * 0.35f, n.X - w * 0.95f, n.Y + t * 0.22f);
+        }
+
+        /// <summary>A breastplate over the torso: a ridge catching the light, a brass neckline, a two-lame skirt.</summary>
+        public void Cuirass(Ramp metal)
+        {
+            float w = B.Shoulder * 0.85f, wa = B.Waist * 0.9f, t = B.Torso;
+            var n = Neck;
+            var h = Hip;
+            F.Poly(metal, Round(n.X - w, n.X + w, 0.7f),
+                n.X - w * 0.7f, n.Y + 1f, n.X + w * 0.55f, n.Y + 0.9f, n.X + w * 0.95f, n.Y + t * 0.32f, h.X + wa * 0.8f, h.Y - t * 0.2f,
+                h.X + wa * 0.75f, h.Y - 0.6f, h.X - wa * 0.8f, h.Y - 0.6f, h.X - wa * 0.85f, h.Y - t * 0.35f);
+            var ridgeTop = n + new Vector2(w * 0.35f, 1.6f);
+            var ridgeBottom = h + new Vector2(wa * 0.25f, -1.5f);
+            F.Stroke(ridgeTop.X, ridgeTop.Y, ridgeBottom.X, ridgeBottom.Y, 0.8f, metal, 1.6f);
+            F.Stroke(n.X - w * 0.6f, n.Y + 1f, n.X + w * 0.5f, n.Y + 1f, 1f, BrassR, 0.3f);
+            F.Stroke(h.X - wa * 0.9f, h.Y + 0.4f, h.X + wa * 0.9f, h.Y + 0.4f, 1.4f, metal, 0.5f);
+            F.Stroke(h.X - wa * 0.85f, h.Y + 1.9f, h.X + wa * 0.85f, h.Y + 1.9f, 1.4f, metal, -0.3f);
+        }
+
+        public void Belt()
+        {
+            float wa = B.Waist;
+            F.Stroke(Hip.X - wa * 0.95f, Hip.Y - 0.6f, Hip.X + wa * 0.9f, Hip.Y - 0.6f, 1.8f, LeatherR, -0.5f);
+            F.Ball(Hip.X + wa * 0.4f, Hip.Y - 0.6f, 1.2f, 1.1f, BrassR, 0.6f);
+        }
+
+        /// <summary>A sash in the faction's colours across the chest, from the near shoulder to the far hip, knotted there.</summary>
+        public void Sash()
+        {
+            var from = NearShoulder + new Vector2(0.5f, 0.3f);
+            var to = Hip + new Vector2(-B.Waist * 0.8f, -1f);
+            F.TeamStroke(from.X, from.Y, to.X, to.Y, 2.2f, 0.2f);
+            F.TeamStroke(to.X, to.Y, to.X - 1f, to.Y + 3f + (Pose.Act == Act.Walk ? 0.5f : 0f), 1.6f, -0.4f);
+        }
+
+        /// <summary>A shoulder guard of lames, brass-rimmed, over the near shoulder; with a purity seal hanging from it if <paramref name="seal"/>.</summary>
+        public void Pauldron(Ramp metal, bool seal = false)
+        {
+            float size = B.Shoulder * 0.75f;
+            var c = NearShoulder + new Vector2(-0.6f, 0.4f);
+            F.Ball(c.X, c.Y, size, size * 0.8f, metal, 0.5f);
+            F.Stroke(c.X - size + 0.5f, c.Y + size * 0.65f, c.X + size - 0.5f, c.Y + size * 0.65f, 1.1f, BrassR, 0f);
+            if (!seal)
+                return;
+            // Wax as big as a coin, a strip of parchment hanging from it.
+            F.Stroke(c.X + 0.6f, c.Y + size, c.X + 1.2f, c.Y + size + 4f, 1.8f, ParchmentR, 0.2f);
+            F.Ball(c.X + 0.4f, c.Y + size * 0.7f, 1.6f, 1.5f, WaxR, 0.4f);
+        }
+
+        /// <summary>The head: a face lost in the shadow of what is drawn over it, the jaw catching a little light.</summary>
+        public void Face()
+        {
+            float r = B.HeadR;
+            F.Ball(Head.X, Head.Y, r, r * 1.05f, FaceShadowR, -0.6f);
+            F.Dot(Head.X + r * 0.35f, Head.Y + r * 0.7f, SkinR.Shade, 2f, 1f);
+        }
+
+        /// <summary>
+        /// An arm from a shoulder towards <paramref name="target"/>: an upper arm tapering into the elbow, a forearm into a
+        /// gauntlet (the forearm in <paramref name="forearm"/>, a vambrace, if given); the elbow bends back and down. Returns
+        /// where the hand ends up (as near the target as the arm reaches).
+        /// </summary>
+        public Vector2 Arm(bool near, Vector2 target, Ramp sleeve, Ramp? forearm = null)
+        {
+            var shoulder = near ? NearShoulder : FarShoulder;
+            float bias = near ? 0f : -1.1f;
+            var hand = Reach(shoulder, target, ArmSegment * 2f);
+            var elbow = Joint(shoulder, hand, ArmSegment, ArmSegment, forward: false);
+            float w = B.Limb;
+            F.Taper(shoulder.X, shoulder.Y, elbow.X, elbow.Y, 3.4f * w, 2.7f * w, sleeve, bias);
+            F.Taper(elbow.X, elbow.Y, hand.X, hand.Y, 2.7f * w, 2.2f * w, forearm ?? sleeve, bias - 0.1f + (forearm != null ? 0.4f : 0f));
+            F.Ball(hand.X, hand.Y, 1.5f * w, 1.4f * w, LeatherR, bias + 0.3f);
+            return hand;
+        }
+
+        /// <summary>Where an empty hand hangs: by the side, swinging against the stride.</summary>
+        public Vector2 HangingHand(bool near) => (near ? NearShoulder : FarShoulder)
+                                               + new Vector2((near ? 1f : -1f) * Swing * 3.2f + 0.5f, ArmSegment * 1.85f);
+
+        /// <summary>A dark cloak from the back of the shoulders.</summary>
+        public void Cloak(float length, float width = 5f) => Cape(F, Pose, Neck.X - 1f, Neck.Y + 0.6f, length, width);
+
+        /// <summary>A plume in the faction's colours from (x, y), curling back and stirring with the cycle.</summary>
+        public void Plume(float x, float y, float length = 6f)
+        {
+            float stir = Mathf.Sin(Pose.Phase * Mathf.Tau) * 0.8f + (Pose.Act == Act.Walk ? 0.8f : 0f);
+            F.TeamStroke(x, y, x - length * 0.45f, y - 1.6f, 2.4f, 0.6f);
+            F.TeamStroke(x - length * 0.45f, y - 1.6f, x - length, y + 0.8f + stir, 1.8f, 0f);
+            F.TeamStroke(x - length * 0.85f, y + 0.4f + stir, x - length * 1.1f, y + 2.5f + stir, 1.2f, -0.5f);
+        }
+
+        /// <summary>A morion: a round crown with a tall comb, a brim sweeping up to points front and back.</summary>
+        public void Morion(Ramp metal)
+        {
+            var c = Head;
+            float r = B.HeadR;
+            F.Ball(c.X, c.Y - r * 0.55f, r * 1.05f, r * 0.75f, metal, 0.8f);
+            F.Poly(metal, (x, y) => 1.4f - (x - c.X + r) * 0.22f,
+                c.X - r * 0.8f, c.Y - r * 1.05f, c.X - r * 0.15f, c.Y - r * 2.05f, c.X + r * 0.6f, c.Y - r * 1.75f, c.X + r * 0.95f, c.Y - r * 1.05f);
+            F.Poly(metal, (x, y) => 0.7f - (y - c.Y) * 0.4f,
+                c.X - r * 1.7f, c.Y - r * 0.85f, c.X - r * 1.15f, c.Y - r * 0.1f, c.X + r * 1.25f, c.Y - r * 0.1f, c.X + r * 1.8f, c.Y - r * 0.85f,
+                c.X + r * 1.35f, c.Y - r * 0.4f, c.X - r * 1.3f, c.Y - r * 0.4f);
+        }
+
+        /// <summary>A sallet: a rounded bowl drawn out into a long tail behind, a visor slit in front.</summary>
+        public void Sallet(Ramp metal)
+        {
+            var c = Head;
+            float r = B.HeadR;
+            F.Poly(metal, (x, y) => 1.9f - (x - c.X + r) * 0.18f - (y - c.Y + r) * 0.12f,
+                c.X - r * 1.1f, c.Y + r * 0.1f, c.X - r * 1f, c.Y - r * 0.9f, c.X - r * 0.2f, c.Y - r * 1.3f, c.X + r * 0.8f, c.Y - r * 1.15f,
+                c.X + r * 1.25f, c.Y - r * 0.4f, c.X + r * 1.3f, c.Y + r * 0.45f, c.X + r * 0.55f, c.Y + r * 0.45f, c.X + r * 0.5f, c.Y + r * 0.05f,
+                c.X - r * 0.5f, c.Y + r * 0.1f, c.X - r * 2.2f, c.Y + r * 0.8f);
+            F.Stroke(c.X - r * 0.1f, c.Y - r * 0.3f, c.X + r * 1.25f, c.Y - r * 0.3f, 1.2f, BlackSteelR, -2f);
+        }
+
+        /// <summary>A great helm: flat-topped, a brass cross over the face round the eye slit, breaths below.</summary>
+        public void GreatHelm(Ramp metal)
+        {
+            var c = Head;
+            float r = B.HeadR;
+            F.Poly(metal, (x, y) => 1.4f - (x - c.X + r) * 0.2f,
+                c.X - r * 1.1f, c.Y + r * 1.15f, c.X - r * 1.15f, c.Y - r * 0.85f, c.X - r * 0.7f, c.Y - r * 1.3f, c.X + r * 1f, c.Y - r * 1.3f,
+                c.X + r * 1.35f, c.Y - r * 0.85f, c.X + r * 1.4f, c.Y + r * 1.15f);
+            F.Stroke(c.X - r * 0.5f, c.Y - r * 0.25f, c.X + r * 1.35f, c.Y - r * 0.25f, 1.4f, BlackSteelR, -2f);
+            F.Stroke(c.X + r * 0.65f, c.Y - r * 1.2f, c.X + r * 0.65f, c.Y + r * 1.05f, 1.3f, BrassR, 0.3f);
+            F.Stroke(c.X - r * 0.2f, c.Y + r * 0.3f, c.X + r * 1.35f, c.Y + r * 0.3f, 1.2f, BrassR, 0f);
+        }
+
+        /// <summary>A deep hood (or cowl) with its point falling behind, framing the shadowed face.</summary>
+        public void Hood(Ramp cloth, float drape = 0f)
+        {
+            var c = Head;
+            float r = B.HeadR;
+            F.Poly(cloth, (x, y) => 1.1f - (x - c.X + r) * 0.16f - (y - c.Y + r) * 0.08f,
+                c.X - r * 1.25f, c.Y + r * 1.2f + drape, c.X - r * 1.35f, c.Y - r * 0.2f, c.X - r * 0.8f, c.Y - r * 1.15f,
+                c.X + r * 0.2f, c.Y - r * 1.45f, c.X + r * 1.2f, c.Y - r * 1.05f, c.X + r * 1.45f, c.Y - r * 0.2f,
+                c.X + r * 0.55f, c.Y - r * 0.55f, c.X - r * 0.1f, c.Y + r * 0.3f, c.X + r * 0.2f, c.Y + r * 1.25f);
+            F.Poly(cloth, (x, y) => -0.3f, c.X - r * 0.9f, c.Y - r * 0.9f, c.X - r * 2.6f, c.Y + r * 0.6f, c.X - r * 1.2f, c.Y + r * 0.2f);
+        }
+    }
+
+    // ---- The soldiers ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Halberdier of the state troops: an upright, square-shouldered trooper in a morion with a plume in his colours, a
+    /// breastplate over a dark doublet, a sash, a cloak; the halberd stands tall beside him and thrusts with a streak.
+    /// </summary>
+    private static void Infantry(Figure f, Pose pose)
+    {
+        var b = new Body(f, pose, Trooper);
+        b.Shadow();
+        b.Cloak(11f, 4.5f);
+        var ns = b.NearShoulder;
+        // Where the halberd is and where the hands hold it.
+        Vector2 hand, butt, tip;
+        if (pose.Strike)
+        {
+            float reach = pose.Follow ? 2f : 0f;
+            hand = ns + new Vector2(6f + reach, 2.5f);
+            butt = hand + new Vector2(-12f, 2f);
+            tip = hand + new Vector2(9f, -1.5f);
+        }
+        else if (pose.Windup)
+        {
+            float back = pose.Index == 1 ? 2.5f : 0.5f;
+            hand = ns + new Vector2(1.5f - back, 4f);
+            butt = hand + new Vector2(-13f, 0.8f);
+            tip = hand + new Vector2(7f, -0.6f);
+        }
+        else if (pose.Hurt)
+        {
+            hand = ns + new Vector2(3f, 5f);
+            butt = new Vector2(hand.X + 4f, 37.5f);
+            tip = hand + new Vector2(-3f, -14f);
+        }
+        else
+        {
+            float rock = pose.Act == Act.Walk ? b.Swing * 0.8f : 0f;
+            hand = ns + new Vector2(5.8f, 5f);
+            butt = new Vector2(hand.X + 0.4f - rock, 38f);
+            tip = new Vector2(hand.X + 0.4f + rock, hand.Y - 14.5f);
+        }
+        var shaftBehind = butt + (tip - butt) * 0.3f;
+        b.Arm(false, pose.Strike || pose.Windup ? shaftBehind : b.HangingHand(false), DoubletR, PlateR);
+        b.Leg(false, TrousersR, BootR);
+        b.Torso(DoubletR);
+        b.Cuirass(PlateR);
+        b.Sash();
+        b.Leg(true, TrousersR, BootR);
+        b.Face();
+        b.Morion(PlateR);
+        b.Plume(b.Head.X - b.B.HeadR * 0.4f, b.Head.Y - b.B.HeadR * 1.5f, 5f);
+        Halberd(f, butt.X, butt.Y, tip.X, tip.Y);
+        if (pose.Strike && !pose.Follow)
+            f.Streak(butt.X, butt.Y - 2f, tip.X + 4f, tip.Y - 1f, 3f, SteelSmear);
+        b.Arm(true, hand, DoubletR, PlateR);
+    }
+
+    /// <summary>
+    /// A huntsman-archer, lean and stooping, in a deep dark hood and a leather jack, a scarf in his colours at the
+    /// throat, a quiver on his back and a longbow taller than his chest; the loosed arrow leaves a streak.
+    /// </summary>
+    private static void Archer(Figure f, Pose pose)
+    {
+        var b = new Body(f, pose, Hunter);
+        b.Shadow();
+        b.Cloak(12f, 4f);
+        // Quiver across the back, fletchings over the shoulder.
+        var q0 = b.Neck + new Vector2(-3.2f, 1.5f);
+        var q1 = b.Hip + new Vector2(-2.8f, -2f);
+        f.Taper(q0.X, q0.Y, q1.X, q1.Y, 3.6f, 3f, LeatherR, -0.4f);
+        f.Stroke(q0.X - 1f, q0.Y - 1.5f, q0.X + 0.5f, q0.Y - 2.5f, 1.4f, FeatherR, 0.2f);
+        var ns = b.NearShoulder;
+        Vector2 bowHand, drawHand;
+        float pull = pose.Windup && pose.Index == 1 ? 2f : 0f;
+        if (pose.Windup || pose.Strike)
+        {
+            bowHand = ns + new Vector2(8.5f, 0.8f);
+            drawHand = pose.Windup ? b.Head + new Vector2(1.6f - pull, 2.6f) : b.Head + new Vector2(-3.8f, 2f);
+        }
+        else
+        {
+            bowHand = ns + new Vector2(5.5f, 5.5f);
+            drawHand = b.HangingHand(false);
+        }
+        b.Arm(false, drawHand, OliveR);
+        b.Leg(false, TrousersR, BootR);
+        b.Torso(LeatherR, 0.3f);
+        b.Belt();
+        b.Leg(true, TrousersR, BootR);
+        b.Face();
+        b.Hood(OliveR, 0.5f);
+        // The scarf at the throat, its end blowing back.
+        var throat = b.Neck + new Vector2(0.6f, 0.6f);
+        f.TeamStroke(throat.X - 2.2f, throat.Y, throat.X + 2f, throat.Y + 0.2f, 1.8f, 0.3f);
+        f.TeamStroke(throat.X - 2f, throat.Y + 0.4f, throat.X - 4f - (pose.Act == Act.Walk ? 1f : 0f), throat.Y + 3f, 1.3f, -0.3f);
+        // The bow (in the near, left hand), the string, an arrow while it is drawn.
+        float half = 10f;
+        float bend = pose.Windup ? 4.5f + pull * 0.5f : pose.Strike ? 3.5f : 3f;
+        Bow(f, bowHand.X - 0.5f, bowHand.Y - half, bowHand.X - 0.5f, bowHand.Y + half, bend);
+        if (pose.Windup)
+        {
+            f.Stroke(bowHand.X - 0.5f, bowHand.Y - half, drawHand.X, drawHand.Y, 0.8f, RopeR);
+            f.Stroke(drawHand.X, drawHand.Y, bowHand.X - 0.5f, bowHand.Y + half, 0.8f, RopeR);
+            f.Stroke(drawHand.X, drawHand.Y, bowHand.X + 5f, bowHand.Y, 1.1f, WoodR, 0.6f);
+            f.Dot(bowHand.X + 4.5f, bowHand.Y - 0.5f, PlateR.Glint, 2f, 1f);
+        }
+        else
+        {
+            float quiver = pose.Strike ? (pose.Follow ? 0.6f : -0.6f) : 0f;
+            f.Stroke(bowHand.X - 1f, bowHand.Y - half, bowHand.X - 1f + quiver, bowHand.Y, 0.8f, RopeR);
+            f.Stroke(bowHand.X - 1f + quiver, bowHand.Y, bowHand.X - 1f, bowHand.Y + half, 0.8f, RopeR);
+            if (pose.Strike && !pose.Follow)
+                f.Streak(bowHand.X - 2f, bowHand.Y, 31f, bowHand.Y - 0.5f, 2f, SteelSmear);
+        }
+        b.Arm(true, bowHand, OliveR);
+    }
+
+    /// <summary>
+    /// A knight of a templar order, broad and heavy, in blackened plate: a great helm with a brass cross and a short
+    /// plume in his colours, a great pauldron with a purity seal, a dark cloak, a heater shield bearing his colours'
+    /// cross, and a sword that cleaves an arc of light.
+    /// </summary>
+    private static void Heavy(Figure f, Pose pose)
+    {
+        var b = new Body(f, pose, Knight);
+        b.Shadow();
+        b.Cloak(14f, 5.5f);
+        var ns = b.NearShoulder;
+        // The sword arm is the far (right) one; the shield rides on the near (left) forearm.
+        Vector2 swordHand, swordTip;
+        if (pose.Windup)
+        {
+            swordHand = b.Neck + new Vector2(-3f - (pose.Index == 1 ? 1.5f : 0f), -4f);
+            swordTip = swordHand + new Vector2(-9f, 6f);
+        }
+        else if (pose.Strike)
+        {
+            swordHand = ns + new Vector2(6.5f, pose.Follow ? 6f : 2f);
+            swordTip = swordHand + (pose.Follow ? new Vector2(8f, 9f) : new Vector2(11f, 3f));
+        }
+        else
+        {
+            swordHand = b.HangingHand(false) + new Vector2(0f, -1.5f);
+            swordTip = swordHand + new Vector2(-3f, -12f);
+        }
+        if (!pose.Strike)
+        {
+            b.Arm(false, swordHand, BlackSteelR);
+            Sword(f, swordHand.X, swordHand.Y, swordTip.X, swordTip.Y);
+        }
+        b.Leg(false, BlackSteelR, BlackSteelR);
+        b.Torso(BlackSteelR);
+        b.Cuirass(PlateR);
+        b.Belt();
+        b.Leg(true, BlackSteelR, BlackSteelR);
+        b.Face();
+        b.GreatHelm(BlackSteelR);
+        b.Plume(b.Head.X - b.B.HeadR * 0.5f, b.Head.Y - b.B.HeadR * 1.3f, 4.5f);
+        var shieldHand = b.Arm(true, ns + new Vector2(3.5f, 6.5f), BlackSteelR);
+        b.Pauldron(BlackSteelR, seal: true);
+        // The heater shield: blackened steel rimmed in brass, the faction's cross on it.
+        var s = shieldHand + new Vector2(1.8f, -0.5f);
+        f.Poly(BrassR, (x, y) => 0.6f, s.X - 4.5f, s.Y - 6f, s.X + 4.5f, s.Y - 6f, s.X + 4.5f, s.Y + 1.5f, s.X, s.Y + 8f, s.X - 4.5f, s.Y + 1.5f);
+        f.Poly(BlackSteelR, (x, y) => 1f - (x - s.X + 3.5f) * 0.28f - (y - s.Y + 5f) * 0.05f,
+            s.X - 3.5f, s.Y - 5f, s.X + 3.5f, s.Y - 5f, s.X + 3.5f, s.Y + 1.3f, s.X, s.Y + 6.5f, s.X - 3.5f, s.Y + 1.3f);
+        f.TeamStroke(s.X, s.Y - 4f, s.X, s.Y + 4.5f, 1.8f, 0.4f);
+        f.TeamStroke(s.X - 2.6f, s.Y - 1f, s.X + 2.6f, s.Y - 1f, 1.8f, 0.4f);
+        if (pose.Strike)
+        {
+            if (!pose.Follow)
+                f.Smear(b.NearShoulder.X, b.NearShoulder.Y, 13f, -120f, 25f, 3.5f, SteelSmear);
+            b.Arm(false, swordHand, BlackSteelR);
+            Sword(f, swordHand.X, swordHand.Y, swordTip.X, swordTip.Y);
+        }
+    }
+
+    /// <summary>
+    /// A crossbowman, short and stocky, in a sallet and a quilted gambeson, a sash in his colours, a great pavise slung
+    /// on his back bearing a band of his colours; winding up he shoulders the crossbow and aims, loosing he rocks back
+    /// with the string snapped forward and the bolt streaking away.
+    /// </summary>
+    private static void Crossbowman(Figure f, Pose pose)
+    {
+        var b = new Body(f, pose, Stocky);
+        b.Shadow();
+        // The pavise slung on the back: a tall wooden shield, ridged down the middle, a band of his colours across it.
+        var top = b.Neck + new Vector2(-5.5f, -2.5f);
+        var bottom = b.Hip + new Vector2(-4.5f, 4f);
+        f.Poly(PaviseR, (x, y) => 0.4f - (x - top.X) * 0.12f,
+            top.X - 2.5f, top.Y, top.X + 2.5f, top.Y - 0.3f, bottom.X + 2.5f, bottom.Y, bottom.X - 2.5f, bottom.Y + 0.3f);
+        f.Stroke(top.X, top.Y + 0.5f, bottom.X, bottom.Y - 0.5f, 0.9f, PaviseR, 1.2f);
+        var band = top + (bottom - top) * 0.35f;
+        f.TeamStroke(band.X - 2.4f, band.Y, band.X + 2.4f, band.Y - 0.2f, 2.4f, 0f);
+        f.Stroke(top.X - 2.5f, top.Y, top.X + 2.5f, top.Y - 0.3f, 1f, IronR, 0.4f);
+        var ns = b.NearShoulder;
+        // The crossbow: carried at the hip, shouldered to aim, kicking up as it looses.
+        Vector2 grip = pose.Windup ? ns + new Vector2(2f, 1f) : pose.Strike ? ns + new Vector2(1f, 0f) : ns + new Vector2(2.5f, 6.5f);
+        float aim = pose.Strike && !pose.Follow ? -0.8f : 0f;
+        var stockBack = grip + new Vector2(-3f, 0.5f);
+        var nose = grip + new Vector2(9f, -0.5f + aim * 3f);
+        b.Arm(false, grip + new Vector2(-1.5f, 0.8f), GambesonR);
+        b.Leg(false, TrousersR, BootR);
+        b.Torso(GambesonR, -0.2f);
+        // The quilting: rows of stitches across the gambeson.
+        for (float y = b.Neck.Y + 2.5f; y < b.Hip.Y - 1f; y += 2.4f)
+        {
+            float lean = (y - b.Neck.Y) / b.B.Torso * (b.Hip.X - b.Neck.X);
+            f.Stroke(b.Neck.X + lean - b.B.Shoulder * 0.7f, y, b.Neck.X + lean + b.B.Shoulder * 0.6f, y, 0.5f, GambesonR, -1.4f);
+        }
+        b.Sash();
+        b.Belt();
+        b.Leg(true, TrousersR, BootR);
+        b.Face();
+        b.Sallet(PlateR);
+        f.Stroke(stockBack.X, stockBack.Y, nose.X, nose.Y, 2.4f, DarkWoodR, 0.4f);
+        f.Stroke(nose.X - 1f, nose.Y - 5f, nose.X - 1f, nose.Y + 4f, 2f, IronR, 0.5f);
+        if (pose.Windup)
+        {
+            f.Stroke(nose.X - 1f, nose.Y - 5f, grip.X + 1f, grip.Y - 0.5f, 0.8f, RopeR);
+            f.Stroke(grip.X + 1f, grip.Y - 0.5f, nose.X - 1f, nose.Y + 4f, 0.8f, RopeR);
+            f.Stroke(grip.X + 1f, grip.Y - 1f, nose.X + 2f, nose.Y - 1f, 1.2f, WoodR, 0.7f);
+        }
+        else
+        {
+            f.Stroke(nose.X - 2f, nose.Y - 5f, nose.X - 2f, nose.Y + 4f, 0.8f, RopeR);
+            if (pose.Strike && !pose.Follow)
+                f.Streak(nose.X, nose.Y - 1f, 31f, nose.Y - 2f, 2f, SteelSmear);
+        }
+        b.Arm(true, grip, GambesonR);
+    }
+
+    /// <summary>
+    /// A warrior priest, stooped under a dark habit and cowl, a stole in his colours, a skull and a chained book at his
+    /// belt, a staff crowned with a gilded twin-tailed comet; his hem sways as he walks. To mend he raises the staff
+    /// high, the comet blazing with holy light, the other hand lifted.
+    /// </summary>
+    private static void Monk(Figure f, Pose pose)
+    {
+        var b = new Body(f, pose, Priest);
+        b.Shadow();
+        // Sandalled feet peeking out under the habit.
+        foreach (var (ankle, bias) in new[] { (b.FarAnkle, -0.8f), (b.NearAnkle, 0f) })
+            f.Stroke(ankle.X - 1f, Mathf.Min(38.3f, ankle.Y + 1.2f), ankle.X + 1.5f, Mathf.Min(38.3f, ankle.Y + 1.2f), 1.8f, BootR, bias);
+        bool blessing = pose.Windup || pose.Strike;
+        var ns = b.NearShoulder;
+        var staffHand = blessing ? b.Head + new Vector2(5f, pose.Windup && pose.Index == 0 ? 1f : -2f) : ns + new Vector2(4.5f, 6.5f);
+        b.Arm(false, blessing ? b.Head + new Vector2(-3f, -3.5f) : b.Hip + new Vector2(1.5f, -2.5f), PriestRobeR);
+        // The habit, widening to a hem that swings with the stride.
+        float sway = Mathf.Sin(pose.Phase * Mathf.Tau) * 1.5f;
+        var n = b.Neck;
+        float hem = 38.5f;
+        f.Poly(PriestRobeR, Round(n.X - 6f, n.X + 6f),
+            n.X - b.B.Shoulder * 0.85f, n.Y + 0.4f, n.X + b.B.Shoulder * 0.6f, n.Y + 0.3f, n.X + b.B.Shoulder * 0.9f, n.Y + 4f,
+            b.Hip.X + 5f + sway, hem, b.Hip.X - 5.5f + sway, hem, b.Hip.X - 4f, b.Hip.Y - 3f);
+        f.Stroke(b.Hip.X - 5f + sway, hem - 0.5f, b.Hip.X + 4.5f + sway, hem - 0.5f, 1.2f, PriestRobeR, -1.2f);
+        // The stole down the front, the rope belt, a skull and a chained book.
+        f.TeamStroke(n.X + 1.6f, n.Y + 1f, b.Hip.X + 2.6f + sway * 0.4f, hem - 4f, 1.8f, 0.3f);
+        b.Belt();
+        var belt = b.Hip + new Vector2(-b.B.Waist * 0.6f, 1.2f);
+        f.Ball(belt.X, belt.Y + 1f, 1.8f, 1.7f, SkullR, 0.3f);
+        f.Dot(belt.X - 0.6f, belt.Y + 0.8f, Eye, 1f, 1f);
+        f.Poly(LeatherR, (x, y) => 0.2f, belt.X + 1.5f, belt.Y + 0.5f, belt.X + 4f, belt.Y + 0.5f, belt.X + 4f, belt.Y + 4f, belt.X + 1.5f, belt.Y + 4f);
+        f.Stroke(belt.X + 1.7f, belt.Y + 0.7f, belt.X + 1.7f, belt.Y + 3.8f, 0.7f, ParchmentR, 0.5f);
+        b.Face();
+        b.Hood(CloakR, 1f);
+        var staffTop = staffHand + new Vector2(0f, blessing ? -10f : -14f);
+        var staffFoot = blessing ? staffHand + new Vector2(0f, 8f) : new Vector2(staffHand.X, 38.5f);
+        f.Stroke(staffFoot.X, staffFoot.Y, staffTop.X, staffTop.Y, 1.6f, DarkWoodR);
+        Comet(f, staffTop.X, staffTop.Y, pose.Strike ? 1.8f : blessing ? 0.8f : 0.3f);
+        if (pose.Strike && !pose.Follow)
+            f.Smear(staffTop.X, staffTop.Y, 4.5f, 0f, 360f, 1.5f, Holy, 0.7f);
+        b.Arm(true, staffHand, PriestRobeR);
+    }
+
+    /// <summary>
+    /// The horde's warlord (half as big again, on the big sheet): a hulking, hunched brute in blackened mail, a horned
+    /// helm with glowing eyes, a fur mantle, a dark cloak, a rag of his colours at his belt, and a great axe that
+    /// cleaves a wide arc.
+    /// </summary>
+    private static void Warlord(Figure f, Pose pose)
+    {
+        var b = new Body(f, pose, Brute);
+        b.Shadow();
+        b.Cloak(15f, 6f);
+        var ns = b.NearShoulder;
+        Vector2 hand, head;
+        if (pose.Windup)
+        {
+            hand = b.Neck + new Vector2(-2f - (pose.Index == 1 ? 1.5f : 0f), -3.5f);
+            head = hand + new Vector2(-8f, -2f);
+        }
+        else if (pose.Strike)
+        {
+            hand = ns + new Vector2(6f, pose.Follow ? 7f : 3f);
+            head = hand + (pose.Follow ? new Vector2(5f, 10f) : new Vector2(9f, 6f));
+        }
+        else
+        {
+            hand = ns + new Vector2(5f, 6f);
+            head = new Vector2(hand.X + (pose.Act == Act.Walk ? b.Swing * 0.6f : 0f), hand.Y - 15f);
+        }
+        b.Arm(false, pose.Strike || pose.Windup ? hand + new Vector2(-2f, 1f) : b.HangingHand(false), MailR);
+        b.Leg(false, MailR, BootR);
+        b.Torso(MailR);
+        for (float y = b.Neck.Y + 2f; y < b.Hip.Y; y += 2f)
+        {
+            float lean = (y - b.Neck.Y) / b.B.Torso * (b.Hip.X - b.Neck.X);
+            f.Stroke(b.Neck.X + lean - b.B.Shoulder * 0.7f, y, b.Neck.X + lean + b.B.Shoulder * 0.65f, y, 0.6f, MailR, 0.6f);
+        }
+        b.Belt();
+        var rag = b.Hip + new Vector2(-1f, 0.5f);
+        f.TeamStroke(rag.X, rag.Y, rag.X - 0.5f, rag.Y + 5f + (pose.Passing ? 0.5f : 0f), 2.2f, -0.2f);
+        b.Leg(true, MailR, BootR);
+        f.Ball(b.Neck.X - 0.5f, b.Neck.Y + 1.5f, b.B.Shoulder * 1.3f, 2.6f, FurR, 0.3f);
+        // Head in a horned helm, the eyes glowing out of its slit.
+        var c = b.Head;
+        float r = b.B.HeadR;
+        f.Ball(c.X, c.Y, r * 1.2f, r * 1.25f, MailR, 0.4f);
+        f.Dot(c.X - r * 0.1f, c.Y - r * 0.1f, Eye, 5f, 1.5f);
+        f.Dot(c.X + r * 0.6f, c.Y - r * 0.1f, new Color("ff4a1a"), 1.4f, 1.2f);
+        f.Stroke(c.X - r * 0.9f, c.Y - r * 0.6f, c.X - r * 1.7f, c.Y - r * 1.6f, 2f, HornR, 0.3f);
+        f.Stroke(c.X - r * 1.7f, c.Y - r * 1.6f, c.X - r * 1.5f, c.Y - r * 2.6f, 1.4f, HornR, 0.5f);
+        f.Stroke(c.X + r * 0.9f, c.Y - r * 0.6f, c.X + r * 1.7f, c.Y - r * 1.6f, 2f, HornR, 0.1f);
+        f.Stroke(c.X + r * 1.7f, c.Y - r * 1.6f, c.X + r * 1.5f, c.Y - r * 2.6f, 1.4f, HornR, 0.3f);
+        if (pose.Strike && !pose.Follow)
+            f.Smear(ns.X, ns.Y, 14f, -110f, 45f, 4f, new Color("ff9a6a"));
+        var foot = hand - (head - hand).Normalized() * 6f;
+        Axe(f, foot.X, foot.Y, head.X, head.Y);
+        b.Arm(true, hand, MailR);
     }
 
     /// <summary>
@@ -1116,55 +1314,6 @@ public static partial class ArtGenerator
         f.Stroke(sx, sy, elbowX, elbowY, 3.6f, FeatherR, bias + 0.2f);
         f.Stroke(elbowX, elbowY, tipX, tipY, 2.6f, WingR, bias + 0.3f);
         f.Stroke((sx + elbowX) / 2f, (sy + elbowY) / 2f + 1.5f, (elbowX + tipX) / 2f, (elbowY + tipY) / 2f + 1.5f, 2f, FeatherR, bias - 0.2f);
-    }
-
-    /// <summary>
-    /// The horde's warlord (the soldier's rig half as big again, on the big sheet): a hulking brute in blackened mail,
-    /// a horned helm with glowing eyes, a fur mantle, a cape in his colours and a great axe that cleaves a wide arc.
-    /// </summary>
-    private static void Warlord(Figure f, Pose pose)
-    {
-        Legs(f, pose, MailR, 4.2f, BootR);
-        Cape(f, pose, 11.5f, 18f, 16f, 6f);
-        if (pose.Windup)
-            Axe(f, 18f, 21f, pose.Index == 1 ? 4f : 6f, pose.Index == 1 ? 5f : 3f);
-        else if (!pose.Strike && !pose.Hurt)
-            Axe(f, 25f, 34f, 25f, 6f + (pose.Passing ? 1 : 0));
-        Arm(f, 12.5f, 20f, pose.Windup ? 14f : 12f, pose.Windup ? 18f : 27f, MailR, -0.9f);
-        f.Poly(MailR, Round(9f, 23f), 9.5f, 18f, 22.5f, 18f, 23f, 21f, 21.5f, 31f, 10.5f, 31f, 9f, 21f);
-        for (int y = 20; y < 30; y += 2)
-            f.Stroke(10.5f, y, 21.5f, y, 0.6f, MailR, 0.6f);
-        Belt(f, 28f);
-        f.TeamStroke(14f, 28.5f, 13.5f, 33f + (pose.Passing ? 0.5f : 0f), 2f, -0.2f);
-        f.Ball(16f, 18.5f, 7.5f, 2.8f, FurR, 0.3f);
-        float hx = pose.Hurt ? -1f : 0f;
-        f.Ball(17f + hx, 12f, 4.8f, 5f, MailR, 0.4f);
-        f.Dot(18f + hx, 12f, Eye, 5f, 1.5f);
-        f.Dot(20f + hx, 12f, new Color("ff4a1a"), 1.4f, 1.2f);
-        f.Stroke(13f + hx, 10f, 10f + hx, 6f, 2f, HornR, 0.3f);
-        f.Stroke(10f + hx, 6f, 10.5f + hx, 2.5f, 1.4f, HornR, 0.5f);
-        f.Stroke(21f + hx, 10f, 24f + hx, 6f, 2f, HornR, 0.1f);
-        f.Stroke(24f + hx, 6f, 23.5f + hx, 2.5f, 1.4f, HornR, 0.3f);
-        if (pose.Strike)
-        {
-            if (!pose.Follow)
-                f.Smear(18f, 20f, 14f, -110f, 45f, 4f, new Color("ff9a6a"));
-            Axe(f, 20f, 21f, pose.Follow ? 27f : 29f, pose.Follow ? 35f : 32f);
-        }
-        Arm(f, 19.5f, 20f, pose.Strike ? 21f : pose.Windup ? 17f : 24.5f, pose.Strike ? 22f : pose.Windup ? 20f : 24f, MailR);
-    }
-
-    /// <summary>A great axe from the haft's foot (x0, y0) to its head.</summary>
-    private static void Axe(Figure f, float x0, float y0, float x1, float y1)
-    {
-        f.Stroke(x0, y0, x1, y1, 1.8f, LeatherR);
-        var dir = new Vector2(x1 - x0, y1 - y0).Normalized();
-        var side = new Vector2(dir.Y, -dir.X);
-        var a = new Vector2(x1, y1) - dir * 1f;
-        f.Poly(SteelR, (x, y) => 1.2f - ((x - a.X) * side.X + (y - a.Y) * side.Y) * 0.25f,
-            a.X - dir.X * 3f, a.Y - dir.Y * 3f, a.X + side.X * 5f - dir.X * 5f, a.Y + side.Y * 5f - dir.Y * 5f,
-            a.X + side.X * 6f + dir.X * 1f, a.Y + side.Y * 6f + dir.Y * 1f, a.X + side.X * 5f + dir.X * 4f, a.Y + side.Y * 5f + dir.Y * 4f,
-            a.X + dir.X * 1f, a.Y + dir.Y * 1f);
     }
 
     /// <summary>
