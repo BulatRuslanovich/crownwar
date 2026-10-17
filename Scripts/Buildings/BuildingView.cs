@@ -41,8 +41,8 @@ public partial class BuildingView : Node2D
     /// <summary>Where smoke rises from, in the picture's pixels (from its top-left corner).</summary>
     private static readonly Dictionary<string, Vector2> Chimneys = new()
     {
-        ["barracks"] = new Vector2(25.5f, 6f),
-        ["watchtower"] = new Vector2(24f, 19f),
+        ["barracks"] = new Vector2(51f, 12f),
+        ["watchtower"] = new Vector2(48f, 38f),
     };
 
     /// <summary>Middle and reach of each picture's lights (worked out once from its lights sheet).</summary>
@@ -204,7 +204,7 @@ public partial class BuildingView : Node2D
         _markTime = Mathf.Max(0f, _markTime - delta);
         float hit = _hitTime / HitSeconds, mark = _markTime / MarkSeconds;
         // A quick shudder, a pixel or so, dying away; the flash and the pulse fade with it.
-        var quiver = new Vector2(Mathf.Round(Mathf.Sin(_time * 95f) * 1.4f * hit), 0f);
+        var quiver = new Vector2(Mathf.Round(Mathf.Sin(_time * 95f) * 2.8f * hit), 0f);
         var tint = Colors.White.Lerp(HitFlash, hit) * Colors.White.Lerp(MarkTint, mark * (0.6f + 0.4f * Mathf.Sin(_time * 28f)));
         foreach (var sprite in new[] { _body, _team, _lights })
             sprite.Position = quiver;
@@ -243,8 +243,8 @@ public partial class BuildingView : Node2D
         if (!_selected)
             return;
         float half = _building.Type.Size * SimConvert.TileSize / 2f;
-        DrawSetTransform(new Vector2(0, -3), 0f, new Vector2(1f, 0.35f));
-        DrawArc(Vector2.Zero, half + 6f, 0f, Mathf.Tau, 40, SelectionColor, 1.5f);
+        DrawSetTransform(new Vector2(0, -6), 0f, new Vector2(1f, 0.35f));
+        DrawArc(Vector2.Zero, half + 12f, 0f, Mathf.Tau, 48, SelectionColor, 3f);
         DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
     }
 
@@ -272,8 +272,8 @@ public partial class BuildingView : Node2D
         {
             float phase = (_time / SmokeSeconds + i / (float)SmokePuffs) % 1f;
             float age = phase * SmokeSeconds;
-            var p = start + new Vector2(wind.X * age * 0.7f + Mathf.Sin(age * 1.7f + i) * 1.5f, -age * 6f + wind.Y * age * 0.3f);
-            float size = Mathf.Round(2f + phase * 4f);
+            var p = start + new Vector2(wind.X * age * 0.7f + Mathf.Sin(age * 1.7f + i) * 3f, -age * 12f + wind.Y * age * 0.3f);
+            float size = Mathf.Round(4f + phase * 8f);
             float alpha = 0.55f * (1f - phase) * Mathf.Min(1f, phase * 6f);
             _smoke.DrawRect(new Rect2((p - new Vector2(size, size) / 2f).Round(), new Vector2(size, size)), SmokeColor with { A = alpha });
         }
@@ -286,41 +286,43 @@ public partial class BuildingView : Node2D
         if (!b.IsComplete)
         {
             float height = SpriteHeight * 0.8f;
-            for (float x = -half + 2; x <= half - 2; x += 8)
-                _overlay.DrawRect(new Rect2(x, -height, 1, height), Scaffold);
-            _overlay.DrawRect(new Rect2(-half + 2, -height / 2, half * 2 - 4, 1), Scaffold);
-            _overlay.DrawRect(new Rect2(-half + 2, -height, half * 2 - 4, 1), Scaffold);
+            // Poles and planks of the scaffolding, a timber's breadth thick.
+            for (float x = -half + 4; x <= half - 4; x += 16)
+                _overlay.DrawRect(new Rect2(x, -height, 2, height), Scaffold);
+            _overlay.DrawRect(new Rect2(-half + 4, -height / 2, half * 2 - 8, 2), Scaffold);
+            _overlay.DrawRect(new Rect2(-half + 4, -height, half * 2 - 8, 2), Scaffold);
         }
 
-        const float width = 30f;
-        float y = -SpriteHeight - 6f;
+        const float width = 60f;
+        const float step = 10f;
+        float y = -SpriteHeight - 12f;
         if (!b.IsComplete)
         {
             Bar(y, b.ConstructionProgress, ConstructionFill);
-            y -= 5f;
+            y -= step;
         }
         if (b.IsUpgrading)
         {
             Bar(y, b.UpgradeProgress, UpgradeFill);
-            y -= 5f;
+            y -= step;
         }
         if (b.Health < b.MaxHealth || _selected)
         {
             float fraction = (float)b.Health / b.MaxHealth;
             Bar(y, fraction, new Color(1f - fraction, 0.3f + 0.6f * fraction, 0.2f));
-            y -= 5f;
+            y -= step;
         }
         if (b.IsComplete && b.Deposit is { IsEndless: false } d)
         {
             if (d.IsExhausted)
             {
                 Bar(y, d.RegenProgress, RegenFill);
-                y -= 5f;
+                y -= step;
             }
             else if (_selected || DepositFraction(d) < LowReserve)
             {
                 Bar(y, DepositFraction(d), ReserveFill);
-                y -= 5f;
+                y -= step;
             }
         }
         if (b.Queue.Count > 0)
@@ -329,16 +331,16 @@ public partial class BuildingView : Node2D
             int waiting = b.Queue.Count - 1;
             int dots = Mathf.Min(waiting, MaxQueueDots);
             for (int i = 0; i < dots; i++)
-                _overlay.DrawRect(new Rect2(-width / 2 + i * 4, y - 4, 3, 3), TrainingFill);
+                _overlay.DrawRect(new Rect2(-width / 2 + i * 8, y - 8, 6, 6), TrainingFill);
             if (waiting > dots)
-                _overlay.DrawString(ThemeDB.FallbackFont, new Vector2(-width / 2 + dots * 4 + 1, y - 0.5f), $"+{waiting - dots}",
-                    fontSize: 8, modulate: TrainingFill);
+                _overlay.DrawString(ThemeDB.FallbackFont, new Vector2(-width / 2 + dots * 8 + 2, y - 1f), $"+{waiting - dots}",
+                    fontSize: 16, modulate: TrainingFill);
         }
 
         void Bar(float barY, float fraction, Color fill)
         {
-            _overlay.DrawRect(new Rect2(-width / 2, barY, width, 4), BarBack);
-            _overlay.DrawRect(new Rect2(-width / 2 + 1, barY + 1, (width - 2) * Mathf.Clamp(fraction, 0f, 1f), 2), fill);
+            _overlay.DrawRect(new Rect2(-width / 2, barY, width, 8), BarBack);
+            _overlay.DrawRect(new Rect2(-width / 2 + 2, barY + 2, (width - 4) * Mathf.Clamp(fraction, 0f, 1f), 4), fill);
         }
     }
 
@@ -398,7 +400,7 @@ public partial class BuildingView : Node2D
         if (count == 0)
             return (Vector2.Zero, 0f);
         var size = max - min;
-        return (sum / count, Mathf.Max(size.X, size.Y) / 2f + 14f);
+        return (sum / count, Mathf.Max(size.X, size.Y) / 2f + 28f);
     }
 
     private static void SetTexture(Sprite2D sprite, string path)

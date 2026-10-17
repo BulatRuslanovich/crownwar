@@ -10,16 +10,21 @@ namespace Warcrown.UI;
 /// </summary>
 public static class Icons
 {
-    /// <summary>The unit's standing frame, enlarged <paramref name="scale"/> times.</summary>
-    public static Texture2D Unit(string unitTypeId, Color team, int scale = 2)
+    /// <summary>
+    /// The unit's standing frame, <paramref name="scale"/> times its size (a big beast shrunk to a soldier's height
+    /// first, so every unit icon is about as tall).
+    /// </summary>
+    public static Texture2D Unit(string unitTypeId, Color team, float scale = 1f)
     {
-        var region = new Rect2I(ArtLayout.FrameIdle * ArtLayout.UnitCellWidth, ArtLayout.UnitRow(unitTypeId) * ArtLayout.UnitCellHeight,
-            ArtLayout.UnitCellWidth, ArtLayout.UnitCellHeight);
-        return Compose(Sprites.Units, Sprites.UnitsTeam, region, team, scale);
+        var art = ArtLayout.UnitArtOf(unitTypeId);
+        var region = new Rect2I(ArtLayout.FrameIdle * art.CellWidth, art.Row * art.CellHeight, art.CellWidth, art.CellHeight);
+        if (art.Big)
+            scale *= ArtLayout.UnitCellHeight / (float)ArtLayout.BigCellSize;
+        return Compose(Sprites.Units(art.Big), Sprites.Units(art.Big, "_team"), region, team, scale);
     }
 
     /// <summary>The building sprite (its sheet's first frame) at its natural size (or scaled), tinted for its owner.</summary>
-    public static Texture2D Building(string buildingTypeId, Color team, int scale = 1) =>
+    public static Texture2D Building(string buildingTypeId, Color team, float scale = 1f) =>
         Compose(Sprites.Path(buildingTypeId), Sprites.Path(buildingTypeId, "_team"), null, team, scale,
             frames: ArtLayout.BuildingFrames);
 
@@ -48,7 +53,7 @@ public static class Icons
     }
 
     /// <param name="frames">Frames side by side in the sheet: without a region, the first one is taken.</param>
-    private static Texture2D Compose(string basePath, string maskPath, Rect2I? region, Color team, int scale, int frames = 1)
+    private static Texture2D Compose(string basePath, string maskPath, Rect2I? region, Color team, float scale, int frames = 1)
     {
         var baseImage = GD.Load<Texture2D>(basePath).GetImage();
         var maskTexture = ResourceLoader.Exists(maskPath) ? GD.Load<Texture2D>(maskPath) : null;
@@ -69,10 +74,14 @@ public static class Icons
         return Scaled(image, scale);
     }
 
-    private static Texture2D Scaled(Image image, int scale)
+    /// <summary>Whole-pixel enlargement; a reduction is resampled smoothly, so fine pixel art does not lose whole rows.</summary>
+    private static Texture2D Scaled(Image image, float scale)
     {
-        if (scale > 1)
-            image.Resize(image.GetWidth() * scale, image.GetHeight() * scale, Image.Interpolation.Nearest);
+        if (!Mathf.IsEqualApprox(scale, 1f))
+        {
+            int w = Mathf.Max(1, Mathf.RoundToInt(image.GetWidth() * scale)), h = Mathf.Max(1, Mathf.RoundToInt(image.GetHeight() * scale));
+            image.Resize(w, h, scale > 1f ? Image.Interpolation.Nearest : Image.Interpolation.Lanczos);
+        }
         return ImageTexture.CreateFromImage(image);
     }
 }

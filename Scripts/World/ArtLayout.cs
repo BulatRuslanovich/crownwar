@@ -6,7 +6,7 @@ namespace Warcrown.World;
 /// <summary>Sheet layout shared by the art generator and the views that cut frames out of the sheets.</summary>
 public static class ArtLayout
 {
-    public const int Tile = 16;
+    public const int Tile = 32;
     public const int TerrainVariants = 4;
     public const int GrassRow = 0, ForestRow = 1, MountainRow = 3, RoadRow = 4, BridgeRow = 6;
     /// <summary>Frames of the animated terrain tiles (water, surf, woods), in the rows under each tile's first frame.</summary>
@@ -48,27 +48,51 @@ public static class ArtLayout
     /// <summary>Frames side by side in each building sheet (flags, wheels, fires).</summary>
     public const int BuildingFrames = 4;
 
-    public const int UnitCellWidth = 16;
-    public const int UnitCellHeight = 20;
-    public const int UnitFrames = 8;
-    public const int UnitRows = 9;
-    public const int FrameIdle = 0, FrameBreath = 1, FrameWalk1 = 2, FrameWalk2 = 3, FrameWalk3 = 4, FrameWalk4 = 5, FrameWindup = 6, FrameStrike = 7;
-    /// <summary>Feet position inside a unit cell.</summary>
-    public static readonly Vector2I UnitFeet = new(8, 19);
+    /// <summary>
+    /// Columns of every unit sheet, by animation: standing and breathing (a hovering flyer's slow wing beats), a stride
+    /// (a flyer's wing beats), an attack — two frames of wind-up, the blow, two of follow-through and one settling back —,
+    /// a flinch when struck, and a death: a stagger, buckling knees, a fall, and two frames lying on the ground.
+    /// </summary>
+    public const int IdleFrames = 4, WalkFrames = 8, AttackFrames = 6, DeathFrames = 5;
+    public const int FrameIdle = 0, FrameWalk = FrameIdle + IdleFrames, FrameAttack = FrameWalk + WalkFrames;
+    public const int FrameHurt = FrameAttack + AttackFrames, FrameDeath = FrameHurt + 1;
+    public const int UnitFrames = FrameDeath + DeathFrames;
+    /// <summary>Frames of an attack: the blow lands on <see cref="AttackStrike"/>.</summary>
+    public const int AttackWindup = 0, AttackStrike = 2, AttackRecover = 5;
 
-    public static int UnitRow(string unitTypeId) => unitTypeId switch
+    /// <summary>Cells of the soldiers' sheet (units.png): 32×40, feet at (16, 39).</summary>
+    public const int UnitCellWidth = 32, UnitCellHeight = 40;
+    public static readonly Vector2I UnitFeet = new(16, 39);
+    /// <summary>Rows of the soldiers' sheet, in order.</summary>
+    public static readonly string[] UnitKinds = { "infantry", "archer", "heavy", "ram", "cavalry", "crossbowman", "monk", "trebuchet", "griffin" };
+
+    /// <summary>Cells of the sheet of big beasts (units_big.png): 64×64, feet at (32, 62).</summary>
+    public const int BigCellSize = 64;
+    public static readonly Vector2I BigFeet = new(32, 62);
+    /// <summary>Rows of the big sheet, in order: the horde's warlord, who towers over everyone, and the dragon.</summary>
+    public static readonly string[] BigKinds = { "warlord", "dragon" };
+
+    /// <summary>Where a unit kind is drawn: which sheet (<see cref="Big"/>), its row, its cell and where the feet are in it.</summary>
+    public readonly record struct UnitArt(bool Big, int Row)
     {
-        "archer" => 1,
-        "heavy" => 2,
-        "ram" => 3,
-        "cavalry" => 4,
-        "crossbowman" => 5,
-        "monk" => 6,
-        "trebuchet" => 7,
-        "warlord" => 8,
-        _ => 0,
-    };
+        public int CellWidth => Big ? BigCellSize : UnitCellWidth;
+        public int CellHeight => Big ? BigCellSize : UnitCellHeight;
+        public Vector2I Feet => Big ? BigFeet : UnitFeet;
+        public int Rows => Big ? BigKinds.Length : UnitKinds.Length;
+    }
 
-    /// <summary>How much bigger than its cell a unit is drawn: the horde's warlord towers over everyone.</summary>
-    public static float UnitScale(string unitTypeId) => unitTypeId == "warlord" ? 1.5f : 1f;
+    /// <summary>The picture of a unit kind (an unknown kind looks like infantry).</summary>
+    public static UnitArt UnitArtOf(string unitTypeId)
+    {
+        int big = System.Array.IndexOf(BigKinds, unitTypeId);
+        return big >= 0 ? new UnitArt(true, big) : new UnitArt(false, System.Math.Max(0, System.Array.IndexOf(UnitKinds, unitTypeId)));
+    }
+
+    /// <summary>How high above the ground (its shadow) a flyer is drawn, in world pixels; 0 for those on foot.</summary>
+    public static float FlightAltitude(string? unitTypeId) => unitTypeId switch
+    {
+        "griffin" => 28f,
+        "dragon" => 40f,
+        _ => 0f,
+    };
 }

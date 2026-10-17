@@ -13,23 +13,30 @@ namespace Warcrown.Units;
 /// through a four-frame stride; fighting, it winds up as its next blow comes due (timed by the simulation's attack
 /// cooldown), strikes, and an archer's bow recoils after the shot. A hit unit flashes white and is knocked back a
 /// pixel. The selection ring is drawn below, the health bar above with a veteran's stars over it (the ground shadow is drawn by
-/// <see cref="World.ShadowsView"/>). The node origin is the unit's feet. All animation is cosmetic: hits are decided
-/// by the simulation.
+/// <see cref="World.ShadowsView"/>). The node origin is the unit's feet — for a flyer, the spot on the ground under it: its
+/// picture and bars hang <see cref="ArtLayout.FlightAltitude"/> above, bobbing on its wing beats, which never stop.
+/// All animation is cosmetic: hits are decided by the simulation.
 /// </summary>
 public partial class UnitView : Node2D
 {
-    private const float LungeDuration = 0.2f;
-    private const float LungeDistance = 3f;
+    /// <summary>How long a blow plays out: the strike, the follow-through and settling back.</summary>
+    private const float LungeDuration = 0.32f;
+    private const float LungeDistance = 6f;
     private const float FlashDuration = 0.1f;
     private const float KnockDuration = 0.14f;
-    private const float KnockDistance = 1.5f;
-    /// <summary>Steps (frames) a second on the march.</summary>
-    private const float StepsPerSecond = 9f;
+    private const float KnockDistance = 3f;
+    /// <summary>Frames of the stride a second on the march.</summary>
+    private const float StepsPerSecond = 16f;
+    /// <summary>Frames of the slow wing beat a second of a hovering flyer, and how far it rises and sinks with them.</summary>
+    private const float HoverBeatsPerSecond = 7f;
+    private const float HoverBob = 3f;
     /// <summary>How long before its blow a fighter winds up (a melee swing, a ram drawing back its log).</summary>
     private const float WindupSeconds = 0.35f;
     /// <summary>How long before the shot an archer draws the bow, and how long the bow quivers after it.</summary>
     private const float DrawSeconds = 0.55f;
     private const float ReleaseSeconds = 0.22f;
+    /// <summary>After the bow quivers, the archer settles back for this long.</summary>
+    private const float RecoverSeconds = 0.18f;
     /// <summary>A breath every few seconds while standing.</summary>
     private const float BreathPeriod = 2.6f;
     private const float BreathHold = 0.7f;
@@ -41,7 +48,8 @@ public partial class UnitView : Node2D
     /// <summary>The soldier in his faction's colour (see <see cref="UnitSheets"/>).</summary>
     private Sprite2D _sprite = null!;
     private Node2D _overlay = null!;
-    private int _row;
+    private ArtLayout.UnitArt _art;
+    private float _altitude;
     private bool _selected;
     private int _drawnHealth;
     private bool _facingLeft;
@@ -70,17 +78,20 @@ public partial class UnitView : Node2D
     public bool FacingLeft => _facingLeft;
     /// <summary>Where the sprites are drawn relative to the feet (lunges and knock-backs move them).</summary>
     public Vector2 SpriteOffset { get; private set; }
-    public int Row => _row;
 
-    /// <summary>How much bigger than its cell the unit is drawn (see <see cref="ArtLayout.UnitScale"/>).</summary>
-    public float BodyScale => _scale;
-    private float _scale = 1f;
+    /// <summary>Which sheet, row and cell the unit is drawn from.</summary>
+    public ArtLayout.UnitArt Art => _art;
+
+    /// <summary>How high its picture floats above the node now (a flyer's altitude with its bob; 0 on foot).</summary>
+    public float Lift { get; private set; }
+
+    public Unit Unit => _unit;
 
     public void Initialize(Unit unit, Texture2D sheet)
     {
         _unit = unit;
-        _row = ArtLayout.UnitRow(unit.Type.Id);
-        _scale = ArtLayout.UnitScale(unit.Type.Id);
+        _art = ArtLayout.UnitArtOf(unit.Type.Id);
+        _altitude = ArtLayout.FlightAltitude(unit.Type.Id);
         _drawnHealth = unit.Health;
         // Every soldier breathes in his own time.
         _idleTime = unit.Id * 0.73f % BreathPeriod;
@@ -113,15 +124,15 @@ public partial class UnitView : Node2D
     public void Promote()
     {
         _promoteTime = PromoteSeconds;
-        _sprite.Scale = new Vector2(0.8f, 1.35f) * _scale;
-        CreateTween().TweenProperty(_sprite, "scale", Vector2.One * _scale, 0.4).SetTrans(Tween.TransitionType.Elastic).SetEase(Tween.EaseType.Out);
+        _sprite.Scale = new Vector2(0.8f, 1.35f);
+        CreateTween().TweenProperty(_sprite, "scale", Vector2.One, 0.4).SetTrans(Tween.TransitionType.Elastic).SetEase(Tween.EaseType.Out);
     }
 
     /// <summary>A recruit steps out: squashed flat, then springing up past its height and settling.</summary>
     public void Pop()
     {
-        _sprite.Scale = new Vector2(1.45f, 0.5f) * _scale;
-        CreateTween().TweenProperty(_sprite, "scale", Vector2.One * _scale, 0.32).SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
+        _sprite.Scale = new Vector2(1.45f, 0.5f);
+        CreateTween().TweenProperty(_sprite, "scale", Vector2.One, 0.32).SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
     }
 
     /// <summary>Briefly flashes white and staggers away from the blow (visual only).</summary>
@@ -167,13 +178,22 @@ public partial class UnitView : Node2D
         var offset = Vector2.Zero;
         Frame = PickFrame(dt, ref offset);
         if (_lungeTime > 0f && _lungeTime <= LungeDuration)
-            offset += _lungeDirection * LungeDistance * Mathf.Sin(Mathf.Pi * (1f - _lungeTime / LungeDuration));
+            offset += _lungeDirection * LungeDistance * Mathf.Sin(Mathf.Pi * Mathf.Min(1f, 1.6f * (1f - _lungeTime / LungeDuration)));
         if (_knockTime > 0f)
             offset += _knockDirection * KnockDistance * (_knockTime / KnockDuration);
         SpriteOffset = offset.Round();
-        _sprite.Frame = _row * ArtLayout.UnitFrames + Frame;
+        if (_altitude > 0f)
+        {
+            // Rises on the down-stroke, sinks on the up-stroke.
+            float phase = Frame < ArtLayout.FrameWalk ? (Frame - ArtLayout.FrameIdle) / (float)ArtLayout.IdleFrames
+                : Frame < ArtLayout.FrameAttack ? (Frame - ArtLayout.FrameWalk) / (float)ArtLayout.WalkFrames
+                : 0.25f;
+            Lift = Mathf.Round(_altitude + HoverBob * (0.5f + 0.5f * Mathf.Sin(phase * Mathf.Tau)));
+            _overlay.Position = new Vector2(0, -Lift);
+        }
+        _sprite.Frame = _art.Row * ArtLayout.UnitFrames + Frame;
         _sprite.FlipH = _facingLeft;
-        _sprite.Position = SpriteOffset;
+        _sprite.Position = SpriteOffset - new Vector2(0, Lift);
 
         if (_unit.Health != _drawnHealth || _unit.Rank != _drawnRank)
         {
@@ -183,65 +203,89 @@ public partial class UnitView : Node2D
         }
     }
 
+    /// <summary>
+    /// The frame to show: after a blow, the strike, the follow-through and settling back; fighting, the wind-up as the
+    /// next blow comes due (an archer drawing the bow); struck, a flinch; on the march, the stride (a flyer's wing
+    /// beats, which go on while it hovers); standing, breathing.
+    /// </summary>
     private int PickFrame(float dt, ref Vector2 offset)
     {
         if (_lungeTime > 0f)
-            return ArtLayout.FrameStrike;
-        if (_unit.State == UnitState.Attacking)
+            return Attack(LungeDuration - _lungeTime);
+        bool fighting = _unit.State == UnitState.Attacking;
+        if (fighting)
         {
             float due = _unit.AttackCooldownTicks / (float)Simulation.TicksPerSecond;
             float since = _unit.Type.AttackCooldown - due;
             if (_unit.Type.IsRanged)
-                return since < ReleaseSeconds ? ArtLayout.FrameStrike : due <= DrawSeconds ? ArtLayout.FrameWindup : ArtLayout.FrameIdle;
-            if (due > WindupSeconds)
-                return ArtLayout.FrameIdle;
-            // A ram rolls back a little to gather speed for the blow.
-            if (_unit.Type.IsSiege && _unit.Target is { } target)
             {
-                var toward = new Vector2(target.Position.X - _unit.Position.X, target.Position.Y - _unit.Position.Y).Normalized();
-                offset -= toward * 2f * (1f - due / WindupSeconds);
+                if (since < ReleaseSeconds + RecoverSeconds)
+                    return Attack(since * LungeDuration / (ReleaseSeconds + RecoverSeconds));
+                if (due <= DrawSeconds)
+                    return ArtLayout.FrameAttack + (due > DrawSeconds / 2f ? ArtLayout.AttackWindup : ArtLayout.AttackWindup + 1);
             }
-            return ArtLayout.FrameWindup;
+            else if (due <= WindupSeconds)
+            {
+                // A ram rolls back a little to gather speed for the blow.
+                if (_unit.Type.IsSiege && _unit.Target is { } target)
+                {
+                    var toward = new Vector2(target.Position.X - _unit.Position.X, target.Position.Y - _unit.Position.Y).Normalized();
+                    offset -= toward * 4f * (1f - due / WindupSeconds);
+                }
+                return ArtLayout.FrameAttack + (due > WindupSeconds / 2f ? ArtLayout.AttackWindup : ArtLayout.AttackWindup + 1);
+            }
         }
+        if (_knockTime > 0f)
+            return ArtLayout.FrameHurt;
         if (_unit.State == UnitState.Moving)
         {
-            _walkTime += dt * StepsPerSecond * Mathf.Clamp(_unit.Type.Speed / 3.4f, 0.6f, 1.2f);
-            return ArtLayout.FrameWalk1 + (int)_walkTime % 4;
+            // Marching steps (wing beats), quicker for the quick.
+            _walkTime += dt * StepsPerSecond * Mathf.Clamp(_unit.Type.Speed / 3.4f, 0.6f, 1.3f);
+            return ArtLayout.FrameWalk + (int)_walkTime % ArtLayout.WalkFrames;
         }
-        _idleTime = (_idleTime + dt) % BreathPeriod;
-        return _idleTime > BreathPeriod - BreathHold ? ArtLayout.FrameBreath : ArtLayout.FrameIdle;
+        // Standing, breathing; a flyer hovering on slow beats.
+        float rate = _altitude > 0f ? HoverBeatsPerSecond : ArtLayout.IdleFrames / BreathPeriod;
+        _idleTime += dt * rate;
+        return ArtLayout.FrameIdle + (int)_idleTime % ArtLayout.IdleFrames;
+
+        // The frames after a blow, by the time since it: the strike, the follow-through, settling back.
+        static int Attack(float since) => ArtLayout.FrameAttack + Mathf.Min(ArtLayout.AttackRecover,
+            ArtLayout.AttackStrike + (int)(since / LungeDuration * (ArtLayout.AttackRecover - ArtLayout.AttackStrike + 1)));
     }
 
     public override void _Draw()
     {
         if (!_selected)
             return;
-        // A flattened ring under the sprites.
-        float ring = _unit.Type.Radius * SimConvert.TileSize + 2f;
-        DrawSetTransform(new Vector2(0, 0.5f), 0f, new Vector2(1f, 0.5f));
-        DrawArc(Vector2.Zero, ring, 0f, Mathf.Tau, 24, SelectionColor, 1f);
+        // A flattened ring on the ground under the sprites (under a flyer's shadow too).
+        float ring = _unit.Type.Radius * SimConvert.TileSize + 4f;
+        DrawSetTransform(new Vector2(0, 1f), 0f, new Vector2(1f, 0.5f));
+        DrawArc(Vector2.Zero, ring, 0f, Mathf.Tau, 32, SelectionColor, 2f);
         DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
     }
 
+    /// <summary>Top of the picture above the feet: the soldiers' cell, or the (lower than its cell) back of a big beast.</summary>
+    private float Height => _art.Big ? 52f : _art.Feet.Y;
+
     private void DrawOverlay()
     {
-        float y = -ArtLayout.UnitFeet.Y - 2;
-        DrawStars(y - 3);
+        float y = -Height - 4;
+        DrawStars(y - 6);
         if (_unit.Health >= _unit.MaxHealth && !_selected)
             return;
         float fraction = Mathf.Clamp((float)_unit.Health / _unit.MaxHealth, 0f, 1f);
         var fill = new Color(1f - fraction, 0.3f + 0.6f * fraction, 0.2f);
-        _overlay.DrawRect(new Rect2(-6, y, 12, 3), BarBack);
-        _overlay.DrawRect(new Rect2(-5, y + 1, 10 * fraction, 1), fill);
+        _overlay.DrawRect(new Rect2(-12, y, 24, 6), BarBack);
+        _overlay.DrawRect(new Rect2(-10, y + 2, 20 * fraction, 2), fill);
     }
 
-    /// <summary>A veteran's rank: one small golden star (a pixel cross with a dark rim) per rank, in a row centred over the bar.</summary>
+    /// <summary>A veteran's rank: one small golden star (with a dark rim) per rank, in a row centred over the bar.</summary>
     private void DrawStars(float y)
     {
         int stars = _unit.Rank;
         if (stars <= 0)
             return;
-        const int spacing = 4;
+        const int spacing = 9;
         float x0 = -(stars - 1) * spacing / 2f;
         for (int pass = 0; pass < 2; pass++) // all the rims first, so a neighbour's rim never cuts into a star
         {
@@ -250,13 +294,19 @@ public partial class UnitView : Node2D
                 var c = new Vector2(Mathf.Floor(x0 + i * spacing), y);
                 if (pass == 0)
                 {
-                    _overlay.DrawRect(new Rect2(c.X - 2, c.Y - 1, 5, 3), StarOutline);
-                    _overlay.DrawRect(new Rect2(c.X - 1, c.Y - 2, 3, 5), StarOutline);
+                    _overlay.DrawRect(new Rect2(c.X - 4, c.Y - 2, 8, 4), StarOutline);
+                    _overlay.DrawRect(new Rect2(c.X - 2, c.Y - 4, 4, 9), StarOutline);
+                    _overlay.DrawRect(new Rect2(c.X - 3, c.Y - 1, 6, 5), StarOutline);
                 }
                 else
                 {
-                    _overlay.DrawRect(new Rect2(c.X - 1, c.Y, 3, 1), StarColor);
-                    _overlay.DrawRect(new Rect2(c.X, c.Y - 1, 1, 3), StarColor);
+                    // A five-pointed star in 6×7 pixels with a glint at its top.
+                    _overlay.DrawRect(new Rect2(c.X - 1, c.Y - 3, 2, 3), StarColor);
+                    _overlay.DrawRect(new Rect2(c.X - 3, c.Y - 1, 6, 1), StarColor);
+                    _overlay.DrawRect(new Rect2(c.X - 2, c.Y, 4, 2), StarColor);
+                    _overlay.DrawRect(new Rect2(c.X - 2, c.Y + 2, 1, 1), StarColor);
+                    _overlay.DrawRect(new Rect2(c.X + 1, c.Y + 2, 1, 1), StarColor);
+                    _overlay.DrawRect(new Rect2(c.X - 1, c.Y - 3, 1, 1), Colors.White);
                 }
             }
         }
@@ -268,10 +318,9 @@ public partial class UnitView : Node2D
         {
             Texture = sheet,
             Hframes = ArtLayout.UnitFrames,
-            Vframes = ArtLayout.UnitRows,
+            Vframes = _art.Rows,
             Centered = false,
-            Offset = -new Vector2(ArtLayout.UnitFeet.X, ArtLayout.UnitFeet.Y),
-            Scale = Vector2.One * _scale,
+            Offset = -new Vector2(_art.Feet.X, _art.Feet.Y),
         };
         AddChild(sprite);
         return sprite;

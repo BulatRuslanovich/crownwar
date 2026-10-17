@@ -66,13 +66,18 @@ public static partial class ArtGenerator
         System.IO.Directory.CreateDirectory(System.IO.Path.Combine(assets, "Tilesets"));
         System.IO.Directory.CreateDirectory(System.IO.Path.Combine(assets, "Sprites"));
 
-        var terrain = Terrain();
-        terrain.Save(System.IO.Path.Combine(assets, "Tilesets", "terrain.png"));
-        Recolor(terrain.Base, WinterPalette).SavePng(System.IO.Path.Combine(assets, "Tilesets", "terrain_winter.png"));
-        Recolor(terrain.Base, DesertPalette).SavePng(System.IO.Path.Combine(assets, "Tilesets", "terrain_desert.png"));
+        foreach (var land in new[] { MeadowLand, WinterLand, DesertLand })
+        {
+            var sheet = Terrain(land);
+            string suffix = land == MeadowLand ? "" : "_" + land.Name;
+            sheet.Save(System.IO.Path.Combine(assets, "Tilesets", "terrain" + suffix + ".png"));
+            SavePreview(sheet, System.IO.Path.Combine(previewDir, "terrain" + suffix + ".png"));
+        }
+        Land = MeadowLand;
 
-        var units = Units();
+        var (units, bigUnits) = Units();
         units.Save(System.IO.Path.Combine(assets, "Sprites", "units.png"), System.IO.Path.Combine(assets, "Sprites", "units_team.png"));
+        bigUnits.Save(System.IO.Path.Combine(assets, "Sprites", "units_big.png"), System.IO.Path.Combine(assets, "Sprites", "units_big_team.png"));
 
         System.IO.Directory.CreateDirectory(System.IO.Path.Combine(assets, "UI"));
         AppIcon(Castle(), System.IO.Path.Combine(assets, "UI"));
@@ -92,74 +97,9 @@ public static partial class ArtGenerator
         var gold = Deposit();
         gold.Save(System.IO.Path.Combine(assets, "Sprites", "gold.png"));
 
-        SavePreview(terrain, System.IO.Path.Combine(previewDir, "terrain.png"));
         SavePreview(units, System.IO.Path.Combine(previewDir, "units.png"));
+        SavePreview(bigUnits, System.IO.Path.Combine(previewDir, "units_big.png"));
         SavePreview(gold, System.IO.Path.Combine(previewDir, "gold.png"));
-    }
-
-    /// <summary>Meadow colours of the terrain and what they become in the snow.</summary>
-    private static readonly (Color From, Color To)[] WinterPalette =
-    {
-        (Grass, new Color("e3eaee")), (GrassDark, new Color("cdd8df")), (GrassLight, new Color("f4f8fa")),
-        (Leaf, new Color("1f4a3a")), (LeafLight, new Color("2c5e48")), (LeafHighlight, new Color("e8f0f2")),
-        (LeafDark, new Color("163a2c")), (TreeOutline, new Color("10291f")), (Bark, new Color("4a3424")),
-        (ForestShadow, new Color("aebccb")), (BarkDark, new Color("33231a")),
-        (Sand, new Color("c9d6de")), (SandDark, new Color("aab8c2")),
-        (Rock, new Color("8a8c90")), (RockLight, new Color("e4eaee")), (RockDark, new Color("55585c")),
-        (Dirt, new Color("9c8f80")), (DirtDark, new Color("7f7466")), (DirtLight, new Color("b5aa9c")),
-    };
-
-    /// <summary>Meadow colours of the terrain and what they become in the desert (palms and oases, red rocks).</summary>
-    private static readonly (Color From, Color To)[] DesertPalette =
-    {
-        (Grass, new Color("d9b77a")), (GrassDark, new Color("c6a165")), (GrassLight, new Color("e8cb92")),
-        (Leaf, new Color("4f7a32")), (LeafLight, new Color("6a9440")), (LeafHighlight, new Color("8db35a")),
-        (LeafDark, new Color("3a5c24")), (TreeOutline, new Color("2a4219")), (Bark, new Color("7a5430")),
-        (ForestShadow, new Color("b8955c")), (SnowShade, new Color("cfae7e")),
-        (Sand, new Color("f0dca0")), (SandDark, new Color("d6bd7e")),
-        (Rock, new Color("a5683f")), (RockLight, new Color("c98a5a")), (RockDark, new Color("7a4a2c")),
-        (Snow, new Color("e8c89a")),
-        (Dirt, new Color("b08850")), (DirtDark, new Color("94703e")), (DirtLight, new Color("c49c62")),
-    };
-
-    /// <summary>
-    /// A copy of <paramref name="source"/> with each colour moved by its nearest palette entry's shift, so shades
-    /// between palette colours follow too; colours far from every entry (wood, outlines) stay as they are.
-    /// </summary>
-    private static Image Recolor(Image source, (Color From, Color To)[] palette)
-    {
-        var image = (Image)source.Duplicate();
-        for (int y = 0; y < image.GetHeight(); y++)
-        {
-            if (y / ArtLayout.Tile == ArtLayout.BridgeRow)
-                continue; // bridges are timber in every biome (their wood is close enough to dirt to be taken for it)
-            for (int x = 0; x < image.GetWidth(); x++)
-            {
-                var c = image.GetPixel(x, y);
-                if (c.A <= 0f)
-                    continue;
-                float best = float.MaxValue;
-                (Color From, Color To) match = default;
-                foreach (var entry in palette)
-                {
-                    float d = (c.R - entry.From.R) * (c.R - entry.From.R) + (c.G - entry.From.G) * (c.G - entry.From.G)
-                              + (c.B - entry.From.B) * (c.B - entry.From.B);
-                    if (d < best)
-                    {
-                        best = d;
-                        match = entry;
-                    }
-                }
-                if (best > 0.012f)
-                    continue;
-                var moved = new Color(
-                    Mathf.Clamp(c.R + match.To.R - match.From.R, 0f, 1f),
-                    Mathf.Clamp(c.G + match.To.G - match.From.G, 0f, 1f),
-                    Mathf.Clamp(c.B + match.To.B - match.From.B, 0f, 1f), c.A);
-                image.SetPixel(x, y, moved);
-            }
-        }
-        return image;
     }
 
     /// <summary>
@@ -168,7 +108,7 @@ public static partial class ArtGenerator
     /// </summary>
     private static void AppIcon(PixelCanvas castle, string uiDir)
     {
-        const int size = 80;
+        const int size = 128;
         var plate = new Color("2b2219");
         var plateLight = new Color("3a2e22");
         var gold = new Color("c9a050");
@@ -180,27 +120,34 @@ public static partial class ArtGenerator
             for (int x = 0; x < size; x++)
             {
                 // Rounded square plate with a two-tone gold frame.
-                int dx = Math.Max(Math.Max(10 - x, x - (size - 11)), 0), dy = Math.Max(Math.Max(10 - y, y - (size - 11)), 0);
+                int dx = Math.Max(Math.Max(16 - x, x - (size - 17)), 0), dy = Math.Max(Math.Max(16 - y, y - (size - 17)), 0);
                 float corner = MathF.Sqrt(dx * dx + dy * dy);
-                if (corner > 8f || x < 2 || y < 2 || x > size - 3 || y > size - 3)
+                if (corner > 13f || x < 3 || y < 3 || x > size - 4 || y > size - 4)
                     continue;
-                bool edge = corner > 6f || x < 4 || y < 4 || x > size - 5 || y > size - 5;
-                bool inner = !edge && (corner > 5f || x < 5 || y < 5 || x > size - 6 || y > size - 6);
+                bool edge = corner > 10f || x < 6 || y < 6 || x > size - 7 || y > size - 7;
+                bool inner = !edge && (corner > 8f || x < 8 || y < 8 || x > size - 9 || y > size - 9);
                 icon.SetPixel(x, y, edge ? gold : inner ? goldDark : y < size / 2 ? plateLight : plate);
             }
         }
-        int castleWidth = castle.Width / ArtLayout.BuildingFrames; // the sheet's first frame
-        int ox = (size - castleWidth) / 2, oy = size - castle.Height - 8;
+        // The castle (the sheet's first frame) in the team colour, shrunk a little to sit inside the frame.
+        int castleWidth = castle.Width / ArtLayout.BuildingFrames;
+        var picture = Image.CreateEmpty(castleWidth, castle.Height, false, Image.Format.Rgba8);
         for (int y = 0; y < castle.Height; y++)
-        {
             for (int x = 0; x < castleWidth; x++)
             {
                 var m = castle.Mask.GetPixel(x, y);
-                var c = m.A > 0 ? new Color(team.R * m.R, team.G * m.G, team.B * m.B) : castle.Base.GetPixel(x, y);
-                if (c.A > 0)
-                    icon.SetPixel(ox + x, oy + y, c);
+                picture.SetPixel(x, y, m.A > 0 ? new Color(team.R * m.R, team.G * m.G, team.B * m.B) : castle.Base.GetPixel(x, y));
             }
-        }
+        int pw = castleWidth * 85 / 100, ph = castle.Height * 85 / 100;
+        picture.Resize(pw, ph, Image.Interpolation.Lanczos);
+        int ox = (size - pw) / 2, oy = size - ph - 12;
+        for (int y = 0; y < ph; y++)
+            for (int x = 0; x < pw; x++)
+            {
+                var c = picture.GetPixel(x, y);
+                if (c.A > 0.05f)
+                    icon.SetPixel(ox + x, oy + y, icon.GetPixel(ox + x, oy + y).Lerp(c with { A = 1f }, c.A));
+            }
 
         Image Scaled(int pixels)
         {

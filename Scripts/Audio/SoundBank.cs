@@ -32,6 +32,10 @@ public enum Sound
     Horn,
     /// <summary>A bright little fanfare: one of yours earned a veteran's rank.</summary>
     Promotion,
+    /// <summary>A dragon breathes: a low growl swelling into a roaring rush of flame.</summary>
+    DragonFire,
+    /// <summary>Fire bursting over the ground: a soft thump and crackling.</summary>
+    FireBurst,
 }
 
 /// <summary>
@@ -84,6 +88,12 @@ public static class SoundBank
             + Sine(70 - 40 * t, t) * Decay(t, 0.1f) * 0.7f), // the arm hits the crossbar
         [Sound.StoneImpact] = Make(0.45f, (t, n) =>
             Sine(58 - 30 * t, t) * Decay(t, 0.14f) + LowNoise(n) * Decay(t, 0.09f) * 0.8f + n * Decay(t, 0.02f) * 0.25f),
+        [Sound.DragonFire] = Make(0.7f, (t, n) =>
+            Soft(Saw(62 + 18 * MathF.Sin(t * 23f), t)) * Attack(t, 0.08f) * Decay(t, 0.35f) * 0.45f // the growl
+            + LowNoise(n) * Attack(t, 0.12f) * Decay(t, 0.3f) * 0.8f), // the rush of flame
+        [Sound.FireBurst] = Make(0.5f, (t, n) =>
+            Sine(80 - 40 * t, t) * Decay(t, 0.06f) * 0.6f + LowNoise(n) * Decay(t, 0.2f) * 0.5f
+            + n * (MathF.Sin(t * 410f) > 0.92f ? 1f : 0f) * Decay(t, 0.25f) * 0.5f), // crackles
         [Sound.UnitDeath] = Make(0.38f, (t, n) =>
             Soft(Square(300 - 420 * t, t)) * Decay(t, 0.12f) * 0.45f + n * Decay(t, 0.05f) * 0.25f),
         [Sound.BuildingDestroyed] = Make(1.3f, (t, n) =>

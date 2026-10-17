@@ -44,7 +44,7 @@ public partial class MatchController
     public Color Lit(Color color) => new(color.R * LightBoost.R, color.G * LightBoost.G, color.B * LightBoost.B, color.A);
 
     /// <summary>The wind (pixels a second) that drifts clouds, smoke, snow and sand; it veers and gusts slowly.</summary>
-    public Vector2 Wind { get; private set; } = new(7f, 1.5f);
+    public Vector2 Wind { get; private set; } = new(14f, 3f);
     private float _windTime;
 
     /// <summary>Dusk and dawn, the wind's slow veering, and the battle heat cooling down.</summary>
@@ -54,7 +54,7 @@ public partial class MatchController
         NightAmount = Mathf.Clamp((1f - _night.Color.R) / (1f - NightTint.R), 0f, 1f);
         LightBoost = new Color(1f / _night.Color.R, 1f / _night.Color.G, 1f / _night.Color.B);
         _windTime += delta;
-        Wind = new Vector2(7f + 3f * MathF.Sin(_windTime / 41f), 1.5f + 2f * MathF.Sin(_windTime / 27f + 1f));
+        Wind = new Vector2(14f + 6f * MathF.Sin(_windTime / 41f), 3f + 4f * MathF.Sin(_windTime / 27f + 1f));
         _battleHeat *= MathF.Pow(0.5f, delta / BattleHeatHalfLife);
     }
 

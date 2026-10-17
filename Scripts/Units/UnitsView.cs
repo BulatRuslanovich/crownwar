@@ -7,7 +7,8 @@ namespace Warcrown.Units;
 
 /// <summary>
 /// Keeps one <see cref="UnitView"/> per simulated unit, positioned with interpolation between ticks,
-/// and drops views (and selection) of units that died. Also draws the planned route of selected units.
+/// and drops views (and selection) of units that died. Also draws the planned route of selected units. Flyers go in a
+/// layer of their own just above the actors (<see cref="Air"/>), so they pass over roofs and towers.
 /// </summary>
 public partial class UnitsView : Node2D
 {
@@ -18,9 +19,16 @@ public partial class UnitsView : Node2D
     private readonly List<Vector2> _pathPoints = new();
     private MatchController _match = null!;
 
+    /// <summary>Where flyers are drawn: y-sorted among themselves, over everything on the ground.</summary>
+    public Node2D Air { get; private set; } = null!;
+
     public void Initialize(MatchController match)
     {
         _match = match;
+        var actors = GetParent();
+        Air = new Node2D { Name = "AirUnits", YSortEnabled = true };
+        actors.GetParent().AddChild(Air);
+        actors.GetParent().MoveChild(Air, actors.GetIndex() + 1);
     }
 
     /// <summary>The unit views (for their shadows).</summary>
@@ -34,9 +42,9 @@ public partial class UnitsView : Node2D
             if (!_views.TryGetValue(unit.Id, out var view))
             {
                 view = new UnitView { Name = $"Unit{unit.Id}" };
-                view.Initialize(unit, _match.UnitSheets.For(FactionColors.Get(unit.FactionId)));
+                view.Initialize(unit, _match.UnitSheets.For(FactionColors.Get(unit.FactionId), World.ArtLayout.UnitArtOf(unit.Type.Id).Big));
                 _views.Add(unit.Id, view);
-                AddChild(view);
+                (unit.Type.IsFlying ? Air : this).AddChild(view);
                 if (_started)
                     view.Pop(); // a recruit (the armies there from the start just stand)
             }
@@ -121,8 +129,8 @@ public partial class UnitsView : Node2D
             if (_pathPoints.Count < 2)
                 continue;
 
-            DrawPolyline(_pathPoints.ToArray(), PathColor, 1f);
-            DrawRect(new Rect2(_pathPoints[^1] - Vector2.One, Vector2.One * 2), PathColor);
+            DrawPolyline(_pathPoints.ToArray(), PathColor, 2f);
+            DrawRect(new Rect2(_pathPoints[^1] - Vector2.One * 2, Vector2.One * 4), PathColor);
         }
     }
 

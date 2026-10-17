@@ -7,9 +7,11 @@ namespace Warcrown.Sim.Buildings;
 
 /// <summary>
 /// Ranged attack of a defensive building. An archer tower hits its target; a catapult (<paramref name="SplashRadius"/>
-/// above zero) hits every enemy unit within that many tiles of where its stone lands.
+/// above zero) hits every enemy unit on the ground within that many tiles of where its stone lands. Only an attack that
+/// <paramref name="HitsAir"/> (arrows) can reach flying units.
 /// </summary>
-public sealed record BuildingAttack(int Damage, float Range, float Cooldown, float ProjectileSpeed, float SplashRadius = 0f)
+public sealed record BuildingAttack(int Damage, float Range, float Cooldown, float ProjectileSpeed, float SplashRadius = 0f,
+    bool HitsAir = false)
 {
     public bool IsSplash => SplashRadius > 0f;
 }

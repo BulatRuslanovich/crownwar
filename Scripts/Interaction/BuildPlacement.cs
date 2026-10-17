@@ -109,7 +109,7 @@ public partial class BuildPlacement : Node2D
         DrawRect(rect, color);
         DrawRect(rect, color with { A = 0.9f }, filled: false, width: 1f / _match.Camera.ZoomLevel);
         if (Builder != null)
-            DrawDashedLine(SimConvert.ToWorld(Builder.Position), rect.GetCenter(), PlanLine, 1f / _match.Camera.ZoomLevel, 4f);
+            DrawDashedLine(SimConvert.ToWorld(Builder.Position), rect.GetCenter(), PlanLine, 1f / _match.Camera.ZoomLevel, 8f);
 
         // Show how far from own units one may build, around each nearby own unit.
         float radius = _match.Sim.Rules.BuildRadius * t;
@@ -139,7 +139,7 @@ public partial class BuildPlacement : Node2D
                 new Color(1f, 1f, 1f, 0.4f));
             DrawRect(rect, Planned with { A = 0.8f }, filled: false, width: width);
             if (_match.Sim.GetUnit(plan.BuilderId) is { } builder)
-                DrawDashedLine(SimConvert.ToWorld(builder.Position), rect.GetCenter(), PlanLine, width, 4f);
+                DrawDashedLine(SimConvert.ToWorld(builder.Position), rect.GetCenter(), PlanLine, width, 8f);
         }
     }
 

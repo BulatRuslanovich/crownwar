@@ -13,6 +13,9 @@ namespace Warcrown.Sim.Units;
 /// <item><see cref="ArmorPiercing"/> is the share of the target's ranged armour a missile ignores (crossbow bolts).</item>
 /// <item>A unit with <see cref="Heal"/> (a monk) does not fight: it mends wounded friends near it.</item>
 /// <item><see cref="BarracksRequired"/>: how many finished barracks its owner needs before it can be trained.</item>
+/// <item>A <see cref="IsFlying"/> unit (a griffin, a dragon) flies straight over water, mountains and buildings; only
+/// those that <see cref="HitsAir"/> (archers, crossbowmen) and shooting buildings with an anti-air attack can hurt it.</item>
+/// <item>A missile with a <see cref="SplashRadius"/> (a dragon's fire) also burns every enemy on the ground that close to its target.</item>
 /// </list>
 /// </summary>
 public sealed record UnitType(
@@ -35,7 +38,10 @@ public sealed record UnitType(
     IReadOnlyDictionary<string, float>? BonusAgainst = null,
     float ArmorPiercing = 0f,
     HealAbility? Heal = null,
-    int BarracksRequired = 0)
+    int BarracksRequired = 0,
+    bool IsFlying = false,
+    bool HitsAir = false,
+    float SplashRadius = 0f)
 {
     public bool IsRanged => ProjectileSpeed > 0f;
 
@@ -93,6 +99,7 @@ public sealed class UnitCatalog
         Require(t.ProjectileSpeed >= 0f && t.RangedArmor is >= 0f and <= 1f, "projectile speed >= 0 and ranged armor in [0, 1]");
         Require(t.ArmorPiercing is >= 0f and <= 1f, "armor piercing in [0, 1]");
         Require(t.BarracksRequired >= 0, "barracks required cannot be negative");
+        Require(t.SplashRadius >= 0f && (t.SplashRadius == 0f || t.IsRanged), "splash must be >= 0, and only a missile splashes");
         Require(t.BonusAgainst == null || t.BonusAgainst.Values.All(b => b > 0f), "damage bonuses must be > 0");
         Require(t.Heal is not { } heal || heal.Amount > 0 && heal.Range >= 0f && heal.Cooldown > 0f && t.SightRange >= heal.Range,
             "heal needs an amount > 0, range >= 0 within sight, cooldown > 0");

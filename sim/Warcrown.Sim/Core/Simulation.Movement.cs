@@ -36,10 +36,16 @@ public sealed partial class Simulation
 
     private void ApplyMove(MoveCommand move)
     {
-        // Units are grouped by walkable region, since each region resolves a blocked target differently.
+        // Units are grouped by walkable region, since each region resolves a blocked target differently; flyers need none.
         var groups = new SortedDictionary<int, List<Unit>>();
+        var flyers = new List<Unit>();
         foreach (var unit in OwnLivingUnits(move.FactionId, move.UnitIds))
         {
+            if (unit.Type.IsFlying)
+            {
+                flyers.Add(unit);
+                continue;
+            }
             int component = Map.ComponentOf(Cell.FromPosition(unit.Position));
             if (!groups.TryGetValue(component, out var list))
                 groups[component] = list = new List<Unit>();
@@ -49,6 +55,8 @@ public sealed partial class Simulation
         var order = move.Mode == MoveMode.AttackMove ? UnitOrder.AttackMove : UnitOrder.Move;
         foreach (var (component, group) in groups)
             OrderGroupMove(group, component, move.Target, order);
+        if (flyers.Count > 0)
+            OrderAirMove(flyers, move.Target, order);
     }
 
     private void ApplyAttack(AttackCommand attack)
@@ -57,13 +65,15 @@ public sealed partial class Simulation
         attack = attack with { UnitIds = attack.UnitIds.Where(id => GetUnit(id) is not { Type.IsHealer: true }).ToArray() };
         if (GetEntity(attack.TargetId) is not { IsAlive: true } target || !AreEnemies(attack.FactionId, target.FactionId))
             return;
-        // A ram cannot fight soldiers: sent at one, it advances with the army and goes for the buildings it meets.
-        var rams = OwnLivingUnits(attack.FactionId, attack.UnitIds).Where(u => u.Type.IsSiege && target is not Building).Select(u => u.Id).ToList();
-        if (rams.Count > 0)
-            ApplyMove(new MoveCommand(attack.FactionId, rams, target.Position, MoveMode.AttackMove));
+        // A ram cannot fight soldiers, nor a swordsman a griffin: sent at one, they advance with the army and fight what
+        // they can on the way.
+        bool CannotStrike(Unit u) => u.Type.IsSiege && target is not Building || !Combat.CombatSystem.CanHit(u, target);
+        var escorts = OwnLivingUnits(attack.FactionId, attack.UnitIds).Where(CannotStrike).Select(u => u.Id).ToList();
+        if (escorts.Count > 0)
+            ApplyMove(new MoveCommand(attack.FactionId, escorts, target.Position, MoveMode.AttackMove));
         foreach (var unit in OwnLivingUnits(attack.FactionId, attack.UnitIds))
         {
-            if (unit.Type.IsSiege && target is not Building)
+            if (CannotStrike(unit))
                 continue;
             unit.StartAttack(target);
             unit.LastOrder = MoveOrderResult.Accepted;
@@ -88,8 +98,36 @@ public sealed partial class Simulation
         OrderGroupMove(new List<Unit> { unit }, Map.ComponentOf(Cell.FromPosition(unit.Position)), rally, UnitOrder.Move);
     }
 
+    /// <summary>Flyers go straight to their slots around the point, whatever lies below (see <see cref="Flight"/>).</summary>
+    private void OrderAirMove(List<Unit> group, Vector2 target, UnitOrder order)
+    {
+        Vector2 center = Flight.Clamp(Map, target);
+        var slots = Formation.ComputeAirSlots(Map, center, group.Count, group.Max(u => u.Type.Radius) * 2f);
+        SortByDistance(group, center);
+        for (int i = 0; i < group.Count; i++)
+        {
+            var unit = group[i];
+            unit.MarchGoal = null;
+            unit.StartMove(order, slots[i], Flight.PathTo(slots[i]));
+            unit.LastOrder = MoveOrderResult.Accepted;
+        }
+    }
+
+    /// <summary>Closest units first (by id among equals), so they take the central slots and the rest fill the outer rings.</summary>
+    private static void SortByDistance(List<Unit> group, Vector2 center) =>
+        group.Sort((a, b) =>
+        {
+            int byDistance = Vector2.DistanceSquared(a.Position, center).CompareTo(Vector2.DistanceSquared(b.Position, center));
+            return byDistance != 0 ? byDistance : a.Id.CompareTo(b.Id);
+        });
+
     private void OrderGroupMove(List<Unit> group, int component, Vector2 target, UnitOrder order)
     {
+        if (group.TrueForAll(u => u.Type.IsFlying))
+        {
+            OrderAirMove(group, target, order); // a lone recruit or builder on the wing
+            return;
+        }
         Cell requested = Cell.FromPosition(target);
         Cell? goal = Map.FindNearestInComponent(requested, component, MaxGoalSearchRadius);
         if (goal == null)
@@ -107,12 +145,7 @@ public sealed partial class Simulation
         float clearance = group.Max(u => u.Type.Radius);
         var slots = Formation.ComputeSlots(Map, center, group.Count, clearance);
 
-        // Closest units take the central slots; the rest fill the outer rings.
-        group.Sort((a, b) =>
-        {
-            int byDistance = Vector2.DistanceSquared(a.Position, center).CompareTo(Vector2.DistanceSquared(b.Position, center));
-            return byDistance != 0 ? byDistance : a.Id.CompareTo(b.Id);
-        });
+        SortByDistance(group, center);
 
         Cell? shared = group.Count >= SharedRouteGroupSize ? Cell.FromPosition(center) : null;
         for (int i = 0; i < group.Count; i++)
@@ -137,6 +170,11 @@ public sealed partial class Simulation
     /// <summary>Undoes pushes into walls, buildings, the map edge or another walkable region.</summary>
     private void KeepOnWalkableGround(Unit unit)
     {
+        if (unit.Type.IsFlying)
+        {
+            unit.Position = Flight.Clamp(Map, unit.Position); // only the map edge holds a flyer back
+            return;
+        }
         Vector2 pos = Map.PushOutOfWalls(unit.Position, unit.Type.Radius);
         var cell = Cell.FromPosition(pos);
         var previousCell = Cell.FromPosition(unit.PreviousPosition);
@@ -191,6 +229,11 @@ public sealed partial class Simulation
 
     private void Repath(Unit unit, Vector2 destination)
     {
+        if (unit.Type.IsFlying)
+        {
+            unit.ReplacePath(Flight.PathTo(destination));
+            return;
+        }
         // The slot itself may now be under a new building: aim for the nearest free spot instead.
         int component = Map.ComponentOf(Cell.FromPosition(unit.Position));
         if (Map.FindNearestInComponent(Cell.FromPosition(destination), component, MaxGoalSearchRadius) is not { } goal)

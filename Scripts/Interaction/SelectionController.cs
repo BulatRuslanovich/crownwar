@@ -7,6 +7,7 @@ using Warcrown.Sim.Buildings;
 using Warcrown.Sim.Core;
 using Warcrown.Sim.Units;
 using Warcrown.UI;
+using Warcrown.World;
 
 namespace Warcrown.Interaction;
 
@@ -127,7 +128,8 @@ public partial class SelectionController : Node2D
             _boxActive = false;
             QueueRedraw();
             var box = new Rect2(_pressWorld, Vector2.Zero).Expand(GetGlobalMousePosition());
-            _match.Selection.Select(OwnUnits().Where(u => box.HasPoint(SimConvert.ToWorld(u.Position))).Select(u => u.Id), additive);
+            _match.Selection.Select(OwnUnits().Where(u => box.HasPoint(SimConvert.ToWorld(u.Position))
+                || box.HasPoint(SimConvert.ToWorld(u.Position) - new Vector2(0, ArtLayout.FlightAltitude(u.Type.Id)))).Select(u => u.Id), additive);
             return;
         }
 
@@ -227,9 +229,10 @@ public partial class SelectionController : Node2D
         {
             var from = SimConvert.ToWorld(producer.Position);
             var to = SimConvert.ToWorld(rally);
-            DrawDashedLine(from, to, RallyColor with { A = 0.7f }, 1f / _match.Camera.ZoomLevel, 4f);
-            DrawLine(to, to + new Vector2(0, -12), new Color("4a3a2a"), 1f);
-            DrawColoredPolygon(new[] { to + new Vector2(0, -12), to + new Vector2(7, -9.5f), to + new Vector2(0, -7) }, RallyColor);
+            DrawDashedLine(from, to, RallyColor with { A = 0.7f }, 1f / _match.Camera.ZoomLevel, 8f);
+            DrawLine(to, to + new Vector2(0, -24), new Color("4a3a2a"), 2f);
+            DrawColoredPolygon(new[] { to + new Vector2(1, -24), to + new Vector2(15, -19), to + new Vector2(1, -14) }, RallyColor);
+            DrawColoredPolygon(new[] { to + new Vector2(1, -24), to + new Vector2(15, -19), to + new Vector2(1, -21) }, RallyColor.Lightened(0.3f));
         }
 
         if (_boxActive)
@@ -244,7 +247,7 @@ public partial class SelectionController : Node2D
         {
             float t = _markerTimeLeft / MarkerDuration;
             DrawSetTransform(_markerPosition, 0f, new Vector2(1f, 0.6f));
-            DrawArc(Vector2.Zero, 3f + 6f * t, 0f, Mathf.Tau, 20, _markerColor with { A = t }, 1f);
+            DrawArc(Vector2.Zero, 6f + 12f * t, 0f, Mathf.Tau, 28, _markerColor with { A = t }, 2f);
             DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
         }
     }
@@ -281,10 +284,11 @@ public partial class SelectionController : Node2D
         float bestDistSq = PickRadius * PickRadius;
         foreach (var unit in candidates)
         {
-            // Units are drawn upwards from their feet, so aim slightly above the position too.
+            // Units are drawn upwards from their feet, so aim slightly above the position too (a flyer: up where it flies).
+            var body = unit.Position - new System.Numerics.Vector2(0f, ArtLayout.FlightAltitude(unit.Type.Id) / SimConvert.TileSize);
             float distSq = MathF.Min(
-                System.Numerics.Vector2.DistanceSquared(unit.Position, point),
-                System.Numerics.Vector2.DistanceSquared(unit.Position - new System.Numerics.Vector2(0f, 0.4f), point));
+                System.Numerics.Vector2.DistanceSquared(body, point),
+                System.Numerics.Vector2.DistanceSquared(body - new System.Numerics.Vector2(0f, 0.4f), point));
             if (distSq <= bestDistSq)
             {
                 bestDistSq = distSq;

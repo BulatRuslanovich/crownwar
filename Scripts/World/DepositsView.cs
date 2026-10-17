@@ -54,7 +54,7 @@ public partial class DepositsView : Node2D
             }
             if (deposit.Yield > MapLoader.DefaultDepositYield)
             {
-                DrawSetTransform(origin + new Vector2(size / 2, size / 2 + 4), 0f, new Vector2(1f, 0.55f));
+                DrawSetTransform(origin + new Vector2(size / 2, size / 2 + 8), 0f, new Vector2(1f, 0.55f));
                 DrawCircle(Vector2.Zero, size * 0.7f, Glint);
                 DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
             }

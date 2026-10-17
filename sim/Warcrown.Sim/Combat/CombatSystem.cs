@@ -45,6 +45,13 @@ internal sealed class CombatSystem
     public static bool InAttackRange(Unit attacker, Entity target) =>
         target.SurfaceDistance(attacker.Position) - attacker.Type.Radius <= attacker.Type.AttackRange;
 
+    /// <summary>Whether a blow or missile of one that <paramref name="hitsAir"/> (or not) can reach <paramref name="target"/>:
+    /// anything on the ground, and a flyer only by arrows and bolts.</summary>
+    public static bool CanHit(bool hitsAir, Entity target) => hitsAir || target is not Unit { Type.IsFlying: true };
+
+    /// <summary>Whether <paramref name="attacker"/> can ever strike <paramref name="target"/> (a flyer is out of reach of most).</summary>
+    public static bool CanHit(Unit attacker, Entity target) => CanHit(attacker.Type.HitsAir, target);
+
     /// <summary>Decides what the unit does this tick: fight, chase, resume its march or go back to its post.</summary>
     public void UpdateBehaviour(Unit unit, IReadOnlyList<Unit> units, IReadOnlyList<Building> buildings, int tick)
     {
@@ -131,7 +138,8 @@ internal sealed class CombatSystem
         foreach (var unit in _resuming)
         {
             var destination = unit.Destination!.Value;
-            var path = unit.MarchGoal is { } goal
+            var path = unit.Type.IsFlying ? Flight.PathTo(destination)
+                : unit.MarchGoal is { } goal
                 ? _pathfinder.FindPathViaField(goal, unit.Position, destination, unit.Type.Radius)
                 : _pathfinder.FindPath(unit.Position, destination, unit.Type.Radius);
             if (path == null)
@@ -208,10 +216,10 @@ internal sealed class CombatSystem
             tower.AttackCooldownTicks--;
 
         if (tower.Target is { } current && (!current.IsAlive || tower.SurfaceDistance(current.Position) > attack.Range
-                                            || !_areEnemies(tower.FactionId, current.FactionId)))
+                                            || !_areEnemies(tower.FactionId, current.FactionId) || !CanHit(attack.HitsAir, current)))
             tower.Target = null;
         if (tower.Target == null && (tick + tower.Id) % ScanIntervalTicks == 0)
-            tower.Target = FindEnemyUnit(tower, units, attack.Range);
+            tower.Target = FindEnemyUnit(tower, units, attack.Range, attack.HitsAir);
         if (tower.Target is not { } target || tower.AttackCooldownTicks > 0)
             return;
 
@@ -256,16 +264,25 @@ internal sealed class CombatSystem
     }
 
     /// <summary>
-    /// A stone lands on its target: every living enemy unit whose body is within the splash radius of the target
-    /// takes the full damage (reduced by ranged armour, like any missile). Friends and buildings are spared.
+    /// A stone lands on its target: every living enemy unit on the ground whose body is within the splash radius of the
+    /// target takes the full damage (reduced by ranged armour, like any missile). Friends, flyers and buildings are spared.
+    /// A dragon's fire also burns its target itself when that is a building, and then the ground around its walls.
     /// </summary>
     private void Splash(Projectile p, IReadOnlyList<Unit> units)
     {
         var impact = p.Target.Position;
-        _emit(new SplashLanded(p.FactionId, p.SourceId, impact, p.SplashRadius));
+        _emit(new SplashLanded(p.FactionId, p.SourceId, impact, p.SplashRadius, p.IsFire));
+        if (p.IsFire && p.Target is Building building)
+        {
+            ApplyDamage(building, p.Damage, ranged: true, p.FactionId, p.ArmorPiercing, p.SourceId);
+            _emit(new AttackLanded(p.FactionId, p.SourceId, building.Id, building.FactionId, impact, Ranged: true));
+        }
         foreach (var unit in units)
         {
-            if (!unit.IsAlive || !_areEnemies(p.FactionId, unit.FactionId) || unit.SurfaceDistance(impact) > p.SplashRadius)
+            if (!unit.IsAlive || unit.Type.IsFlying || !_areEnemies(p.FactionId, unit.FactionId))
+                continue;
+            float distance = p.Target is Building walls ? walls.SurfaceDistance(unit.Position) - unit.Type.Radius : unit.SurfaceDistance(impact);
+            if (distance > p.SplashRadius)
                 continue;
             ApplyDamage(unit, p.Damage, ranged: true, p.FactionId, attackerId: p.SourceId);
             _emit(new AttackLanded(p.FactionId, p.SourceId, unit.Id, unit.FactionId, unit.Position, Ranged: true, Splash: true));
@@ -290,8 +307,8 @@ internal sealed class CombatSystem
 
     private bool IsStillValidTarget(Unit unit, Entity target)
     {
-        if (!target.IsAlive || !_areEnemies(unit.FactionId, target.FactionId))
-            return false; // dead, or made peace with
+        if (!target.IsAlive || !_areEnemies(unit.FactionId, target.FactionId) || !CanHit(unit, target))
+            return false; // dead, made peace with, or flying out of its reach
         if (unit.Order == UnitOrder.AttackUnit)
             return true; // explicit orders are followed anywhere
         float limit = unit.Type.SightRange * LoseTargetFactor;
@@ -299,16 +316,16 @@ internal sealed class CombatSystem
     }
 
     private Unit? FindEnemyUnit(Unit unit, IReadOnlyList<Unit> units) =>
-        FindEnemyUnit(unit, units, unit.Type.SightRange);
+        FindEnemyUnit(unit, units, unit.Type.SightRange, unit.Type.HitsAir);
 
-    /// <summary>Nearest living unit of another faction within <paramref name="range"/> of the seeker's body.</summary>
-    private Unit? FindEnemyUnit(Entity seeker, IReadOnlyList<Unit> units, float range)
+    /// <summary>Nearest living unit of another faction within <paramref name="range"/> of the seeker's body that it can hit.</summary>
+    private Unit? FindEnemyUnit(Entity seeker, IReadOnlyList<Unit> units, float range, bool hitsAir)
     {
         Unit? best = null;
         float bestDistance = float.MaxValue;
         foreach (var other in units)
         {
-            if (!_areEnemies(seeker.FactionId, other.FactionId) || !other.IsAlive)
+            if (!_areEnemies(seeker.FactionId, other.FactionId) || !other.IsAlive || other.Type.IsFlying && !hitsAir)
                 continue;
             float distance = seeker.SurfaceDistance(other.Position);
             if (distance <= range && distance < bestDistance)
@@ -345,7 +362,8 @@ internal sealed class CombatSystem
         if (attacker.Type.IsRanged)
         {
             Fire(attacker.Id, attacker.FactionId, damage, attacker.Type.ProjectileSpeed, attacker.Position, target,
-                armorPiercing: attacker.Type.ArmorPiercing, isStone: attacker.Type.IsSiege);
+                attacker.Type.SplashRadius, attacker.Type.ArmorPiercing, isStone: attacker.Type.IsSiege,
+                isFire: attacker.Type.SplashRadius > 0f);
         }
         else
         {
@@ -355,18 +373,25 @@ internal sealed class CombatSystem
     }
 
     private void Fire(int sourceId, int factionId, int damage, float speed, Vector2 from, Entity target, float splashRadius = 0f,
-        float armorPiercing = 0f, bool isStone = false)
+        float armorPiercing = 0f, bool isStone = false, bool isFire = false)
     {
-        var projectile = new Projectile(sourceId, factionId, damage, speed, from, target, splashRadius, armorPiercing, isStone);
+        var projectile = new Projectile(sourceId, factionId, damage, speed, from, target, splashRadius, armorPiercing, isStone, isFire);
         _projectiles.Add(projectile);
-        _emit(new ProjectileFired(factionId, from, Splash: projectile.IsStone));
+        _emit(new ProjectileFired(factionId, from, Splash: projectile.IsStone, Fire: isFire));
     }
 
     private void Chase(Unit unit, Entity target)
     {
-        // Buildings are solid: head for the nearest free spot next to them instead of their center.
+        if (unit.Type.IsFlying)
+        {
+            unit.SetSingleWaypoint(target.Position); // straight over everything, until in reach
+            return;
+        }
+        // Buildings are solid: head for the nearest free spot next to them instead of their center. A flyer over water
+        // or rock is shot at from the nearest ground we can stand on.
         Vector2 goal = target.Position;
-        if (target is Building)
+        if (target is Building
+            || target is Unit { Type.IsFlying: true } && !_map.AreConnected(Cell.FromPosition(unit.Position), Cell.FromPosition(goal)))
         {
             int component = _map.ComponentOf(Cell.FromPosition(unit.Position));
             if (_map.FindNearestInComponent(Cell.FromPosition(target.Position), component, ApproachSearchRadius) is not { } spot)
@@ -403,6 +428,11 @@ internal sealed class CombatSystem
     private void ReturnToPost(Unit unit)
     {
         Vector2 post = unit.GuardPoint;
+        if (unit.Type.IsFlying)
+        {
+            unit.StartMove(UnitOrder.Move, post, Flight.PathTo(post));
+            return;
+        }
         if (!_map.IsWalkable(Cell.FromPosition(post)))
         {
             unit.CompleteOrder(); // a building now stands on the old post: guard from here

@@ -5,7 +5,8 @@ namespace Warcrown.Sim.Units;
 /// <summary>
 /// Soft body separation: overlapping units are pushed apart a bit every tick.
 /// Moving units shove idle ones aside more than the other way round, so a marching group
-/// flows through units standing in its way instead of stopping in front of them.
+/// flows through units standing in its way instead of stopping in front of them. Flyers only jostle other flyers: the
+/// air and the ground do not push each other.
 /// </summary>
 internal static class UnitCollisions
 {
@@ -22,6 +23,8 @@ internal static class UnitCollisions
             for (int j = i + 1; j < units.Count; j++)
             {
                 var b = units[j];
+                if (a.Type.IsFlying != b.Type.IsFlying)
+                    continue;
                 float minDist = a.Type.Radius + b.Type.Radius;
                 Vector2 delta = b.Position - a.Position;
                 float distSq = delta.LengthSquared();

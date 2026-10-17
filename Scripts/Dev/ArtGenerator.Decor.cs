@@ -11,207 +11,206 @@ public static partial class ArtGenerator
     private static readonly Color FlowerYellow = new("f2d04a");
     private static readonly Color FlowerWhite = new("f4f1e6");
     private static readonly Color FlowerBlue = new("7f8fe6");
-    private static readonly Color Berry = new("c42a4a");
-    private static readonly Color Bone = new("e8e2d0");
-    private static readonly Color BoneDark = new("b5ab92");
-    private static readonly Color Ice = new("bfe6f6");
-    private static readonly Color IceDark = new("7fb4d4");
-    private static readonly Color IceOutline = new("3d6a8a");
-    private static readonly Color GroundShadow = new(0f, 0f, 0f, 0.22f);
+    private static readonly Ramp BerryR = Ramp.Of(new Color("c42a4a"), mood: FigureMood);
+    private static readonly Ramp BoneR = Ramp.Of(new Color("e2dac4"), 0.7f);
+    private static readonly Ramp IceR = Ramp.Of(new Color("a9daf0"), 0.7f);
+    private static readonly Ramp CapR = Ramp.Of(new Color("c8502e"), mood: FigureMood);
+    private static readonly Ramp CactusR = Ramp.Of(new Color("5e8f3c"), mood: FigureMood);
 
     /// <summary>
-    /// One small thing lying on open ground, on a transparent 16×16 tile (see <see cref="ArtLayout.MeadowDecor"/> and the
-    /// other pools for which kinds each biome uses; the winter and desert sheets recolour them like the rest).
+    /// One small thing lying on open ground, on a transparent 32×32 tile (see <see cref="ArtLayout.MeadowDecor"/> and
+    /// the other pools for which kinds each biome uses), drawn in the biome's own materials.
     /// </summary>
     private static void DecorTile(PixelCanvas c, int kind)
     {
-        var cell = new Rect2I(c.Origin, new Vector2I(16, 16));
+        var cell = new Rect2I(c.Origin, new Vector2I(T, T));
+        var g = Land.Ground;
         switch (kind)
         {
             case 0: Flowers(c, FlowerRed, 0); break;
             case 1: Flowers(c, FlowerYellow, 1); break;
             case 2: Flowers(c, FlowerWhite, 2); break;
             case 3: Flowers(c, FlowerBlue, 3); break;
-            case 4: // tall grass
-                for (int b = 0; b < 7; b++)
+            case 4: // tall grass, a clump of leaning blades
+                for (int b = 0; b < 11; b++)
                 {
-                    int x = 3 + b * 2 - (b > 3 ? 1 : 0), h = 3 + Hash(b, 4, 1) % 4, lean = b % 3 - 1;
-                    for (int i = 0; i < h; i++)
-                        c.Px(x + (i == h - 1 ? lean : 0), 13 - i, i == h - 1 ? new Color("8cc35a") : GrassDark, solid: false);
+                    float x = 7 + b * 1.8f, tall = 6 + Hash(b, 4, 1) % 7, lean = (b - 5) * 0.5f;
+                    for (int i = 0; i < (int)tall; i++)
+                    {
+                        float t = i / tall;
+                        int px = (int)(x + lean * t * t * 3f);
+                        c.Px(px, 27 - i, t > 0.7f ? Land.Tuft : g.Shade.Lerp(Land.Leaf.Base, 0.4f), solid: false);
+                    }
                 }
                 break;
-            case 5: Bush(c, 8, 10, 4.2f, false); c.Outline(TreeOutline, cell); break;
+            case 5: Bush(c, 16, 19, 8.5f, false); c.SelOut(SilhouetteRim, cell); break;
             case 6: // pebbles
-                foreach (var (x, y) in new[] { (4, 6), (10, 4), (7, 11), (12, 12), (3, 13) })
+                foreach (var (x, y) in new[] { (8, 12), (20, 8), (14, 22), (24, 24), (6, 26) })
                 {
-                    c.Px(x, y, RockLight, solid: false);
-                    c.Px(x + 1, y, Rock, solid: false);
-                    c.Px(x, y + 1, RockDark, solid: false);
+                    c.GroundShadow(x + 1.5f, y + 2.5f, 3f, 1.4f, 0.25f);
+                    c.Ball(x, y, 2.2f, 1.7f, Land.Rock, 0.4f);
                 }
+                c.SelOut(SilhouetteRim, cell);
                 break;
             case 7: // mushrooms
-                foreach (var (x, y, w) in new[] { (5, 10, 4), (10, 12, 3) })
+                foreach (var (x, y, w) in new[] { (10f, 22f, 4.5f), (21f, 25f, 3.5f) })
                 {
-                    c.Rect(x + w / 2 - 1, y, 2, 3, Bone);
-                    c.Rect(x, y - 2, w, 2, new Color("c8502e"));
-                    c.Rect(x + 1, y - 3, w - 2, 1, new Color("c8502e"));
-                    c.Px(x + 1, y - 2, FlowerWhite);
+                    c.GroundShadow(x + 2, y + 4, w, 1.6f, 0.25f);
+                    c.Stroke(x, y, x, y + 4, 2.4f, BoneR);
+                    c.Ball(x, y - 1f, w, w * 0.6f, CapR, 0.3f, 0.3f);
+                    c.Px((int)x - 1, (int)y - 3, FlowerWhite);
+                    c.Px((int)x + 2, (int)y - 2, FlowerWhite);
                 }
-                c.Outline(new Color("3a2418"), cell);
+                c.SelOut(SilhouetteRim, cell);
                 break;
-            case 8: Stump(c, false); c.Outline(Outline, cell); break;
-            case 9: // fallen log
-                Shadow(c, 3, 13, 11, 1);
-                c.Rect(2, 9, 11, 4, Bark);
-                c.Rect(2, 9, 11, 1, WoodLight);
-                c.Rect(2, 12, 11, 1, BarkDark);
-                c.Rect(12, 9, 2, 4, WoodLight);
-                c.Px(12, 10, Wood);
-                c.Px(5, 8, Leaf);
-                c.Px(6, 8, LeafLight);
-                c.Outline(Outline, cell);
+            case 8: Stump(c, false); c.SelOut(SilhouetteRim, cell); break;
+            case 9: // fallen log, moss on its back
+                c.GroundShadow(17, 27, 12, 2.5f, 0.3f);
+                c.Column(5, 18, 22, 8, Land.Bark, 0.1f, horizontal: true);
+                c.Ball(26f, 22f, 2.5f, 4f, WoodR, 0.6f, 1f);
+                c.Ball(26f, 22f, 1.2f, 2f, DarkWoodR, 0f, 1f);
+                c.Ball(11f, 17.5f, 3.5f, 1.5f, Land.Leaf, 0.4f);
+                c.SelOut(SilhouetteRim, cell);
                 break;
-            case 10: Rock3(c, 8, 9, 3.4f); c.Outline(Outline, cell); break;
-            case 11: // a broken column of an old ruin, a drum fallen beside it
-                Shadow(c, 4, 14, 11, 1);
-                c.Rect(5, 12, 7, 2, Stone);
-                c.Rect(6, 4, 5, 8, StoneLight);
-                c.Rect(9, 4, 2, 8, Stone);
-                c.Rect(6, 6, 1, 6, Stone);
-                c.Px(6, 3, StoneLight); c.Px(8, 3, StoneLight); c.Px(9, 2, Stone);
-                c.Rect(12, 11, 3, 3, StoneLight);
-                c.Px(14, 13, Stone);
-                c.Px(7, 9, Leaf); c.Px(6, 10, LeafLight); // ivy
-                c.Outline(Outline, cell);
+            case 10: RockLump(c, 16, 19, 7f); c.SelOut(SilhouetteRim, cell); break;
+            case 11: // a broken column of an old ruin, a drum fallen beside it, ivy
+                c.GroundShadow(18, 28, 11, 2.5f, 0.3f);
+                c.Block(9, 24, 15, 4, WallR, top: 1);
+                c.Column(11, 8, 10, 16, WallLightR);
+                for (int x = 11; x < 21; x++)
+                    if (Hash(x, 0, 11) % 3 == 0)
+                        c.Erase(x, 8 + Hash(x, 1, 11) % 3);
+                c.Column(24, 21, 6, 6, WallLightR, 0.2f, horizontal: true);
+                c.Ball(13f, 18f, 2f, 3f, Land.Leaf, 0.2f);
+                c.Ball(12f, 21f, 1.5f, 2f, Land.Leaf, -0.4f);
+                c.SelOut(SilhouetteRim, cell);
                 break;
             case 12: // berry bush
-                Bush(c, 8, 10, 4f, false);
-                foreach (var (x, y) in new[] { (6, 8), (9, 9), (7, 12), (10, 11), (5, 10) })
-                    c.Px(x, y, Berry);
-                c.Outline(TreeOutline, cell);
+                Bush(c, 16, 19, 8f, false);
+                foreach (var (x, y) in new[] { (12, 15), (18, 17), (14, 23), (21, 21), (10, 20), (17, 12) })
+                    c.Ball(x, y, 1.3f, 1.3f, BerryR, 0.6f);
+                c.SelOut(SilhouetteRim, cell);
                 break;
             case 13: // snowdrift
-                for (int y = 0; y < 5; y++)
-                {
-                    int half = 6 - Math.Abs(y - 1) - (y > 2 ? 1 : 0);
-                    for (int x = 8 - half; x < 8 + half; x++)
-                        c.Px(x, 8 + y, y >= 3 ? SnowShade : y == 0 ? Colors.White : Snow, solid: false);
-                }
-                c.Rect(4, 13, 8, 1, new Color("aebccb"));
+                c.Ball(16f, 22f, 12f, 5.5f, Land.Cap, 0.6f, 0.4f);
+                for (int x = 5; x < 28; x++)
+                    c.Px(x, 27, Land.Cap.Shade, solid: false);
                 break;
             case 14: // ice crystals
-                Shadow(c, 4, 13, 9, 1);
-                foreach (var (x, h) in new[] { (5, 5), (8, 8), (11, 4) })
+                c.GroundShadow(17, 27, 9, 2.2f, 0.25f);
+                foreach (var (x, h) in new[] { (10f, 10f), (16f, 16f), (22f, 8f) })
                 {
-                    c.Rect(x, 13 - h, 2, h, Ice);
-                    c.Rect(x + 1, 13 - h, 1, h, IceDark);
-                    c.Px(x, 12 - h, Ice);
+                    c.Polygon(new[] { new Vector2(x - 2.5f, 27), new Vector2(x - 2f, 27 - h + 3), new Vector2(x, 27 - h), new Vector2(x + 2f, 27 - h + 3), new Vector2(x + 2.5f, 27) },
+                        IceR, (px, py) => px < x ? 1f : -0.8f);
                 }
-                c.Outline(IceOutline, cell);
+                c.SelOut(IceR.Deep, cell);
                 break;
-            case 15: Twigs(c, BarkDark); break;
-            case 16: Stump(c, true); c.Outline(Outline, cell); break;
-            case 17: // young fir with snow on its boughs
-                Shadow(c, 5, 14, 7, 1);
-                for (int row = 0; row < 10; row++)
-                {
-                    int half = 1 + row / 2 - (row % 3 == 0 && row > 0 ? 1 : 0);
-                    for (int x = 8 - half; x <= 8 + half; x++)
-                        c.Px(x, 3 + row, row % 3 == 0 ? Snow : x < 8 ? LeafLight : LeafDark);
-                }
-                c.Rect(8, 13, 1, 2, Bark);
-                c.Outline(TreeOutline, cell);
+            case 15: Twigs(c, Land.Bark.Shade); break;
+            case 16: Stump(c, true); c.SelOut(SilhouetteRim, cell); break;
+            case 17: // young fir, snow on its boughs
+                c.GroundShadow(18, 28, 7, 2f, 0.3f);
+                c.Stroke(16, 25, 16, 29, 2f, Land.Bark);
+                Fir(c, 16, 6, 21, 17, 0);
+                c.SelOut(SilhouetteRim, cell);
                 break;
             case 18: // frozen puddle
-                for (int y = 0; y < 5; y++)
-                    for (int x = 0; x < 11; x++)
+                for (int y = 0; y < 10; y++)
+                    for (int x = 0; x < 22; x++)
                     {
-                        float dx = (x - 5f) / 5.5f, dy = (y - 2f) / 2.5f;
-                        if (dx * dx + dy * dy <= 1f)
-                            c.Px(3 + x, 8 + y, dx * dx + dy * dy > 0.6f ? IceDark : Ice, solid: false);
+                        float dx = (x - 10.5f) / 11f, dy = (y - 4.5f) / 5f;
+                        float d = dx * dx + dy * dy;
+                        if (d <= 1f)
+                            c.Shade(5 + x, 16 + y, IceR, d > 0.7f ? -1f : (x - y) % 7 == 0 ? 1.5f : 0.2f, solid: false);
                     }
-                c.Px(6, 9, Colors.White, solid: false);
-                c.Px(7, 9, Colors.White, solid: false);
                 break;
-            case 19: Rock3(c, 8, 9, 3.4f); c.Rect(6, 6, 4, 1, Snow); c.Rect(5, 7, 3, 1, Snow); c.Outline(Outline, cell); break;
+            case 19: RockLump(c, 16, 19, 7f); c.Ball(14f, 13f, 5f, 2f, Land.Cap, 0.6f, 1f); c.SelOut(SilhouetteRim, cell); break;
             case 20: // tracks in the snow
-                for (int s = 0; s < 4; s++)
+                for (int s = 0; s < 5; s++)
                 {
-                    c.Px(3 + s * 3, 12 - s * 2, SnowShade, solid: false);
-                    c.Px(4 + s * 3, 13 - s * 2, SnowShade, solid: false);
-                    c.Px(5 + s * 3, 11 - s * 2, SnowShade, solid: false);
+                    int x = 5 + s * 5, y = 26 - s * 4 + (s % 2) * 2;
+                    c.Px(x, y, g.Shade, solid: false);
+                    c.Px(x + 1, y, g.Shade, solid: false);
+                    c.Px(x, y + 1, g.Deep, solid: false);
+                    c.Px(x + 1, y + 1, g.Shade, solid: false);
                 }
                 break;
             case 21: // saguaro
-                Shadow(c, 6, 14, 6, 1);
-                c.Rect(7, 3, 3, 11, Leaf);
-                c.Rect(7, 3, 1, 11, LeafLight);
-                c.Rect(9, 3, 1, 11, LeafDark);
-                c.Rect(4, 8, 3, 2, Leaf); c.Rect(4, 5, 2, 3, Leaf); c.Px(4, 5, LeafLight);
-                c.Rect(10, 6, 2, 2, Leaf); c.Rect(11, 3, 2, 3, Leaf); c.Px(12, 3, LeafDark);
-                c.Px(8, 2, FlowerRed);
-                c.Outline(TreeOutline, cell);
+                c.GroundShadow(18, 28, 6, 2f, 0.3f);
+                c.Column(14, 6, 5, 22, CactusR);
+                c.Stroke(9, 17, 13, 17, 3.4f, CactusR);
+                c.Column(8, 10, 3, 8, CactusR);
+                c.Stroke(19, 13, 22, 13, 3f, CactusR, -0.3f);
+                c.Column(21, 7, 3, 7, CactusR, -0.2f);
+                for (int y = 8; y < 27; y += 3)
+                    c.Px(16, y, CactusR.Deep);
+                c.Px(16, 5, FlowerRed);
+                c.SelOut(SilhouetteRim, cell);
                 break;
             case 22: // barrel cactus
-                Shadow(c, 5, 13, 7, 1);
-                c.Disc(8, 10, 3.2f, Leaf);
-                c.Rect(6, 8, 1, 4, LeafLight);
-                c.Rect(10, 8, 1, 4, LeafDark);
-                c.Px(8, 7, FlowerYellow);
-                c.Px(7, 6, FlowerRed);
-                c.Outline(TreeOutline, cell);
+                c.GroundShadow(17, 27, 7, 2f, 0.3f);
+                c.Ball(16f, 21f, 6.5f, 6.5f, CactusR, 0.2f);
+                for (int x = 12; x <= 20; x += 4)
+                    c.Stroke(x, 16, x, 26, 0.8f, CactusR, -1.2f);
+                c.Ball(16f, 14.5f, 2f, 1.3f, Ramp.Of(FlowerYellow), 0.6f);
+                c.Px(14, 13, FlowerRed);
+                c.SelOut(SilhouetteRim, cell);
                 break;
             case 23: // skull
-                Shadow(c, 5, 13, 7, 1);
-                c.Rect(5, 8, 6, 4, Bone);
-                c.Rect(6, 7, 4, 1, Bone);
-                c.Rect(6, 12, 4, 1, BoneDark);
-                c.Px(6, 9, Outline); c.Px(9, 9, Outline);
-                c.Px(7, 11, BoneDark); c.Px(8, 11, BoneDark);
-                c.Outline(new Color("5a4a34"), cell);
+                c.GroundShadow(17, 26, 7, 2f, 0.3f);
+                c.Ball(16f, 19f, 6f, 5f, BoneR, 0.3f);
+                c.Block(12, 22, 8, 3, BoneR, top: 0, bias: -0.4f);
+                c.Rect(12, 18, 3, 3, SilhouetteRim);
+                c.Rect(18, 18, 3, 3, SilhouetteRim);
+                c.Px(16, 21, BoneR.Deep);
+                for (int x = 13; x < 20; x += 2)
+                    c.Px(x, 24, BoneR.Deep);
+                c.SelOut(SilhouetteRim, cell);
                 break;
             case 24: // ribcage half in the sand
-                c.Rect(3, 11, 11, 1, Bone);
-                for (int r = 0; r < 4; r++)
-                {
-                    c.Rect(4 + r * 3, 7 + r % 2, 1, 4 - r % 2, Bone);
-                    c.Px(5 + r * 3, 7 + r % 2, BoneDark);
-                }
-                c.Outline(new Color("8a7a5a"), cell);
+                c.Stroke(6, 23, 27, 23, 2f, BoneR);
+                for (int r = 0; r < 5; r++)
+                    c.Stroke(8 + r * 4, 23, 9 + r * 4 + (r % 2), 14 + r % 2 * 2, 1.6f, BoneR, 0.3f);
+                c.SelOut(BoneR.Deep, cell);
                 break;
-            case 25: Twigs(c, new Color("8a6a3a")); break; // tumbleweed
+            case 25: Twigs(c, Land.Bark.Base); break; // tumbleweed
             case 26: // cracked ground
-                foreach (var (x0, y0, x1, y1) in new[] { (2, 6, 7, 9), (7, 9, 13, 7), (7, 9, 8, 14), (10, 8, 12, 12) })
-                    LineGround(c, x0, y0, x1, y1, DirtDark);
+                foreach (var (x0, y0, x1, y1) in new[] { (4, 12, 14, 18), (14, 18, 26, 14), (14, 18, 16, 28), (20, 16, 24, 24), (8, 22, 14, 18) })
+                    LineGround(c, x0, y0, x1, y1, Land.Ground.Deep);
                 break;
             case 27: // a pile of rocks
-                Rock3(c, 6, 10, 3f);
-                Rock3(c, 11, 11, 2.2f);
-                Rock3(c, 9, 7, 2f);
-                c.Outline(Outline, cell);
+                RockLump(c, 12, 20, 6f);
+                RockLump(c, 22, 22, 4.5f);
+                RockLump(c, 17, 14, 4f);
+                c.SelOut(SilhouetteRim, cell);
                 break;
             case 28: // ripples of wind-blown sand
-                for (int r = 0; r < 3; r++)
-                    for (int x = 2; x < 14; x++)
+                for (int r = 0; r < 4; r++)
+                    for (int x = 3; x < 29; x++)
                     {
-                        int y = 5 + r * 4 + (int)Mathf.Round(Mathf.Sin(x * 0.7f + r) * 0.8f);
-                        c.Px(x, y, GrassLight, solid: false);
-                        c.Px(x, y + 1, GrassDark, solid: false);
+                        int y = 7 + r * 6 + (int)Mathf.Round(Mathf.Sin(x * 0.35f + r) * 1.5f);
+                        c.Px(x, y, g.Light, solid: false);
+                        c.Px(x, y + 1, g.Shade, solid: false);
                     }
                 break;
             case 29: // a crumbling sandstone wall
-                Shadow(c, 2, 14, 13, 1);
-                for (int x = 2; x < 14; x++)
+                c.GroundShadow(17, 28, 13, 2.5f, 0.3f);
+                for (int x = 4; x < 28; x++)
                 {
-                    int top = 6 + Hash(x / 2, 3, 29) % 4;
-                    for (int y = top; y < 14; y++)
-                        c.Px(x, y, (y - top) % 3 == 2 || (x + (y / 3) * 2) % 5 == 0 ? SandDark : Sand);
+                    int top = 12 + Hash(x / 3, 3, 29) % 7;
+                    for (int y = top; y < 28; y++)
+                    {
+                        bool joint = (y - 12) % 4 == 3 || (x + (y / 4 % 2) * 3) % 7 == 0;
+                        c.Shade(x, y, Land.Sand, joint ? -1.2f : y == top ? 1f : x > 25 ? -0.6f : 0f);
+                    }
                 }
-                c.Outline(Outline, cell);
+                c.SelOut(SilhouetteRim, cell);
                 break;
             case 30: // scattered bones
-                c.Rect(4, 9, 5, 1, Bone); c.Px(3, 8, Bone); c.Px(3, 10, Bone); c.Px(9, 8, Bone); c.Px(9, 10, Bone);
-                c.Rect(8, 12, 4, 1, BoneDark); c.Px(7, 11, Bone); c.Px(12, 13, Bone);
+                c.Stroke(7, 18, 17, 18, 1.8f, BoneR, 0.3f);
+                c.Ball(6f, 17f, 1.5f, 1.5f, BoneR, 0.5f); c.Ball(6f, 19.5f, 1.5f, 1.5f, BoneR);
+                c.Ball(18f, 17f, 1.5f, 1.5f, BoneR, 0.5f); c.Ball(18f, 19.5f, 1.5f, 1.5f, BoneR);
+                c.Stroke(15, 25, 23, 24, 1.6f, BoneR, -0.4f);
+                c.SelOut(BoneR.Deep, cell);
                 break;
             default: // a mixed patch of flowers
                 Flowers(c, FlowerYellow, 5);
@@ -220,70 +219,67 @@ public static partial class ArtGenerator
         }
     }
 
+    /// <summary>A few flowers: a stem, four petals round a heart, a leaf.</summary>
     private static void Flowers(PixelCanvas c, Color petal, int seed)
     {
-        for (int f = 0; f < 4; f++)
+        var petals = Ramp.Of(petal, 0.6f);
+        for (int f = 0; f < 5; f++)
         {
-            int x = 2 + Hash(f, seed, 3) % 12, y = 3 + Hash(seed, f, 4) % 10;
-            c.Px(x, y + 1, GrassDark, solid: false);
-            c.Px(x, y + 2, GrassDark, solid: false);
-            c.Px(x - 1, y, petal, solid: false);
-            c.Px(x + 1, y, petal, solid: false);
-            c.Px(x, y - 1, petal, solid: false);
-            c.Px(x, y, f % 2 == 0 ? FlowerYellow : petal.Darkened(0.25f), solid: false);
+            int x = 5 + Hash(f, seed, 3) % 22, y = 6 + Hash(seed, f, 4) % 20;
+            for (int s = 1; s <= 4; s++)
+                c.Px(x, y + s, Land.Leaf.Base, solid: false);
+            c.Px(x + 1, y + 3, Land.Leaf.Light, solid: false);
+            c.Px(x - 1, y, petals.Light, solid: false);
+            c.Px(x + 1, y, petals.Shade, solid: false);
+            c.Px(x, y - 1, petals.Glint, solid: false);
+            c.Px(x, y + 1, petals.Shade, solid: false);
+            c.Px(x, y, f % 2 == 0 ? FlowerYellow : petals.Deep, solid: false);
         }
     }
 
     private static void Bush(PixelCanvas c, int cx, int cy, float r, bool snow)
     {
-        Shadow(c, cx - (int)r + 1, cy + (int)r, (int)(2 * r), 1);
-        c.Disc(cx, cy, r, Leaf);
-        int ri = (int)Mathf.Ceil(r);
-        for (int y = -ri; y <= ri; y++)
-            for (int x = -ri; x <= ri; x++)
-            {
-                if (x * x + y * y > r * r)
-                    continue;
-                if (x + y < -r * 0.7f) c.Px(cx + x, cy + y, LeafLight);
-                else if (x + y > r * 0.6f) c.Px(cx + x, cy + y, LeafDark);
-            }
-        c.Px(cx - 2, cy - 2, snow ? Snow : LeafHighlight);
+        c.GroundShadow(cx + 2, cy + r - 1, r * 1.1f, r * 0.35f, 0.3f);
+        Crown(c, cx, cy, r, cx + cy, 0);
+        if (snow)
+            c.Ball(cx - 2, cy - r * 0.6f, r * 0.6f, 2f, Land.Cap, 0.6f, 1f);
     }
 
     private static void Stump(PixelCanvas c, bool snow)
     {
-        Shadow(c, 5, 13, 8, 1);
-        c.Rect(5, 8, 6, 5, Bark);
-        c.Rect(9, 8, 2, 5, BarkDark);
-        c.Rect(5, 7, 6, 2, WoodLight);
-        c.Px(7, 7, Wood); c.Px(8, 8, Wood);
-        c.Px(4, 12, Bark); c.Px(11, 12, BarkDark);
+        c.GroundShadow(18, 27, 9, 2.5f, 0.3f);
+        c.Column(10, 16, 12, 10, Land.Bark);
+        c.Stroke(8, 26, 11, 24, 2f, Land.Bark, 0.2f);
+        c.Stroke(24, 26, 21, 24, 2f, Land.Bark, -0.6f);
+        c.Ball(16f, 16f, 6f, 2.5f, WoodR, 0.5f, 1f);
+        c.Ball(16f, 16f, 3.5f, 1.4f, WoodR, -0.3f, 1f);
+        c.Px(16, 16, DarkWoodR.Base);
         if (snow)
-        {
-            c.Rect(5, 6, 6, 2, Snow);
-            c.Px(4, 7, Snow);
-        }
+            c.Ball(15f, 14.5f, 6.5f, 2.5f, Land.Cap, 0.8f, 1f);
     }
 
-    private static void Rock3(PixelCanvas c, int cx, int cy, float r)
+    private static void RockLump(PixelCanvas c, int cx, int cy, float r)
     {
-        Shadow(c, cx - (int)r, cy + (int)r - 1, (int)(2 * r) + 1, 1);
-        int ri = (int)Mathf.Ceil(r);
-        for (int y = -ri; y <= ri; y++)
-            for (int x = -ri - 1; x <= ri + 1; x++)
+        c.GroundShadow(cx + 2, cy + r * 0.7f, r * 1.25f, r * 0.4f, 0.3f);
+        for (int y = (int)(cy - r); y <= (int)(cy + r * 0.7f); y++)
+            for (int x = (int)(cx - r - 2); x <= (int)(cx + r + 2); x++)
             {
-                float dx = x / (r + 0.8f), dy = y / r;
-                if (dx * dx + dy * dy > 1f || y > r * 0.6f)
+                float dx = (x + 0.5f - cx) / (r + 1.5f), dy = (y + 0.5f - cy) / r;
+                float d = dx * dx + dy * dy;
+                if (d > 1f)
                     continue;
-                c.Px(cx + x, cy + y, x + y < -r * 0.5f ? RockLight : x + y > r * 0.4f ? RockDark : Rock);
+                // Facets: a lit top, a mid face, a shaded side.
+                float light = dy < -0.35f ? 1.2f : dx > 0.35f ? -1f : 0.1f;
+                light += (Hash(x / 2, y / 2, cx) % 3 - 1) * 0.2f;
+                c.Shade(x, y, Land.Rock, light);
             }
     }
 
     /// <summary>A dry, leafless bush: twigs branching from the ground.</summary>
     private static void Twigs(PixelCanvas c, Color color)
     {
-        Shadow(c, 4, 13, 8, 1);
-        foreach (var (x0, y0, x1, y1) in new[] { (8, 13, 8, 7), (8, 10, 5, 6), (8, 9, 11, 5), (5, 6, 4, 4), (11, 5, 12, 3), (8, 7, 7, 4), (8, 11, 12, 9) })
+        c.GroundShadow(17, 27, 8, 2f, 0.25f);
+        foreach (var (x0, y0, x1, y1) in new[] { (16, 27, 16, 14), (16, 21, 10, 13), (16, 19, 22, 10), (10, 13, 8, 8), (22, 10, 24, 6), (16, 15, 14, 8), (16, 23, 24, 19), (13, 17, 9, 18) })
             LineGround(c, x0, y0, x1, y1, color);
     }
 
@@ -299,13 +295,5 @@ public static partial class ArtGenerator
             if (e2 >= dy) { err += dy; x0 += sx; }
             if (e2 <= dx) { err += dx; y0 += sy; }
         }
-    }
-
-    /// <summary>A soft dark strip on the ground under a thing.</summary>
-    private static void Shadow(PixelCanvas c, int x, int y, int w, int h)
-    {
-        for (int j = 0; j < h; j++)
-            for (int i = 0; i < w; i++)
-                c.Px(x + i, y + j, GroundShadow, solid: false);
     }
 }

@@ -5,11 +5,12 @@ namespace Warcrown.World;
 
 /// <summary>
 /// RTS camera: keyboard / screen-edge panning, middle-mouse drag, wheel zoom towards the cursor.
-/// Zoom uses fixed steps so pixel art stays crisp at the integer levels. Position is the view center.
+/// Zoom uses fixed steps so pixel art stays crisp at the levels of one or two screen pixels per art pixel; zoomed out
+/// further, the world is drawn smoothed (mipmapped) instead of shimmering. Position is the view center.
 /// </summary>
 public partial class CameraController : Camera2D
 {
-    private static readonly float[] ZoomLevels = { 0.5f, 1f, 2f, 3f, 4f };
+    private static readonly float[] ZoomLevels = { 0.25f, 0.5f, 1f, 1.5f, 2f };
 
     /// <summary>Pan speed in screen pixels per second, so it feels the same at every zoom level.</summary>
     [Export] public float PanSpeed { get; set; } = 900f;
@@ -39,7 +40,7 @@ public partial class CameraController : Camera2D
 
     public override void _Ready()
     {
-        Zoom = Vector2.One * ZoomLevel;
+        ApplyZoom();
         GetWindow().MouseEntered += OnMouseEntered;
         GetWindow().MouseExited += OnMouseExited;
     }
@@ -50,10 +51,18 @@ public partial class CameraController : Camera2D
         GetWindow().MouseExited -= OnMouseExited;
     }
 
+    /// <summary>Sets the zoom of the current level, and how the world's pixels are filtered at it.</summary>
+    private void ApplyZoom()
+    {
+        Zoom = Vector2.One * ZoomLevel;
+        if (GetParent() is CanvasItem world)
+            world.TextureFilter = ZoomLevel < 1f ? TextureFilterEnum.LinearWithMipmaps : TextureFilterEnum.Nearest;
+    }
+
     public void SetZoomIndex(int index)
     {
         _zoomIndex = Mathf.Clamp(index, 0, ZoomLevels.Length - 1);
-        Zoom = Vector2.One * ZoomLevel;
+        ApplyZoom();
         ClampToBounds();
     }
 
@@ -184,7 +193,7 @@ public partial class CameraController : Camera2D
         Vector2 fromCenter = screenPoint - GetViewportRect().Size / 2;
         Vector2 worldUnderCursor = Position + fromCenter / ZoomLevel;
         _zoomIndex = next;
-        Zoom = Vector2.One * ZoomLevel;
+        ApplyZoom();
         Position = worldUnderCursor - fromCenter / ZoomLevel;
         ClampToBounds();
     }

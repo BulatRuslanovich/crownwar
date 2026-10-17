@@ -13,20 +13,21 @@ public enum Biome : byte
 
 /// <summary>
 /// Makes a random map for 2 to 4 players from a seed, the land from Perlin noise like a Minecraft world: the terrain
-/// is not mirrored, so one player may get a river at the door, another a mountain ridge. The start is fair all the
+/// is not mirrored, so one player may get a river at the door, another a forest. The start is fair all the
 /// same, whatever the number of players. The same seed and player count always give the same map (so lockstep peers
 /// only exchange those).
 /// <list type="bullet">
 /// <item>Size: a square, larger for more players (<see cref="SizeFor"/>).</item>
 /// <item>Climate: temperature and humidity noise place the biomes — cold winter, hot and dry desert, temperate
 /// meadow — in large natural regions.</item>
-/// <item>Land: elevation and moisture noise give mountains on the heights, lakes in the hollows and woods where it
-/// is wet, each biome in its own way; rivers wind along the ridges of another noise.</item>
+/// <item>Land: elevation and moisture noise give lakes in the hollows and woods where it is wet (and wooded hills on
+/// the heights), each biome in its own way; rivers wind along the ridges of another noise. There are no mountains:
+/// water is the only barrier (hand-made maps may still have them).</item>
 /// <item>Castles: on a circle round the middle, at equal angles, so every castle is as far from its neighbours and
 /// from the middle as every other; the layout is turned one of the ways the square looks the same, and each castle
 /// takes the driest spot near its place, cleared for the first buildings.</item>
 /// <item>Roads: laid by a path search over the land between neighbouring castles and to the middle, avoiding
-/// mountains and water where they can, bridging rivers and crossing ridges by passes where they must — so every
+/// water where they can and bridging rivers where they must — so every
 /// castle reaches every other.</item>
 /// <item>Gold: two deposits by every castle at the same distances; rich ones in the gaps between neighbours (and the
 /// middle), as far from one castle as from the next; the rest scattered as it falls, all of it inside the circle the
@@ -83,13 +84,19 @@ public static class MapGenerator
         return new MapDefinition(grid, Array.Empty<UnitSpawn>(), starts, deposits, build.Biomes);
     }
 
-    /// <summary>What a biome grows at a given elevation and moisture (both 0..1, most values near 0.5).</summary>
+    /// <summary>
+    /// What a biome grows at a given elevation and moisture (both 0..1, most values near 0.5): lakes in the hollows,
+    /// woods where it is wet, and on the heights, where mountains would stand, woods that need less moisture — fir-clad
+    /// hills in the snow, wooded hilltops in the meadows; the desert's heights stay open sand.
+    /// </summary>
     private static Terrain Grow(Biome biome, float elevation, float moisture) => biome switch
     {
-        Biome.Winter => elevation > 0.65f ? Terrain.Mountain : elevation < 0.30f ? Terrain.Water : moisture > 0.55f ? Terrain.Forest : Terrain.Grass,
-        Biome.Desert => elevation > 0.69f ? Terrain.Mountain : elevation < 0.26f ? Terrain.Water
+        Biome.Winter => elevation < 0.30f ? Terrain.Water
+            : moisture > 0.55f || elevation > 0.65f && moisture > 0.42f ? Terrain.Forest : Terrain.Grass,
+        Biome.Desert => elevation < 0.26f ? Terrain.Water
             : moisture > 0.66f || moisture > 0.58f && elevation < 0.37f ? Terrain.Forest : Terrain.Grass, // palms by the oases
-        _ => elevation > 0.68f ? Terrain.Mountain : elevation < 0.30f ? Terrain.Water : moisture > 0.57f ? Terrain.Forest : Terrain.Grass,
+        _ => elevation < 0.30f ? Terrain.Water
+            : moisture > 0.57f || elevation > 0.68f && moisture > 0.47f ? Terrain.Forest : Terrain.Grass,
     };
 
     /// <summary>One map being made: its size, its random stream, and the land as it takes shape.</summary>
@@ -138,7 +145,7 @@ public static class MapGenerator
                     float e = elevation.Fractal(x * 0.05f, y * 0.05f, 4);
                     float m = moisture.Fractal(x * 0.11f, y * 0.11f, 3);
                     var land = Grow(biome, e, m);
-                    // Rivers: where the river noise crosses its middle, on land that is neither mountain nor lake.
+                    // Rivers: where the river noise crosses its middle, on land that is not a lake.
                     float r = MathF.Abs(rivers.Fractal(x * 0.022f, y * 0.022f, 2) - 0.5f);
                     float riverWidth = biome == Biome.Desert ? 0.008f : 0.014f;
                     if (land is Terrain.Grass or Terrain.Forest && r < riverWidth)
@@ -149,8 +156,8 @@ public static class MapGenerator
         }
 
         /// <summary>
-        /// Woods or ranges of two biomes never touch: a narrow clearing (or a pass) runs between them, which the smooth
-        /// blend of the ground then covers, instead of pines and oaks, grey and red rocks meeting on a straight line.
+        /// Woods (or ranges, on hand-made land) of two biomes never touch: a narrow clearing runs between them, which the
+        /// smooth blend of the ground then covers, instead of pines and oaks meeting on a straight line.
         /// </summary>
         public void SeparateBiomes()
         {
@@ -320,7 +327,8 @@ public static class MapGenerator
 
         /// <summary>
         /// The castle's top-left cell close to <paramref name="place"/>: of a few dozen spots around it, the one with the
-        /// most dry land around (lakes and mountains are not cleared away into a meadow), with a little luck in the choice.
+        /// most dry land around (lakes are not cleared away into a meadow), the nearer the place the better (so every castle
+    /// stays as far from the middle and its neighbours as the others), with a little luck in the choice.
         /// </summary>
         private Cell PickStart(Vector2 place, int jitter)
         {
@@ -341,6 +349,7 @@ public static class MapGenerator
                         score += Tiles[y * Width + x] switch { Terrain.Grass => 1f, Terrain.Forest => 0.6f, _ => -1f };
                     }
                 score += (float)_rng.NextDouble() * 8f; // luck: not always the very best spot
+                score -= 2f * MathF.Sqrt((c.X - ideal.X) * (c.X - ideal.X) + (c.Y - ideal.Y) * (c.Y - ideal.Y)); // fairness: stay near the place
                 if (score > bestScore)
                 {
                     bestScore = score;
@@ -374,7 +383,7 @@ public static class MapGenerator
 
         /// <summary>
         /// Lays a road along the cheapest way between two cells (four directions, so bridges run straight): open ground
-        /// is cheap, existing roads cheaper, woods dearer, and water (a bridge) and mountains (a pass) dearest of all.
+        /// is cheap, existing roads cheaper, woods dearer, and water (a bridge) dearest of all.
         /// </summary>
         private void Road(Cell from, Cell to)
         {

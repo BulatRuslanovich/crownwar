@@ -6,40 +6,41 @@ using Warcrown.World;
 namespace Warcrown.Units;
 
 /// <summary>
-/// The unit sheet with a faction's colour baked into its mask, one texture per colour, made on first use. A unit is
+/// The unit sheets (soldiers and big beasts) with a faction's colour baked into their masks, one texture per colour and
+/// sheet, made on first use. A unit is
 /// then one sprite with one texture, so the renderer draws a whole army of a faction in few batches instead of
 /// switching between the body sheet and the mask sheet for every soldier. The match owns these textures and frees
 /// them when it ends (engine objects must not outlive the tree).
 /// </summary>
 public sealed class UnitSheets : IDisposable
 {
-    private readonly Dictionary<Color, ImageTexture> _byColor = new();
-    private Image? _body;
-    private Image? _mask;
+    private readonly Dictionary<(Color, bool), ImageTexture> _byColor = new();
+    private readonly Dictionary<bool, (Image Body, Image Mask)> _sources = new();
 
-    /// <summary>The sheet for units of <paramref name="team"/>'s colour.</summary>
-    public Texture2D For(Color team)
+    /// <summary>The sheet (soldiers', or the big beasts' when <paramref name="big"/>) for units of <paramref name="team"/>'s colour.</summary>
+    public Texture2D For(Color team, bool big = false)
     {
-        if (_byColor.TryGetValue(team, out var texture))
+        if (_byColor.TryGetValue((team, big), out var texture))
             return texture;
-        texture = ImageTexture.CreateFromImage(Bake(team));
-        _byColor[team] = texture;
+        texture = ImageTexture.CreateFromImage(Bake(team, big));
+        _byColor[(team, big)] = texture;
         return texture;
     }
 
     /// <summary>The mask tinted in <paramref name="team"/>'s colour laid over the body, as the two sprites used to draw it.</summary>
-    private Image Bake(Color team)
+    private Image Bake(Color team, bool big)
     {
-        _body ??= Load(Sprites.Units);
-        _mask ??= Load(Sprites.UnitsTeam);
-        int w = _body.GetWidth(), h = _body.GetHeight();
+        if (!_sources.TryGetValue(big, out var source))
+            _sources[big] = source = (Load(Sprites.Units(big)), Load(Sprites.Units(big, "_team")));
+        var (body, mask) = source;
+        int w = body.GetWidth(), h = body.GetHeight();
         var image = Image.CreateEmpty(w, h, false, Image.Format.Rgba8);
         for (int y = 0; y < h; y++)
         {
             for (int x = 0; x < w; x++)
             {
-                var b = _body.GetPixel(x, y);
-                var m = _mask.GetPixel(x, y);
+                var b = body.GetPixel(x, y);
+                var m = mask.GetPixel(x, y);
                 if (m.A <= 0f)
                 {
                     image.SetPixel(x, y, b);
@@ -52,6 +53,7 @@ public sealed class UnitSheets : IDisposable
                 image.SetPixel(x, y, color with { A = a });
             }
         }
+        image.GenerateMipmaps(); // smooth when zoomed far out
         return image;
     }
 
@@ -67,8 +69,11 @@ public sealed class UnitSheets : IDisposable
         foreach (var texture in _byColor.Values)
             texture.Dispose();
         _byColor.Clear();
-        _body?.Dispose();
-        _mask?.Dispose();
-        _body = _mask = null;
+        foreach (var (body, mask) in _sources.Values)
+        {
+            body.Dispose();
+            mask.Dispose();
+        }
+        _sources.Clear();
     }
 }

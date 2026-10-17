@@ -67,6 +67,8 @@ public static class HudText
             parts.Add(string.Format(T("INFO_SPLASH"), splash.Range, splash.Damage, splash.SplashRadius));
         else if (type.Attack is { } attack)
             parts.Add(string.Format(T("INFO_SHOOTS"), attack.Range, attack.Damage));
+        if (type.Attack is { } shooting)
+            parts.Add(T(shooting.HitsAir ? "INFO_HITS_AIR" : "INFO_NO_AIR"));
         else if (type.SightRange > 0f && !type.IsCapital)
             parts.Add(string.Format(T("INFO_SIGHT"), type.SightRange));
         if (type.IsCapital)
@@ -95,6 +97,12 @@ public static class HudText
                     lines.Add(string.Format(T("INFO_BONUS_AGAINST"), bonus, Names.Of(sim.Rules.Units.Get(against))));
         if (type.IsSiege)
             lines.Add(string.Format(T("INFO_SIEGE"), type.BuildingDamageMultiplier));
+        if (type.SplashRadius > 0f)
+            lines.Add(string.Format(T("INFO_FIRE"), type.SplashRadius));
+        if (type.IsFlying)
+            lines.Add(T("INFO_FLYING"));
+        if (type.HitsAir)
+            lines.Add(T("INFO_HITS_AIR"));
         lines.Add(string.Format(T("INFO_UPKEEP"), type.Upkeep));
         lines.Add(T("HUD_RECRUIT_SHIFT"));
         return string.Join("\n", lines);

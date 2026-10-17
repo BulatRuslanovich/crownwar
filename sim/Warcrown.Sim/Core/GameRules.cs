@@ -260,7 +260,10 @@ public sealed class GameRules
         Heal: u.TryGetProperty("heal", out var heal)
             ? new HealAbility(heal.GetProperty("amount").GetInt32(), heal.GetProperty("range").GetSingle(), heal.GetProperty("cooldown").GetSingle())
             : null,
-        BarracksRequired: OptionalInt(u, "barracksRequired"));
+        BarracksRequired: OptionalInt(u, "barracksRequired"),
+        IsFlying: OptionalBool(u, "flying"),
+        HitsAir: OptionalBool(u, "antiAir"),
+        SplashRadius: OptionalSingle(u, "splash"));
 
     private static BuildingType ParseBuilding(JsonElement b)
     {
@@ -285,7 +288,8 @@ public sealed class GameRules
                     a.GetProperty("range").GetSingle(),
                     a.GetProperty("cooldown").GetSingle(),
                     a.GetProperty("projectileSpeed").GetSingle(),
-                    OptionalSingle(a, "splash"))
+                    OptionalSingle(a, "splash"),
+                    OptionalBool(a, "antiAir"))
                 : null,
             SightRange: OptionalSingle(b, "sight"),
             MaxCount: OptionalInt(b, "maxCount"),

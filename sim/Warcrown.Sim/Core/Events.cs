@@ -162,8 +162,14 @@ public sealed record MatchEnded(int WinningTeam) : SimEvent(-1);
 public sealed record AttackLanded(int FactionId, int AttackerId, int TargetId, int TargetFactionId, Vector2 Position, bool Ranged,
     bool Splash = false) : SimEvent(FactionId);
 
-/// <summary>A catapult's stone came down at <paramref name="Position"/>, hurting enemies within <paramref name="Radius"/> tiles.</summary>
-public sealed record SplashLanded(int FactionId, int SourceId, Vector2 Position, float Radius) : SimEvent(FactionId);
+/// <summary>
+/// A catapult's stone came down at <paramref name="Position"/>, hurting enemies within <paramref name="Radius"/> tiles
+/// (or a dragon's fire burst there, <paramref name="Fire"/>).
+/// </summary>
+public sealed record SplashLanded(int FactionId, int SourceId, Vector2 Position, float Radius, bool Fire = false) : SimEvent(FactionId);
 
-/// <summary>An archer or tower loosed an arrow (or a catapult a stone, <paramref name="Splash"/>) from <paramref name="Position"/>.</summary>
-public sealed record ProjectileFired(int FactionId, Vector2 Position, bool Splash = false) : SimEvent(FactionId);
+/// <summary>
+/// An archer or tower loosed an arrow (or a catapult a stone, <paramref name="Splash"/>; or a dragon breathed fire,
+/// <paramref name="Fire"/>) from <paramref name="Position"/>.
+/// </summary>
+public sealed record ProjectileFired(int FactionId, Vector2 Position, bool Splash = false, bool Fire = false) : SimEvent(FactionId);

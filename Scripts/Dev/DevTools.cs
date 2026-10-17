@@ -23,6 +23,7 @@ namespace Warcrown.Dev;
 ///   --demo-move=&lt;x&gt;,&lt;y&gt;      select all player units and order them to advance to tile (x, y)
 ///   --demo-camera=&lt;x&gt;,&lt;y&gt;    center the camera on tile (x, y)
 ///   --demo-army=&lt;n&gt;          stress test: n player units and n enemy units (every kind) clash on screen
+///   --demo-flyers            griffins and a dragon of the player's fly at enemy archers and soldiers near the camera
 ///   --pause                  open the pause menu right away
 ///   --debug-hud              show the developer overlay (F3 toggles it in game)
 ///   --demo-end=victory|defeat show the end screen (view only, the match goes on)
@@ -96,6 +97,8 @@ public static class DevTools
             DemoMove(match, move);
         if (Arg(args, "--demo-army") is { } army)
             DemoArmy(match, int.Parse(army, CultureInfo.InvariantCulture));
+        if (args.Contains("--demo-flyers"))
+            DemoFlyers(match);
         if (args.Contains("--pause"))
             match.SetPaused(true);
         if (Arg(args, "--demo-end") is { } end)
@@ -224,6 +227,24 @@ public static class DevTools
         int enemy = sim.Factions.First(f => f.Id != match.LocalFactionId).Id;
         var b = Sim.Units.Formation.ComputeSlots(sim.Map, east, perSide, 0.36f)
             .Select((p, i) => sim.SpawnUnit(types[i % types.Length], enemy, p).Id).ToList();
+        match.Issue(new MoveCommand(match.LocalFactionId, a, east, MoveMode.AttackMove));
+        match.Issue(new MoveCommand(enemy, b, west, MoveMode.AttackMove));
+    }
+
+    /// <summary>The player's griffins and a dragon west of the camera, enemy archers, spearmen and a griffin east of it, closing in.</summary>
+    private static void DemoFlyers(MatchController match)
+    {
+        var sim = match.Sim;
+        var center = SimConvert.ToSim(match.Camera.Position);
+        var west = sim.Map.FindNearestInComponent(Cell.FromPosition(center + new SimVector2(-5f, 0f)), TileGrid.AnyComponent, 12)!.Value.Center;
+        var east = sim.Map.FindNearestInComponent(Cell.FromPosition(center + new SimVector2(5f, 0f)), TileGrid.AnyComponent, 12)!.Value.Center;
+        var own = new[] { "griffin", "griffin", "griffin", "dragon" };
+        var a = Sim.Units.Formation.ComputeSlots(sim.Map, west, own.Length, 0.45f)
+            .Select((p, i) => sim.SpawnUnit(own[i], match.LocalFactionId, p).Id).ToList();
+        int enemy = sim.Factions.First(f => f.Id != match.LocalFactionId).Id;
+        var theirs = new[] { "archer", "archer", "infantry", "archer", "infantry", "griffin", "crossbowman" };
+        var b = Sim.Units.Formation.ComputeSlots(sim.Map, east, theirs.Length, 0.4f)
+            .Select((p, i) => sim.SpawnUnit(theirs[i], enemy, p).Id).ToList();
         match.Issue(new MoveCommand(match.LocalFactionId, a, east, MoveMode.AttackMove));
         match.Issue(new MoveCommand(enemy, b, west, MoveMode.AttackMove));
     }

@@ -175,10 +175,19 @@ public sealed partial class BotBrain
             {
                 float rangedShare = enemies.Count(u => u.Type.IsRanged) / (float)enemies.Count;
                 float armoredShare = enemies.Count(u => u.Type.RangedArmor > 0f) / (float)enemies.Count;
+                float airShare = enemies.Count(u => u.Type.IsFlying) / (float)enemies.Count;
+                float antiAirShare = enemies.Count(u => u.Type.HitsAir) / (float)enemies.Count;
                 for (int i = 0; i < options.Count; i++)
                 {
                     if (options[i].IsSiege || options[i].IsHealer)
                         continue;
+                    // Bowmen answer flyers; flyers are wasted on an army of bowmen.
+                    if (options[i].HitsAir) weights[i] *= 1f + 3f * airShare;
+                    if (options[i].IsFlying)
+                    {
+                        weights[i] *= 1.5f - antiAirShare;
+                        continue;
+                    }
                     if (options[i].ArmorPiercing > 0f) weights[i] *= 1f + 2f * armoredShare; // bolts through plate
                     // Arrow armor answers archers; cheap swarms answer heavies; archers answer plain infantry.
                     if (options[i].RangedArmor > 0f) weights[i] *= 1f + 2f * rangedShare;
@@ -198,7 +207,9 @@ public sealed partial class BotBrain
         return options[^1];
 
         // A fixed mix: mostly infantry, some archers and heavies.
-        static float BaseWeight(UnitType t) => t.IsRanged ? 0.25f : t.RangedArmor > 0f ? 0.25f : 0.5f;
+        // Flyers are a seasoning: a griffin now and then, a dragon more rarely.
+        static float BaseWeight(UnitType t) => t.IsFlying ? (t.IsRanged ? 0.08f : 0.12f)
+            : t.IsRanged ? 0.25f : t.RangedArmor > 0f ? 0.25f : 0.5f;
     }
 
     /// <summary>Nearest free deposit that is closer to our castle than to any enemy castle and not guarded.</summary>

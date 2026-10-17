@@ -63,6 +63,32 @@ public static class Formation
     }
 
     /// <summary>
+    /// Slots for flyers: the lattice around <paramref name="target"/>, closest first, regardless of the ground below
+    /// (kept inside the map, so a group at an edge bunches up rather than leaving it). <paramref name="spacing"/>
+    /// is at least <see cref="Spacing"/>, more for big bodies.
+    /// </summary>
+    public static List<Vector2> ComputeAirSlots(TileGrid map, Vector2 target, int count, float spacing)
+    {
+        spacing = MathF.Max(Spacing, spacing);
+        var slots = new List<Vector2>(count);
+        int reach = (int)MathF.Ceiling(MathF.Sqrt(count)) + 1;
+        var candidates = Scratch.Candidates;
+        candidates.Clear();
+        for (int j = -reach; j <= reach; j++)
+        {
+            for (int i = -reach; i <= reach; i++)
+            {
+                var p = Flight.Clamp(map, new Vector2(target.X + i * spacing, target.Y + j * spacing));
+                candidates.Add((p, Vector2.Distance(p, target) + 1e-4f * (j * (2 * reach + 1) + i)));
+            }
+        }
+        candidates.Sort((a, b) => a.Key.CompareTo(b.Key));
+        for (int k = 0; k < count; k++)
+            slots.Add(candidates[k % candidates.Count].Point);
+        return slots;
+    }
+
+    /// <summary>
     /// Dijkstra from <paramref name="goal"/> (8 directions, no corner cutting) until enough cells are settled.
     /// The list returned is scratch space, valid until the next call.
     /// </summary>

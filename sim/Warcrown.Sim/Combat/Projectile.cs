@@ -7,15 +7,17 @@ namespace Warcrown.Sim.Combat;
 /// A homing missile (an arrow, or a catapult's stone) shot by an archer or a tower. Whether it hits is decided here,
 /// in the simulation: it always reaches a living target, and fizzles if the target is gone first. A stone with a
 /// <see cref="SplashRadius"/> hurts every enemy unit that close to where it lands. A bolt with <see cref="ArmorPiercing"/>
-/// ignores that share of the target's ranged armour; a trebuchet's stone (<see cref="IsStone"/>) flies in an arc.
+/// ignores that share of the target's ranged armour; a trebuchet's stone (<see cref="IsStone"/>) flies in an arc. A
+/// dragon's fire (<see cref="IsFire"/>) burns its target, unit or building, and splashes the enemies on the ground around it.
 /// </summary>
 public sealed class Projectile
 {
     internal Projectile(int sourceId, int factionId, int damage, float speed, Vector2 from, Entity target, float splashRadius = 0f,
-        float armorPiercing = 0f, bool isStone = false)
+        float armorPiercing = 0f, bool isStone = false, bool isFire = false)
     {
         ArmorPiercing = armorPiercing;
-        IsStone = isStone || splashRadius > 0f;
+        IsFire = isFire;
+        IsStone = !isFire && (isStone || splashRadius > 0f);
         SourceId = sourceId;
         FactionId = factionId;
         Damage = damage;
@@ -34,6 +36,9 @@ public sealed class Projectile
 
     /// <summary>A stone (catapult, trebuchet), drawn flying in an arc rather than as an arrow.</summary>
     public bool IsStone { get; }
+
+    /// <summary>A dragon's fireball: hits its target itself as well as the ground around it.</summary>
+    public bool IsFire { get; }
 
     /// <summary>Id of the archer or tower that shot it (it may be gone by the time the arrow lands).</summary>
     public int SourceId { get; }

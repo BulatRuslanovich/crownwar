@@ -9,7 +9,8 @@ namespace Warcrown.World;
 /// Shadows of buildings and units cast by the sun: each picture's silhouette laid on the ground behind it and sheared
 /// to the side the sun shines from. The sun crosses the sky with the day, so shadows swing from the west in the morning
 /// to the east in the evening and are longest at dawn and dusk; at night only faint moon shadows stay. Drawn as one
-/// group under the actors, so overlapping shadows do not darken each other and nobody's shadow falls on a roof.
+/// group under the actors, so overlapping shadows do not darken each other and nobody's shadow falls on a roof. A flyer
+/// casts a soft blot on the ground below it instead, thrown aside by the sun the higher it flies.
 /// </summary>
 public partial class ShadowsView : CanvasGroup
 {
@@ -73,8 +74,8 @@ public partial class ShadowsView : CanvasGroup
             var rect = new Rect2(-size.X / 2f, -size.Y, size.X, size.Y);
             // A footing of shade where the walls meet the ground, then the cast shadow.
             float half = view.Building.Type.Size * SimConvert.TileSize / 2f;
-            _drawer.DrawSetTransform(view.Position + new Vector2(0, -2), 0f, new Vector2(1f, 0.3f));
-            _drawer.DrawCircle(Vector2.Zero, half + 2f, Colors.Black);
+            _drawer.DrawSetTransform(view.Position + new Vector2(0, -4), 0f, new Vector2(1f, 0.3f));
+            _drawer.DrawCircle(Vector2.Zero, half + 4f, Colors.Black);
             _drawer.DrawSetTransformMatrix(new Transform2D(Vector2.Right, shear, view.Position));
             _drawer.DrawTextureRectRegion(body, rect, region, Colors.Black);
             _drawer.DrawTextureRectRegion(team, rect, region, Colors.Black);
@@ -85,21 +86,32 @@ public partial class ShadowsView : CanvasGroup
         {
             if (!view.Visible)
                 continue;
-            _drawer.DrawSetTransform(view.Position + view.SpriteOffset + new Vector2(0, 0.5f), 0f, new Vector2(1f, 0.45f));
-            _drawer.DrawCircle(Vector2.Zero, 4f, Colors.Black);
-        }
-        int w = ArtLayout.UnitCellWidth, h = ArtLayout.UnitCellHeight;
-        var silhouettes = _match.UnitSheets.For(Colors.White);
-        foreach (var view in _units.Views)
-        {
-            if (!view.Visible)
+            if (view.Lift > 0f)
+            {
+                // Far below a flyer: a blot the size of its wingspan, shrinking a little as it rises on a beat.
+                float span = (view.Art.Big ? 20f : 12f) * (1f - (view.Lift - ArtLayout.FlightAltitude(view.Unit.Type.Id)) * 0.03f);
+                _drawer.DrawSetTransform(view.Position + new Vector2(-_lean * view.Lift * 0.4f, 1f), 0f, new Vector2(1f, 0.4f));
+                _drawer.DrawCircle(Vector2.Zero, span, Colors.Black);
                 continue;
-            var feet = view.Position + view.SpriteOffset;
-            var region = new Rect2(view.Frame * w, view.Row * h, w, h);
-            var rect = new Rect2(-ArtLayout.UnitFeet.X, -ArtLayout.UnitFeet.Y, w, h);
-            _drawer.DrawSetTransformMatrix(new Transform2D(view.FacingLeft ? Vector2.Left : Vector2.Right, shear, feet)
-                .ScaledLocal(Vector2.One * view.BodyScale));
-            _drawer.DrawTextureRectRegion(silhouettes, rect, region, Colors.Black);
+            }
+            _drawer.DrawSetTransform(view.Position + view.SpriteOffset + new Vector2(0, 1f), 0f, new Vector2(1f, 0.45f));
+            _drawer.DrawCircle(Vector2.Zero, view.Art.Big ? 14f : 8f, Colors.Black);
+        }
+        foreach (bool big in new[] { false, true })
+        {
+            var silhouettes = _match.UnitSheets.For(Colors.White, big);
+            foreach (var view in _units.Views)
+            {
+                if (!view.Visible || view.Art.Big != big || view.Lift > 0f)
+                    continue;
+                var art = view.Art;
+                int w = art.CellWidth, h = art.CellHeight;
+                var feet = view.Position + view.SpriteOffset;
+                var region = new Rect2(view.Frame * w, art.Row * h, w, h);
+                var rect = new Rect2(-art.Feet.X, -art.Feet.Y, w, h);
+                _drawer.DrawSetTransformMatrix(new Transform2D(view.FacingLeft ? Vector2.Left : Vector2.Right, shear, feet));
+                _drawer.DrawTextureRectRegion(silhouettes, rect, region, Colors.Black);
+            }
         }
         _drawer.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
     }

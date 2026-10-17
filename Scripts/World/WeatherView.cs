@@ -28,7 +28,7 @@ public partial class WeatherView : Node2D
         public int Size;
     }
 
-    /// <summary>Particles a second per screen of 1280×720 at full strength, by biome.</summary>
+    /// <summary>Particles a second per screenful of world (1280×720 screen pixels at zoom 0.5) at full strength, by biome.</summary>
     private const float SnowRate = 70f, SandRate = 45f, LeafRate = 5f, FireflyRate = 6f;
     private const int MaxParticles = 600;
 
@@ -56,7 +56,7 @@ public partial class WeatherView : Node2D
         {
             var p = _particles[i];
             p.Age += dt;
-            if (p.Age >= p.Life || !view.Grow(64f).HasPoint(p.Position))
+            if (p.Age >= p.Life || !view.Grow(128f).HasPoint(p.Position))
             {
                 _particles.RemoveAt(i);
                 continue;
@@ -64,16 +64,16 @@ public partial class WeatherView : Node2D
             switch (p.Kind)
             {
                 case Kind.Snow:
-                    p.Position += (p.Velocity + new Vector2(wind.X * 0.8f + Mathf.Sin(p.Age * 2.1f + p.Phase) * 6f, 0f)) * dt;
+                    p.Position += (p.Velocity + new Vector2(wind.X * 0.8f + Mathf.Sin(p.Age * 2.1f + p.Phase) * 12f, 0f)) * dt;
                     break;
                 case Kind.Sand:
                     p.Position += (p.Velocity + wind * 2.5f) * dt;
                     break;
                 case Kind.Leaf:
-                    p.Position += (p.Velocity + wind * 1.2f + new Vector2(0f, Mathf.Sin(p.Age * 3f + p.Phase) * 8f)) * dt;
+                    p.Position += (p.Velocity + wind * 1.2f + new Vector2(0f, Mathf.Sin(p.Age * 3f + p.Phase) * 16f)) * dt;
                     break;
                 case Kind.Firefly:
-                    p.Position += new Vector2(Mathf.Sin(p.Age * 0.9f + p.Phase), Mathf.Cos(p.Age * 0.7f + p.Phase * 2f)) * 7f * dt;
+                    p.Position += new Vector2(Mathf.Sin(p.Age * 0.9f + p.Phase), Mathf.Cos(p.Age * 0.7f + p.Phase * 2f)) * 14f * dt;
                     break;
             }
             _particles[i] = p;
@@ -94,7 +94,7 @@ public partial class WeatherView : Node2D
     private void Spawn(Rect2 view, float dt)
     {
         // Attempts in proportion to the area on screen; each lands on some cell and takes that biome's chance.
-        float screens = view.Area / (1280f * 720f);
+        float screens = view.Area / (2560f * 1440f);
         _spawnDebt += dt * screens * SnowRate;
         bool night = _match.Sim.IsNight;
         var map = _match.Sim.Map;
@@ -128,21 +128,21 @@ public partial class WeatherView : Node2D
         {
             Biome.Winter => new Particle
             {
-                Kind = Kind.Snow, Position = at, Velocity = new Vector2(0f, 14f + r * 12f), Life = 3f + r * 3f,
-                Phase = r * 10f, Color = SnowColor, Size = r < 0.25f ? 2 : 1,
+                Kind = Kind.Snow, Position = at, Velocity = new Vector2(0f, 28f + r * 24f), Life = 3f + r * 3f,
+                Phase = r * 10f, Color = SnowColor, Size = r < 0.25f ? 3 : 2,
             },
             Biome.Desert => new Particle
             {
-                Kind = Kind.Sand, Position = at, Velocity = new Vector2(20f + r * 30f, 2f), Life = 0.8f + r * 1.2f,
-                Color = SandColor, Size = 2 + (int)(r * 3),
+                Kind = Kind.Sand, Position = at, Velocity = new Vector2(40f + r * 60f, 4f), Life = 0.8f + r * 1.2f,
+                Color = SandColor, Size = 4 + (int)(r * 6),
             },
             _ when night => new Particle
             {
-                Kind = Kind.Firefly, Position = at, Life = 4f + r * 4f, Phase = r * 20f, Color = FireflyColor, Size = 1,
+                Kind = Kind.Firefly, Position = at, Life = 4f + r * 4f, Phase = r * 20f, Color = FireflyColor, Size = 2,
             },
             _ => new Particle
             {
-                Kind = Kind.Leaf, Position = at, Velocity = new Vector2(4f, 5f + r * 6f), Life = 4f + r * 3f, Phase = r * 10f,
+                Kind = Kind.Leaf, Position = at, Velocity = new Vector2(8f, 10f + r * 12f), Life = 4f + r * 3f, Phase = r * 10f,
                 Color = LeafColors[_random.Next(LeafColors.Length)], Size = 2,
             },
         };
@@ -162,19 +162,23 @@ public partial class WeatherView : Node2D
                     DrawRect(new Rect2(at, new Vector2(p.Size, p.Size)), p.Color with { A = 0.9f * alpha });
                     break;
                 case Kind.Sand:
-                    DrawRect(new Rect2(at, new Vector2(p.Size, 1)), p.Color with { A = 0.55f * alpha });
+                    DrawRect(new Rect2(at, new Vector2(p.Size, 2)), p.Color with { A = 0.55f * alpha });
                     break;
                 case Kind.Leaf:
-                    // A leaf turning over: wide, then edge-on.
+                    // A leaf turning over: wide, then edge-on, with a darker vein.
                     bool flat = Mathf.Sin(p.Age * 5f + p.Phase) > 0f;
-                    DrawRect(new Rect2(at, flat ? new Vector2(2, 1) : new Vector2(1, 2)), p.Color with { A = alpha });
+                    var leaf = flat ? new Vector2(4, 2) : new Vector2(2, 4);
+                    DrawRect(new Rect2(at, leaf), p.Color with { A = alpha });
+                    DrawRect(new Rect2(at + (flat ? new Vector2(1, 1) : new Vector2(1, 1)), flat ? new Vector2(2, 1) : new Vector2(1, 2)),
+                        p.Color.Darkened(0.25f) with { A = alpha });
                     break;
                 case Kind.Firefly:
                     // Blinks on and off, glowing through the dark.
                     float blink = Mathf.Max(0f, Mathf.Sin(p.Age * 2.4f + p.Phase));
                     var glow = _match.Lit(p.Color) with { A = blink * alpha };
-                    DrawRect(new Rect2(at - Vector2.One, new Vector2(3, 3)), glow with { A = glow.A * 0.25f });
-                    DrawRect(new Rect2(at, Vector2.One), glow);
+                    DrawRect(new Rect2(at - new Vector2(2, 2), new Vector2(6, 6)), glow with { A = glow.A * 0.2f });
+                    DrawRect(new Rect2(at - Vector2.One, new Vector2(4, 4)), glow with { A = glow.A * 0.35f });
+                    DrawRect(new Rect2(at, new Vector2(2, 2)), glow);
                     break;
             }
         }

@@ -6,11 +6,9 @@ namespace Warcrown.World;
 /// <summary>Where the sprite sheets are (Assets/Sprites, written by the art generator) and which one a building uses.</summary>
 public static class Sprites
 {
-    /// <summary>Every unit kind, one row each (see <see cref="ArtLayout.UnitRow"/>).</summary>
-    public const string Units = "res://Assets/Sprites/units.png";
-
-    /// <summary>The faction-colour mask of <see cref="Units"/>.</summary>
-    public const string UnitsTeam = "res://Assets/Sprites/units_team.png";
+    /// <summary>The soldiers' sheet (or the big beasts', <paramref name="big"/>), one row a kind (see <see cref="ArtLayout.UnitArtOf"/>);
+    /// <paramref name="layer"/> "_team" for its faction-colour mask.</summary>
+    public static string Units(bool big, string layer = "") => Path(big ? "units_big" : "units", layer);
 
     /// <summary>A sheet by name; <paramref name="layer"/> is "" for the picture, "_team" for its colour mask, "_lights" for its night lights.</summary>
     public static string Path(string name, string layer = "") => $"res://Assets/Sprites/{name}{layer}.png";

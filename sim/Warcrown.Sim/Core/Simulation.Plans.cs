@@ -16,7 +16,7 @@ public sealed partial class Simulation
 
     /// <summary>
     /// The soldier who would walk over to build there: the nearest of the faction's units that can reach the place
-    /// and has not been sent to build already, preferring those not fighting; never a siege engine. Null if none.
+    /// (or fly there) and has not been sent to build already, preferring those not fighting; never a siege engine. Null if none.
     /// </summary>
     public Unit? FindBuilder(int factionId, string buildingTypeId, Cell anchor)
     {
@@ -32,7 +32,7 @@ public sealed partial class Simulation
         foreach (var unit in _units)
         {
             if (unit.FactionId != factionId || !unit.IsAlive || unit.Type.IsSiege
-                || Map.ComponentOf(Cell.FromPosition(unit.Position)) != component
+                || !unit.Type.IsFlying && Map.ComponentOf(Cell.FromPosition(unit.Position)) != component
                 || IsBuilder(unit.Id))
                 continue;
             var key = (unit.Target != null, Vector2.Distance(unit.Position, center));

@@ -21,7 +21,22 @@ public sealed partial class BotBrain
             Mode = BotMode.Defend;
             // Meet the intruders closest to home first.
             var nearest = threats.OrderBy(t => Vector2.Distance(t.Position, capital.Position)).First();
-            Send(army, nearest.Position, MoveMode.AttackMove);
+            if (!nearest.Type.IsFlying)
+            {
+                Send(army, nearest.Position, MoveMode.AttackMove);
+                return;
+            }
+            // Only arrows reach a flyer: the bowmen go for it, the rest meet what walks, or wait at home.
+            var shooters = army
+                .Where(u => u.Type.HitsAir && u.Target == null
+                            && (u.Destination is not { } d || Vector2.Distance(d, nearest.Position) > 3f))
+                .Select(u => u.Id).ToList();
+            if (shooters.Count > 0)
+                Issue(new MoveCommand(FactionId, shooters, nearest.Position, MoveMode.AttackMove));
+            var walkers = army.Where(u => !u.Type.HitsAir).ToList();
+            var walking = threats.Where(t => !t.Type.IsFlying).OrderBy(t => Vector2.Distance(t.Position, capital.Position)).FirstOrDefault();
+            if (walkers.Count > 0)
+                Send(walkers, walking?.Position ?? RallyPoint(capital), MoveMode.AttackMove);
             return;
         }
 

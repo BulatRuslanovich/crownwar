@@ -14,7 +14,7 @@ public partial class CloudsView : Node2D
 {
     private const int Shapes = 5;
     /// <summary>One cloud per this many square pixels of map.</summary>
-    private const float AreaPerCloud = 260_000f;
+    private const float AreaPerCloud = 1_040_000f;
     private const float DayAlpha = 0.13f;
     /// <summary>Cloud pictures are drawn at this many screen pixels per pixel, chunky like the rest of the art.</summary>
     private const float PixelScale = 3f;
@@ -44,10 +44,10 @@ public partial class CloudsView : Node2D
     /// <summary>A cloud's shadow: overlapping round puffs with a ragged rim, as an image one pixel per art pixel.</summary>
     private static ImageTexture MakeShape(Random random)
     {
-        int w = 60 + random.Next(50), h = 30 + random.Next(20);
+        int w = 120 + random.Next(100), h = 60 + random.Next(40);
         var image = Image.CreateEmpty(w, h, false, Image.Format.Rgba8);
         var puffs = new List<(float X, float Y, float R)>();
-        int count = 5 + random.Next(5);
+        int count = 7 + random.Next(6);
         for (int i = 0; i < count; i++)
         {
             float r = h * (0.22f + random.NextSingle() * 0.2f);
@@ -72,7 +72,7 @@ public partial class CloudsView : Node2D
         float target = _match.Sim.IsNight ? 0f : DayAlpha;
         _alpha = Mathf.Lerp(_alpha, target, Smoothing.Factor(0.5f, dt));
         var wind = _match.Wind;
-        var margin = new Vector2(400f, 200f);
+        var margin = new Vector2(800f, 400f);
         for (int i = 0; i < _clouds.Count; i++)
         {
             var (position, shape, speed) = _clouds[i];

@@ -102,7 +102,7 @@ public partial class Hud
         row.MoveChild(coin, _gold.GetIndex());
         var soldier = new TextureRect
         {
-            Texture = Icons.Unit("infantry", FactionColors.Get(_match.LocalFactionId), scale: 1),
+            Texture = Icons.Unit("infantry", FactionColors.Get(_match.LocalFactionId), scale: 0.5f),
             StretchMode = TextureRect.StretchModeEnum.KeepCentered,
         };
         row.AddChild(soldier);
