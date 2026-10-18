@@ -15,7 +15,8 @@ namespace Warcrown.UI;
 public partial class EndScreen : CanvasLayer
 {
     private Button _menuButton = null!;
-    private static readonly Color VictoryColor = UiPalette.Highlight;
+    /// <summary>The title as the theme draws it (antique gold) for a victory; tinted red for a defeat.</summary>
+    private static readonly Color VictoryColor = Colors.White;
     private static readonly Color DefeatColor = UiPalette.Problem;
     private static readonly Color LocalColor = UiPalette.Highlight;
     private static readonly Color Muted = UiPalette.TextMuted;
@@ -181,7 +182,7 @@ public partial class EndScreen : CanvasLayer
         foreach (string key in new[] { "STATS_TRAINED", "STATS_KILLED", "STATS_LOST", "STATS_BUILT", "STATS_RAZED", "STATS_GOLD", "SCORE_STATUS" })
             Header(key);
 
-        var crown = GD.Load<Texture2D>("res://Assets/UI/logo.png");
+        var crown = GD.Load<Texture2D>("res://Assets/UI/crown.png");
         foreach (int f in sides.OrderByDescending(f => winners.Contains(f)).ThenByDescending(f => stats.Of(f).Killed))
         {
             var side = stats.Of(f);
@@ -189,7 +190,7 @@ public partial class EndScreen : CanvasLayer
             mark.AddChild(new ColorRect { Color = FactionColors.Get(f), CustomMinimumSize = new Vector2(14, 14), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter });
             mark.AddChild(new TextureRect
             {
-                Texture = winners.Contains(f) ? crown : null, CustomMinimumSize = new Vector2(24, 16),
+                Texture = winners.Contains(f) ? crown : null, CustomMinimumSize = new Vector2(30, 18),
                 ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
             });
             _table.AddChild(mark);

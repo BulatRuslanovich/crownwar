@@ -16,10 +16,10 @@ content_margin_top = 12.0
 content_margin_right = 16.0
 content_margin_bottom = 12.0
 texture = ExtResource("2_panel")
-texture_margin_left = 12.0
-texture_margin_top = 12.0
-texture_margin_right = 12.0
-texture_margin_bottom = 12.0
+texture_margin_left = 20.0
+texture_margin_top = 20.0
+texture_margin_right = 20.0
+texture_margin_bottom = 20.0
 axis_stretch_horizontal = 1
 axis_stretch_vertical = 1
 
@@ -29,10 +29,10 @@ content_margin_top = 6.0
 content_margin_right = 12.0
 content_margin_bottom = 8.0
 texture = ExtResource("3_button")
-texture_margin_left = 8.0
-texture_margin_top = 8.0
-texture_margin_right = 8.0
-texture_margin_bottom = 8.0
+texture_margin_left = 16.0
+texture_margin_top = 16.0
+texture_margin_right = 16.0
+texture_margin_bottom = 16.0
 
 [sub_resource type="StyleBoxTexture" id="button_hover"]
 content_margin_left = 12.0
@@ -40,10 +40,10 @@ content_margin_top = 6.0
 content_margin_right = 12.0
 content_margin_bottom = 8.0
 texture = ExtResource("4_hover")
-texture_margin_left = 8.0
-texture_margin_top = 8.0
-texture_margin_right = 8.0
-texture_margin_bottom = 8.0
+texture_margin_left = 16.0
+texture_margin_top = 16.0
+texture_margin_right = 16.0
+texture_margin_bottom = 16.0
 
 [sub_resource type="StyleBoxTexture" id="button_pressed"]
 content_margin_left = 12.0
@@ -51,10 +51,10 @@ content_margin_top = 8.0
 content_margin_right = 12.0
 content_margin_bottom = 6.0
 texture = ExtResource("5_pressed")
-texture_margin_left = 8.0
-texture_margin_top = 8.0
-texture_margin_right = 8.0
-texture_margin_bottom = 8.0
+texture_margin_left = 16.0
+texture_margin_top = 16.0
+texture_margin_right = 16.0
+texture_margin_bottom = 16.0
 
 [sub_resource type="StyleBoxTexture" id="button_disabled"]
 content_margin_left = 12.0
@@ -62,18 +62,22 @@ content_margin_top = 6.0
 content_margin_right = 12.0
 content_margin_bottom = 8.0
 texture = ExtResource("6_disabled")
-texture_margin_left = 8.0
-texture_margin_top = 8.0
-texture_margin_right = 8.0
-texture_margin_bottom = 8.0
+texture_margin_left = 16.0
+texture_margin_top = 16.0
+texture_margin_right = 16.0
+texture_margin_bottom = 16.0
 
 [sub_resource type="StyleBoxFlat" id="focus"]
 draw_center = false
+expand_margin_left = -4.0
+expand_margin_top = -4.0
+expand_margin_right = -4.0
+expand_margin_bottom = -4.0
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
-border_color = Color(1, 0.86, 0.4, 1)
+border_color = Color(0.85, 0.66, 0.32, 1)
 
 [sub_resource type="StyleBoxTexture" id="field"]
 content_margin_left = 10.0
@@ -81,10 +85,10 @@ content_margin_top = 5.0
 content_margin_right = 10.0
 content_margin_bottom = 5.0
 texture = ExtResource("7_field")
-texture_margin_left = 6.0
-texture_margin_top = 6.0
-texture_margin_right = 6.0
-texture_margin_bottom = 6.0
+texture_margin_left = 10.0
+texture_margin_top = 10.0
+texture_margin_right = 10.0
+texture_margin_bottom = 10.0
 
 [sub_resource type="StyleBoxTexture" id="bar_back"]
 content_margin_left = 2.0
@@ -92,13 +96,13 @@ content_margin_top = 2.0
 content_margin_right = 2.0
 content_margin_bottom = 2.0
 texture = ExtResource("9_bar")
-texture_margin_left = 4.0
-texture_margin_top = 4.0
-texture_margin_right = 4.0
-texture_margin_bottom = 4.0
+texture_margin_left = 6.0
+texture_margin_top = 6.0
+texture_margin_right = 6.0
+texture_margin_bottom = 6.0
 
 [sub_resource type="StyleBoxFlat" id="bar_fill"]
-bg_color = Color(0.49, 1, 0.42, 1)
+bg_color = Color(0.42, 0.78, 0.36, 1)
 
 [sub_resource type="StyleBoxTexture" id="tooltip"]
 content_margin_left = 10.0
@@ -106,23 +110,23 @@ content_margin_top = 6.0
 content_margin_right = 10.0
 content_margin_bottom = 6.0
 texture = ExtResource("8_tooltip")
-texture_margin_left = 6.0
-texture_margin_top = 6.0
-texture_margin_right = 6.0
-texture_margin_bottom = 6.0
+texture_margin_left = 8.0
+texture_margin_top = 8.0
+texture_margin_right = 8.0
+texture_margin_bottom = 8.0
 
 [resource]
-Button/colors/font_color = Color(0.95, 0.9, 0.8, 1)
-Button/colors/font_hover_color = Color(1, 0.95, 0.82, 1)
-Button/colors/font_pressed_color = Color(1, 0.92, 0.6, 1)
-Button/colors/font_disabled_color = Color(0.55, 0.5, 0.45, 1)
-Button/colors/font_focus_color = Color(1, 0.95, 0.82, 1)
+Button/colors/font_color = Color(0.88, 0.85, 0.78, 1)
+Button/colors/font_hover_color = Color(1, 0.9, 0.64, 1)
+Button/colors/font_pressed_color = Color(0.95, 0.8, 0.48, 1)
+Button/colors/font_disabled_color = Color(0.45, 0.44, 0.42, 1)
+Button/colors/font_focus_color = Color(1, 0.9, 0.64, 1)
 Button/styles/disabled = SubResource("button_disabled")
 Button/styles/focus = SubResource("focus")
 Button/styles/hover = SubResource("button_hover")
 Button/styles/normal = SubResource("button_normal")
 Button/styles/pressed = SubResource("button_pressed")
-Label/colors/font_color = Color(0.95, 0.91, 0.82, 1)
+Label/colors/font_color = Color(0.9, 0.87, 0.8, 1)
 LineEdit/styles/focus = SubResource("focus")
 LineEdit/styles/normal = SubResource("field")
 OptionButton/styles/focus = SubResource("focus")
@@ -135,8 +139,8 @@ ProgressBar/styles/background = SubResource("bar_back")
 ProgressBar/styles/fill = SubResource("bar_fill")
 TooltipPanel/styles/panel = SubResource("tooltip")
 HeaderLarge/base_type = &"Label"
-HeaderLarge/colors/font_color = Color(1, 0.86, 0.4, 1)
-HeaderLarge/colors/font_outline_color = Color(0.2, 0.12, 0.04, 1)
+HeaderLarge/colors/font_color = Color(0.9, 0.75, 0.45, 1)
+HeaderLarge/colors/font_outline_color = Color(0.06, 0.04, 0.03, 1)
 HeaderLarge/colors/font_shadow_color = Color(0, 0, 0, 0.55)
 HeaderLarge/constants/outline_size = 8
 HeaderLarge/constants/shadow_offset_x = 4
@@ -144,8 +148,8 @@ HeaderLarge/constants/shadow_offset_y = 4
 HeaderLarge/font_sizes/font_size = 48
 HeaderLarge/fonts/font = ExtResource("1_pixel")
 HeaderMedium/base_type = &"Label"
-HeaderMedium/colors/font_color = Color(1, 0.86, 0.4, 1)
-HeaderMedium/colors/font_outline_color = Color(0.2, 0.12, 0.04, 1)
+HeaderMedium/colors/font_color = Color(0.9, 0.75, 0.45, 1)
+HeaderMedium/colors/font_outline_color = Color(0.06, 0.04, 0.03, 1)
 HeaderMedium/colors/font_shadow_color = Color(0, 0, 0, 0.5)
 HeaderMedium/constants/outline_size = 6
 HeaderMedium/constants/shadow_offset_x = 3
@@ -153,7 +157,7 @@ HeaderMedium/constants/shadow_offset_y = 3
 HeaderMedium/font_sizes/font_size = 24
 HeaderMedium/fonts/font = ExtResource("1_pixel")
 HeaderSmall/base_type = &"Label"
-HeaderSmall/colors/font_color = Color(1, 0.86, 0.4, 1)
+HeaderSmall/colors/font_color = Color(0.9, 0.75, 0.45, 1)
 HeaderSmall/colors/font_shadow_color = Color(0, 0, 0, 0.5)
 HeaderSmall/constants/shadow_offset_x = 2
 HeaderSmall/constants/shadow_offset_y = 2
@@ -162,3 +166,6 @@ HeaderSmall/fonts/font = ExtResource("1_pixel")
 PixelButton/base_type = &"Button"
 PixelButton/font_sizes/font_size = 16
 PixelButton/fonts/font = ExtResource("1_pixel")
+TooltipLabel/colors/font_color = Color(0.9, 0.87, 0.8, 1)
+PopupMenu/colors/font_color = Color(0.88, 0.85, 0.78, 1)
+PopupMenu/colors/font_hover_color = Color(1, 0.9, 0.64, 1)

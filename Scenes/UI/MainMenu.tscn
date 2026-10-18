@@ -4,6 +4,7 @@
 [ext_resource type="PackedScene" path="res://Scenes/UI/SettingsPanel.tscn" id="2_settings"]
 [ext_resource type="PackedScene" path="res://Scenes/UI/HowToPlay.tscn" id="3_help"]
 [ext_resource type="Texture2D" path="res://Assets/UI/logo.png" id="4_logo"]
+[ext_resource type="Texture2D" path="res://Assets/UI/title.png" id="5_title"]
 
 [sub_resource type="Gradient" id="vignette_colors"]
 offsets = PackedFloat32Array(0.45, 1)
@@ -73,17 +74,17 @@ layout_mode = 2
 theme_override_constants/separation = 12
 
 [node name="Logo" type="TextureRect" parent="Center/Panel/Rows"]
-custom_minimum_size = Vector2(0, 120)
+custom_minimum_size = Vector2(0, 128)
 layout_mode = 2
 texture = ExtResource("4_logo")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Title" type="Label" parent="Center/Panel/Rows"]
-theme_type_variation = &"HeaderLarge"
+[node name="Title" type="TextureRect" parent="Center/Panel/Rows"]
+custom_minimum_size = Vector2(0, 51)
 layout_mode = 2
-text = "Warcrown"
-horizontal_alignment = 1
+texture = ExtResource("5_title")
+stretch_mode = 3
 
 [node name="Subtitle" type="Label" parent="Center/Panel/Rows"]
 layout_mode = 2

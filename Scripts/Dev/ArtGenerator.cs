@@ -103,98 +103,15 @@ public static partial class ArtGenerator
     }
 
     /// <summary>
-    /// The application icon: the realm's arms — a heater shield in the faction blue bordered in gold with the gilded
-    /// lily on it, two swords crossed behind it and a gold crown on top — drawn as pixel art 64 px square and enlarged
-    /// by whole pixels: icon.png (256 px) for the window and project, icon.ico (16–256 px) for the Windows executable,
-    /// and splash.png for the boot screen.
+    /// The application icon: the realm's arms (<see cref="Emblem"/>) in the faction blue, 64 px square, enlarged by
+    /// whole pixels: icon.png (256 px) for the window and project, icon.ico (16–256 px) for the Windows executable, and
+    /// splash.png for the boot screen.
     /// </summary>
     private static void AppIcon(string uiDir)
     {
         const int size = 64;
         var team = new Color("3c6fd8");
-        var c = new PixelCanvas(size, size);
-        // Two swords crossed behind the shield: the points out at the top corners, the hilts at the bottom ones.
-        foreach (int side in new[] { -1, 1 })
-        {
-            var guard = new Vector2(32 - side * 20, 50);
-            var point = new Vector2(32 + side * 25, 5);
-            var along = (point - guard).Normalized();
-            var across = new Vector2(-along.Y, along.X);
-            c.Taper(guard.X, guard.Y, point.X, point.Y, 5f, 1.2f, SteelR, 0.3f);
-            c.Stroke(guard.X + along.X * 2, guard.Y + along.Y * 2, point.X - along.X * 6, point.Y - along.Y * 6, 1f, SteelR, 1.6f); // the fuller's glint
-            var grip = guard - along * 7f;
-            c.Stroke(guard.X, guard.Y, grip.X, grip.Y, 2.6f, LeatherR, -0.2f);
-            c.Stroke(guard.X - across.X * 6, guard.Y - across.Y * 6, guard.X + across.X * 6, guard.Y + across.Y * 6, 2.6f, GoldR, 0.3f);
-            c.Ball(grip.X - along.X * 1.5f, grip.Y - along.Y * 1.5f, 2.4f, 2.4f, GoldR, 0.5f);
-        }
-        // The shield: a gold border, the field in faction colours lit from the left, the lily in the middle.
-        Vector2[] Heater(float inset)
-        {
-            var points = new System.Collections.Generic.List<Vector2>
-            {
-                new(14 + inset, 17 + inset), new(50 - inset, 17 + inset), new(50 - inset, 33),
-            };
-            for (int i = 1; i <= 8; i++)
-            {
-                float t = i / 8f;
-                points.Add(new Vector2(Mathf.Lerp(Mathf.Lerp(50 - inset, 50 - inset, t), Mathf.Lerp(50 - inset, 32, t), t),
-                    Mathf.Lerp(Mathf.Lerp(33, 50, t), Mathf.Lerp(50, 60 - inset * 1.4f, t), t)));
-            }
-            for (int i = 7; i >= 1; i--)
-            {
-                var q = points[3 + i - 1];
-                points.Add(new Vector2(64 - q.X, q.Y));
-            }
-            points.Add(new Vector2(14 + inset, 33));
-            return points.ToArray();
-        }
-        c.Polygon(Heater(0f), GoldR, (x, y) => 0.9f - (x - 14) / 36f * 1.6f + (y < 20 ? 0.6f : 0f));
-        c.Polygon(Heater(2.5f), null, (x, y) => 0.5f - (x - 16) / 32f * 1.9f + (y < 23 ? 0.3f : 0f) - (y - 20) * 0.012f);
-        string[] lily =
-        {
-            "..#..",
-            ".###.",
-            "#.#.#",
-            "#####",
-            "..#..",
-            ".#.#.",
-        };
-        // Its shadow on the field first, a pixel down and right, so it stands out.
-        foreach (bool shadow in new[] { true, false })
-            for (int j = 0; j < lily.Length; j++)
-                for (int i = 0; i < 5; i++)
-                    if (lily[j][i] == '#')
-                        for (int k = 0; k < 4; k++)
-                        {
-                            int x = 27 + i * 2 + k % 2, y = 29 + j * 2 + k / 2;
-                            if (shadow)
-                                c.TeamLit(x + 1, y + 1, -2f);
-                            else
-                                c.Shade(x, y, GoldR, (j < 2 ? 1.3f : i < 2 ? 0.7f : 0f) + (k == 0 ? 0.4f : k == 3 ? -0.5f : 0f));
-                        }
-        // The crown over the shield: five points with pearls, a band set with rubies.
-        var ruby = Ramp.Of(new Color("b02438"));
-        foreach (var (x, tip) in new[] { (19.5f, 7f), (25.75f, 5f), (32f, 2.5f), (38.25f, 5f), (44.5f, 7f) })
-        {
-            c.Polygon(new[] { new Vector2(x - 3.4f, 14), new Vector2(x, tip + 1.5f), new Vector2(x + 3.4f, 14) }, GoldR,
-                (px, py) => px + 0.5f < x ? 1.1f : -0.2f);
-            c.Ball(x, tip, 1.7f, 1.7f, FeatherR, 0.6f);
-        }
-        c.Block(17, 13, 30, 7, GoldR, top: 1, bias: 0.2f);
-        for (int x = 17; x < 47; x++)
-            c.Shade(x, 19, GoldR, -1.2f);
-        foreach (float x in new[] { 23f, 32f, 41f })
-            c.Ball(x, 16f, 1.8f, 1.6f, ruby, 0.6f);
-        c.RimLight(new Rect2I(0, 0, size, size), SkyRim, 0.3f);
-        c.SelOut(SilhouetteRim);
-
-        var icon = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
-        for (int y = 0; y < size; y++)
-            for (int x = 0; x < size; x++)
-            {
-                var m = c.Mask.GetPixel(x, y);
-                icon.SetPixel(x, y, m.A > 0 ? new Color(team.R * m.R, team.G * m.G, team.B * m.B) : c.Base.GetPixel(x, y));
-            }
+        var icon = Emblem().Composite(team);
 
         Image Scaled(int pixels)
         {

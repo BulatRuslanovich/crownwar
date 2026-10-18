@@ -15,7 +15,7 @@ public partial class StatsChart : Control
 {
     public enum Measure { Army, Income, Buildings }
 
-    private static readonly Color Back = new(0.05f, 0.04f, 0.03f, 0.85f);
+    private static readonly Color Back = new(0.04f, 0.04f, 0.05f, 0.85f);
     private static readonly Color Grid = new(1f, 0.9f, 0.7f, 0.08f);
     private static readonly Color Axis = UiPalette.TextMuted;
     private const float Left = 48f, Bottom = 22f, Top = 8f, Right = 12f;

@@ -588,6 +588,19 @@ public sealed class PixelCanvas
             }
     }
 
+    /// <summary>The picture as it shows in the game: the faction-colour mask tinted with <paramref name="team"/> over the colours.</summary>
+    public Image Composite(Color team)
+    {
+        var image = Image.CreateEmpty(Width, Height, false, Image.Format.Rgba8);
+        for (int y = 0; y < Height; y++)
+            for (int x = 0; x < Width; x++)
+            {
+                var m = Mask.GetPixel(x, y);
+                image.SetPixel(x, y, m.A > 0 ? new Color(team.R * m.R, team.G * m.G, team.B * m.B) : Base.GetPixel(x, y));
+            }
+        return image;
+    }
+
     public void Save(string basePath, string? maskPath = null, string? glowPath = null)
     {
         Base.SavePng(basePath);
