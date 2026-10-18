@@ -158,6 +158,28 @@ public sealed class PixelCanvas
     public bool IsTeam(int x, int y) => Inside(x, y, out x, out y) && Mask.GetPixel(x, y).A > 0f;
 
     /// <summary>Marks a rectangle as shining at night in <paramref name="color"/> (the day picture is not changed).</summary>
+    /// <summary>
+    /// Marks the ellipse inscribed in a rectangle as shining at night in <paramref name="color"/>, full in its middle
+    /// and fading to nothing at its rim: the glow of a fire or of lamplight deep in an opening, not a lit box (the
+    /// game adds the soft halo round it).
+    /// </summary>
+    public void LitSoft(int x, int y, int w, int h, Color color)
+    {
+        for (int j = 0; j < h; j++)
+            for (int i = 0; i < w; i++)
+            {
+                float nx = (i + 0.5f) / w * 2f - 1f, ny = (j + 0.5f) / h * 2f - 1f;
+                float k = 1f - (nx * nx + ny * ny);
+                if (k <= 0f || !Inside(x + i, y + j, out int px, out int py))
+                    continue;
+                k = Mathf.Sqrt(k);
+                var lit = new Color(color.R * k, color.G * k, color.B * k);
+                var was = Glow.GetPixel(px, py);
+                Glow.SetPixel(px, py, new Color(Mathf.Max(was.R, lit.R), Mathf.Max(was.G, lit.G), Mathf.Max(was.B, lit.B)));
+                HasGlow = true;
+            }
+    }
+
     public void Lit(int x, int y, int w, int h, Color color)
     {
         for (int j = 0; j < h; j++)
