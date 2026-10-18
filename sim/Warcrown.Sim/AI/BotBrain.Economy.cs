@@ -192,10 +192,13 @@ public sealed partial class BotBrain
                         continue;
                     }
                     if (options[i].ArmorPiercing > 0f) weights[i] *= 1f + 2f * armoredShare; // bolts through plate
-                    // Arrow armor answers archers; cheap swarms answer heavies; archers answer plain infantry.
+                    // Arrow armor answers archers.
                     if (options[i].RangedArmor > 0f) weights[i] *= 1f + 2f * rangedShare;
                     if (options[i].IsRanged) weights[i] *= 1.5f - armoredShare;
-                    if (!options[i].IsRanged && options[i].RangedArmor == 0f) weights[i] *= 1f + 2f * armoredShare;
+                    // The counters in the rules: more of what hits the enemy's kinds hard, less of what they hit hard.
+                    float edge = enemies.Average(e => Bonus(options[i], e.Type) - 1f);
+                    float danger = enemies.Average(e => Bonus(e.Type, options[i]) - 1f);
+                    weights[i] *= (1f + 2f * edge) / (1f + danger);
                 }
             }
         }
@@ -208,6 +211,9 @@ public sealed partial class BotBrain
                 return options[i];
         }
         return options[^1];
+
+        static float Bonus(UnitType attacker, UnitType target) =>
+            attacker.BonusAgainst != null && attacker.BonusAgainst.TryGetValue(target.Id, out float bonus) ? bonus : 1f;
 
         // A fixed mix: mostly infantry, some archers and heavies.
         // Flyers are a seasoning: a griffin now and then, a dragon more rarely.

@@ -75,14 +75,14 @@ public class UnitRosterTests
     }
 
     [Test]
-    public void SpearmenHitHorsesTwiceAsHard()
+    public void SpearmenHitHorsesThreeTimesAsHard()
     {
         var sim = CreateSim();
         var spearman = sim.SpawnUnit("infantry", 0, new Vector2(15.5f, 8.5f));
         var rider = sim.SpawnUnit("cavalry", 1, new Vector2(16.5f, 8.5f));
         var other = sim.SpawnUnit("infantry", 1, new Vector2(17.5f, 8.5f));
 
-        Assert.That(spearman.Type.DamageAgainst(rider), Is.EqualTo(2 * spearman.Type.Damage));
+        Assert.That(spearman.Type.DamageAgainst(rider), Is.EqualTo(3 * spearman.Type.Damage));
         Assert.That(spearman.Type.DamageAgainst(other), Is.EqualTo(spearman.Type.Damage));
     }
 
