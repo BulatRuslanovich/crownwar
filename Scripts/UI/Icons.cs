@@ -20,7 +20,7 @@ public static class Icons
         var region = new Rect2I(ArtLayout.FrameIdle * art.CellWidth, art.Row * art.CellHeight, art.CellWidth, art.CellHeight);
         if (art.Big)
             scale *= ArtLayout.UnitCellHeight / (float)ArtLayout.BigCellSize;
-        return Compose(Sprites.Units(art.Big), Sprites.Units(art.Big, "_team"), region, team, scale);
+        return Compose(Sprites.Units(art.Big), Sprites.Units(art.Big, "_team"), region, team, scale, trim: true);
     }
 
     /// <summary>The building sprite (its sheet's first frame) at its natural size (or scaled), tinted for its owner.</summary>
@@ -53,7 +53,9 @@ public static class Icons
     }
 
     /// <param name="frames">Frames side by side in the sheet: without a region, the first one is taken.</param>
-    private static Texture2D Compose(string basePath, string maskPath, Rect2I? region, Color team, float scale, int frames = 1)
+    /// <param name="trim">Cut away the empty margin round the picture (a soldier is much smaller than his cell).</param>
+    private static Texture2D Compose(string basePath, string maskPath, Rect2I? region, Color team, float scale, int frames = 1,
+        bool trim = false)
     {
         var baseImage = GD.Load<Texture2D>(basePath).GetImage();
         var maskTexture = ResourceLoader.Exists(maskPath) ? GD.Load<Texture2D>(maskPath) : null;
@@ -71,6 +73,8 @@ public static class Icons
                 image.SetPixel(x, y, m.A > 0 ? new Color(team.R * m.R, team.G * m.G, team.B * m.B, m.A) : b);
             }
         }
+        if (trim && image.GetUsedRect() is { Size.X: > 0 } used)
+            image = image.GetRegion(used.Grow(1).Intersection(new Rect2I(0, 0, image.GetWidth(), image.GetHeight())));
         return Scaled(image, scale);
     }
 

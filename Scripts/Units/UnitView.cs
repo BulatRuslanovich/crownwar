@@ -96,6 +96,7 @@ public partial class UnitView : Node2D
         // Every soldier breathes in his own time.
         _idleTime = unit.Id * 0.73f % BreathPeriod;
         _sprite = MakeSprite(sheet);
+        _height = HeightOf(sheet, _art);
         _overlay = new Node2D { Name = "Overlay" };
         _overlay.Draw += DrawOverlay;
         AddChild(_overlay);
@@ -265,7 +266,38 @@ public partial class UnitView : Node2D
     }
 
     /// <summary>Top of the picture above the feet: the soldiers' cell, or the (lower than its cell) back of a big beast.</summary>
-    private float Height => _art.Big ? 52f : _art.Feet.Y;
+    /// <summary>How far above the feet the picture's head reaches (kinds differ in height; see <see cref="HeightOf"/>).</summary>
+    private float Height => _height;
+    private float _height;
+
+    /// <summary>The height of each kind's standing picture, measured once from its sheet.</summary>
+    private static readonly System.Collections.Generic.Dictionary<(bool Big, int Row), float> Heights = new();
+
+    /// <summary>
+    /// How far above the feet the kind's idle picture reaches: the first row from the top of its cell with a few drawn
+    /// pixels side by side (a helmet, a head), so a spear's thin point does not count.
+    /// </summary>
+    private static float HeightOf(Texture2D sheet, ArtLayout.UnitArt art)
+    {
+        if (Heights.TryGetValue((art.Big, art.Row), out float height))
+            return height;
+        var image = sheet.GetImage();
+        int top = art.Feet.Y;
+        for (int y = 0; y < art.CellHeight && top == art.Feet.Y; y++)
+        {
+            int run = 0, best = 0;
+            for (int x = 0; x < art.CellWidth; x++)
+            {
+                run = image.GetPixel(ArtLayout.FrameIdle * art.CellWidth + x, art.Row * art.CellHeight + y).A > 0.5f ? run + 1 : 0;
+                best = Mathf.Max(best, run);
+            }
+            if (best >= 4)
+                top = y;
+        }
+        height = art.Feet.Y - top;
+        Heights[(art.Big, art.Row)] = height;
+        return height;
+    }
 
     private void DrawOverlay()
     {

@@ -575,44 +575,6 @@ public sealed class PixelCanvas
         }
     }
 
-    /// <summary>
-    /// Copies the drawing in <paramref name="source"/> of <paramref name="from"/> (its pixels, colour and faction mask) turned a quarter left
-    /// about its bottom middle, so a figure standing in it lies on its back: its head where the left side was, its feet
-    /// on the right. The result is placed with its bottom middle at <paramref name="feet"/> (local pixels).
-    /// </summary>
-    public void CopyLying(PixelCanvas from, Rect2I source, Vector2I feet, bool solid = true)
-    {
-        int px = source.Position.X + source.Size.X / 2, py = source.End.Y - 1;
-        var drawn = new System.Collections.Generic.List<(int Dx, int Dy, Color Base, Color Mask)>();
-        int minDx = int.MaxValue, minDy = int.MaxValue, maxDy = int.MinValue;
-        for (int y = source.Position.Y; y < source.End.Y; y++)
-            for (int x = source.Position.X; x < source.End.X; x++)
-            {
-                var b = from.Base.GetPixel(x, y);
-                var m = from.Mask.GetPixel(x, y);
-                if (b.A <= 0.5f && m.A <= 0f)
-                    continue; // translucent smears and shadows stay behind
-                int dx = x - px, dy = y - py;
-                drawn.Add((dx, dy, b, m));
-                minDx = Math.Min(minDx, dx);
-                minDy = Math.Min(minDy, dy);
-                maxDy = Math.Max(maxDy, dy);
-            }
-        // A quarter turn: what stood up now lies to the left, what was in front now points up; the body is centred on
-        // the feet's spot and its back rests on the ground.
-        var pixels = new System.Collections.Generic.List<(int X, int Y, Color Base, Color Mask)>();
-        foreach (var (dx, dy, b, m) in drawn)
-            pixels.Add((feet.X + dy - (minDy + maxDy) / 2, feet.Y - dx + minDx, b, m));
-        foreach (var (x, y, b, m) in pixels)
-        {
-            if (!Inside(x, y, out int ax, out int ay))
-                continue;
-            Base.SetPixel(ax, ay, b);
-            Mask.SetPixel(ax, ay, m);
-            _occupied[ay * Width + ax] = solid;
-        }
-    }
-
     /// <summary>Erases everything in a rectangle (canvas pixels).</summary>
     public void ClearRect(Rect2I area)
     {
