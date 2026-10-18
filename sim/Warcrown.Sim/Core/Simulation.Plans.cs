@@ -86,14 +86,15 @@ public sealed partial class Simulation
         var type = Rules.GetBuildingType(build.BuildingTypeId);
         if (FindBuilder(build.FactionId, type.Id, build.Anchor) is not { } builder)
             return false;
-        if (!faction.Treasury.TrySpend(BuildCost(type)))
+        int cost = BuildCost(type, build.FactionId);
+        if (!faction.Treasury.TrySpend(cost))
         {
             _events.Add(new BuildRejected(build.FactionId, build.BuildingTypeId, BuildError.NotEnoughGold));
             return true;
         }
         var center = Building.CenterOf(build.Anchor, type.Size);
         OrderGroupMove(new List<Unit> { builder }, Map.ComponentOf(Cell.FromPosition(builder.Position)), center, UnitOrder.Move);
-        var plan = new BuildPlan(_nextPlanId++, build.FactionId, type, build.Anchor, builder.Id, BuildCost(type), builder.Destination);
+        var plan = new BuildPlan(_nextPlanId++, build.FactionId, type, build.Anchor, builder.Id, cost, builder.Destination);
         _plans.Add(plan);
         _events.Add(new BuildPlanned(build.FactionId, plan.Id, type.Id, builder.Id));
         return true;
@@ -110,7 +111,7 @@ public sealed partial class Simulation
             var error = CanBuild(plan.FactionId, plan.Type.Id, plan.Anchor, checkGold: false);
             if (error == BuildError.None)
             {
-                PlaceSite(plan.Type, plan.FactionId, plan.Anchor).Invested = plan.Paid;
+                PlaceSite(plan.Type, plan.FactionId, plan.Anchor, plan.Paid);
                 // The builder's walk ends where he stands: the site needs nobody, and its middle is now walls.
                 if (builder is { IsAlive: true } && builder.Destination == plan.Goal)
                     builder.CompleteOrder();

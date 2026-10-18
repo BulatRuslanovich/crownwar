@@ -137,6 +137,32 @@ public class BuildingPlacementTests
     }
 
     [Test]
+    public void EveryBarracksCostsMoreThanTheLast()
+    {
+        Assert.That(TestSim.RealRules().GetBuildingType("barracks").CostGrowthPercent, Is.EqualTo(125));
+        var barracks = TestMaps.Barracks with { Cost = 150, CostGrowthPercent = 135 };
+        var rules = new GameRules(0, 4f, Array.Empty<StartingUnits>(), TestMaps.Rules.Units,
+            new[] { TestMaps.Castle, TestMaps.Mine, barracks, TestMaps.Tower });
+        var sim = new Simulation(TestMaps.Parse(Field, "start 1 1", "gold 14 1", "gold 3 7", "unit infantry 0 11 2"),
+            rules, new MatchSetup(1, ShuffleStarts: false));
+        sim.GetFaction(0)!.Treasury.Add(1000);
+        Assert.That(sim.BuildCost(barracks, 0), Is.EqualTo(150));
+
+        sim.Issue(new BuildCommand(0, "barracks", new Cell(9, 4)));
+        sim.Step();
+        Assert.That(sim.BuildCost(barracks, 0), Is.EqualTo(200), "the second one is dearer");
+        Assert.That(sim.BuildCost(barracks, 1), Is.EqualTo(150), "each faction counts its own");
+
+        // An order sent off with a builder counts too, and the site remembers what it cost (refunds are shares of it).
+        sim.Issue(new BuildCommand(0, "barracks", new Cell(17, 8)));
+        sim.Step();
+        Assert.That(sim.BuildCost(barracks, 0), Is.EqualTo(270));
+        for (int i = 0; i < 20 * Simulation.TicksPerSecond && sim.CountBuildings(0, "barracks") < 2; i++)
+            sim.Step();
+        Assert.That(sim.Buildings.Where(b => b.Type.Id == "barracks").Select(b => b.Invested), Is.EquivalentTo(new[] { 150, 200 }));
+    }
+
+    [Test]
     public void UnitsStandingOnTheSiteStepAside()
     {
         var sim = CreateSim();

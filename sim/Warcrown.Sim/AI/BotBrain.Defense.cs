@@ -55,7 +55,7 @@ public sealed partial class BotBrain
         }
 
         var castle = _sim.Rules.BuildingTypes.First(t => t.IsCapital);
-        if (_sim.MayBuildOutpost(FactionId, castle) && me.Treasury.CanAfford(_sim.BuildCost(castle)))
+        if (_sim.MayBuildOutpost(FactionId, castle) && me.Treasury.CanAfford(_sim.BuildCost(castle, FactionId)))
             TryPlaceNear(castle, home, 0, 8, sendBuilder: true);
     }
 }

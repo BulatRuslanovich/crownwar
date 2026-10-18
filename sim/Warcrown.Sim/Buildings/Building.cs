@@ -47,8 +47,12 @@ public sealed record BuildingType(
     float UpgradeTime = 0f,
     int YieldBonus = 0,
     bool UnlocksUnits = false,
-    bool IsCitadel = false)
+    bool IsCitadel = false,
+    int CostGrowthPercent = 100)
 {
+    // CostGrowthPercent: every one the owner already has (or has ordered) makes the next this much dearer, in
+    // percent of the previous price (125: 150, 190, 230, 290...). 100 keeps the price flat.
+
     // UnlocksUnits: each finished building of such a kind (a barracks) opens one more step of the units the owner can
     // train (see UnitType.BarracksRequired).
 

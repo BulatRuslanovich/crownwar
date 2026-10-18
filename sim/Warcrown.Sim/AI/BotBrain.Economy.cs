@@ -53,24 +53,24 @@ public sealed partial class BotBrain
         else
             _expansion = null;
 
-        // 2. Barracks when the army limit is the bottleneck, or now and then with gold to spare, to open the next kind of
-        //    unit (each finished barracks opens one).
+        // 2. Barracks when the army limit is the bottleneck, or now and then to open the next kind of unit (each finished
+        //    barracks opens one). Each costs more than the last, so it is saved for, unless the army is outmatched.
         var barracksType = _sim.Rules.BuildingTypes.FirstOrDefault(t => t.ArmyCap > 0 && t.IsBuildable && !t.IsMine && t.Attack == null);
         int barracks = OwnBuildings().Count(b => b.Type.Id == barracksType?.Id);
         bool capped = me.Population >= me.ArmyCap - 1;
+        int barracksCost = barracksType != null ? _sim.BuildCost(barracksType, FactionId) : 0;
         bool unlockDue = barracksType is { UnlocksUnits: true } && !threatened
-                         && _sim.Tick - _lastBarracksTick >= BarracksIntervalSeconds * Simulation.TicksPerSecond
-                         && gold - reserve >= barracksType.Cost * 2;
+                         && _sim.Tick - _lastBarracksTick >= BarracksIntervalSeconds * Simulation.TicksPerSecond;
         if (barracksType != null && barracks < _profile.MaxBarracks && (capped || unlockDue))
         {
-            if (gold - reserve >= barracksType.Cost && TryPlaceNear(barracksType, capital.Position, 3, 7))
+            if (gold - reserve >= barracksCost && TryPlaceNear(barracksType, capital.Position, 3, 7))
             {
-                gold -= barracksType.Cost;
+                gold -= barracksCost;
                 _lastBarracksTick = _sim.Tick;
             }
-            else if (capped)
+            else if (capped || !behind)
             {
-                reserve += barracksType.Cost;
+                reserve += barracksCost;
             }
         }
 

@@ -29,7 +29,7 @@ public sealed partial class Simulation
             for (int x = 0; x < type.Size; x++)
                 if (!Map.IsWalkable(new Cell(anchor.X + x, anchor.Y + y)))
                     throw new ArgumentException($"The citadel does not fit at {anchor}.");
-        var citadel = AddBuilding(type, setup.GarrisonFactionId, anchor, constructionTicks: 0);
+        var citadel = AddBuilding(type, setup.GarrisonFactionId, anchor, constructionTicks: 0, invested: type.Cost);
         Defense = new DefenseState(setup.FactionCount, setup.GarrisonFactionId, setup.HordeFactionId, citadel.Id,
             Ticks.FromSeconds(Rules.Defense.FirstWaveSeconds), setup.Seed);
         // The ground the waves must reach: the region in front of the citadel's gate.
@@ -42,8 +42,22 @@ public sealed partial class Simulation
         Defense is { } d && type.IsCapital && d.IsPlayer(factionId)
         && CountBuildings(factionId, type.Id) + PlannedCount(factionId, type.Id) == 0;
 
-    /// <summary>What a building costs: a castle (only ever a new outpost in Defense) at the mode's price.</summary>
-    public int BuildCost(BuildingType type) => Defense != null && type.IsCapital ? Rules.Defense.OutpostCost : type.Cost;
+    /// <summary>
+    /// What the next building of this kind costs the faction: a castle (only ever a new outpost in Defense) at the
+    /// mode's price; a kind with <see cref="BuildingType.CostGrowthPercent"/> dearer for each one standing or ordered,
+    /// rounded to tens. Integer arithmetic only, so every lockstep peer charges the same.
+    /// </summary>
+    public int BuildCost(BuildingType type, int factionId)
+    {
+        if (Defense != null && type.IsCapital)
+            return Rules.Defense.OutpostCost;
+        if (type.CostGrowthPercent == 100)
+            return type.Cost;
+        long cost = type.Cost;
+        for (int owned = CountBuildings(factionId, type.Id) + PlannedCount(factionId, type.Id); owned > 0; owned--)
+            cost = cost * type.CostGrowthPercent / 100;
+        return (int)Math.Min(int.MaxValue, (cost + 5) / 10 * 10);
+    }
 
     private float BuildSeconds(BuildingType type) => Defense != null && type.IsCapital ? Rules.Defense.OutpostBuildSeconds : type.BuildTime;
 

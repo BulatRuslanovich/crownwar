@@ -79,6 +79,8 @@ public sealed class GameRules
                 throw new ArgumentException($"Building type '{type.Id}': size and health must be positive, cost and build time non-negative.");
             if (type.RangedArmor is < 0f or > 1f)
                 throw new ArgumentException($"Building type '{type.Id}': ranged armor must be in [0, 1].");
+            if (type.CostGrowthPercent < 100)
+                throw new ArgumentException($"Building type '{type.Id}': cost growth cannot be below 1.");
             for (var level = type.NextTier; level != null; level = level.NextTier)
             {
                 if (level.Id != type.Id || level.MaxHealth <= 0 || level.Size != type.Size)
@@ -294,7 +296,9 @@ public sealed class GameRules
             SightRange: OptionalSingle(b, "sight"),
             MaxCount: OptionalInt(b, "maxCount"),
             UnlocksUnits: OptionalBool(b, "unlocksUnits"),
-            IsCitadel: OptionalBool(b, "citadel"));
+            IsCitadel: OptionalBool(b, "citadel"),
+            // Kept as an integer percentage: prices must come out the same on every lockstep peer.
+            CostGrowthPercent: b.TryGetProperty("costGrowth", out var growth) ? (int)Math.Round(growth.GetDouble() * 100) : 100);
         return b.TryGetProperty("tiers", out var tiers) ? WithTiers(type, tiers.EnumerateArray().ToList()) : type;
     }
 

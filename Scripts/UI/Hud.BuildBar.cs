@@ -15,16 +15,17 @@ public partial class Hud
     /// Two short lines next to the picture: the cost, then the hotkey and how many of a limited kind stand already.
     /// The name and the rest are in the tooltip.
     /// </summary>
-    private string BuildButtonText(BuildingType type, int standing)
+    private string BuildButtonText(BuildingType type, int standing, int cost)
     {
         string hotkey = BuildHotkeys.TryGetValue(type.Id, out var key) ? $"[{key}]" : "";
         string count = type.MaxCount > 0 ? $"{standing}/{type.MaxCount}" : "";
         string second = hotkey.Length > 0 && count.Length > 0 ? hotkey + " " + count : hotkey + count;
-        return $"{_match.Sim.BuildCost(type)}{Tr("HUD_GOLD_SHORT")}\n{second}";
+        return $"{cost}{Tr("HUD_GOLD_SHORT")}\n{second}";
     }
 
-    /// <summary>What each build button last showed: how many stand, whether it is affordable, pressed, in which language.</summary>
-    private (int Standing, bool Available, bool Pressed, bool Shown, int Text)[] _buildShown = System.Array.Empty<(int, bool, bool, bool, int)>();
+    /// <summary>What each build button last showed: how many stand, the price (barracks grow dearer), whether it is
+    /// affordable, pressed, in which language.</summary>
+    private (int Standing, int Cost, bool Available, bool Pressed, bool Shown, int Text)[] _buildShown = System.Array.Empty<(int, int, bool, bool, bool, int)>();
 
     private void UpdateBuildButtons()
     {
@@ -32,22 +33,23 @@ public partial class Hud
             return;
         if (_buildShown.Length != _buildButtons.Count)
         {
-            _buildShown = new (int, bool, bool, bool, int)[_buildButtons.Count];
-            System.Array.Fill(_buildShown, (-1, false, false, false, -1));
+            _buildShown = new (int, int, bool, bool, bool, int)[_buildButtons.Count];
+            System.Array.Fill(_buildShown, (-1, -1, false, false, false, -1));
         }
         for (int i = 0; i < _buildButtons.Count; i++)
         {
             var (button, type) = _buildButtons[i];
             int standing = type.MaxCount > 0 ? _match.Sim.CountBuildings(_match.LocalFactionId, type.Id) : 0;
-            bool available = faction.Treasury.CanAfford(_match.Sim.BuildCost(type)) && (type.MaxCount == 0 || standing < type.MaxCount);
+            int cost = _match.Sim.BuildCost(type, _match.LocalFactionId);
+            bool available = faction.Treasury.CanAfford(cost) && (type.MaxCount == 0 || standing < type.MaxCount);
             bool pressed = _placement.ActiveType == type;
             bool shown = type.IsBuildable || _match.Sim.MayBuildOutpost(_match.LocalFactionId, type);
-            if (!Changed(ref _buildShown[i], (standing, available, pressed, shown, _textVersion)))
+            if (!Changed(ref _buildShown[i], (standing, cost, available, pressed, shown, _textVersion)))
                 continue;
             button.Visible = shown;
             if (!shown && pressed)
                 _placement.Cancel();
-            button.Text = BuildButtonText(type, standing);
+            button.Text = BuildButtonText(type, standing, cost);
             MarkAvailable(button, available);
             button.ButtonPressed = pressed;
         }
@@ -56,11 +58,11 @@ public partial class Hud
     private void CreateBuildButtons(HBoxContainer row)
     {
         bool defense = _match.Sim.Defense != null;
-        foreach (var type in _match.Sim.Rules.BuildingTypes.Where(t => t.IsBuildable || defense && t.IsCapital).OrderBy(_match.Sim.BuildCost))
+        foreach (var type in _match.Sim.Rules.BuildingTypes.Where(t => t.IsBuildable || defense && t.IsCapital).OrderBy(t => _match.Sim.BuildCost(t, _match.LocalFactionId)))
         {
             var button = new Button
             {
-                Text = BuildButtonText(type, 0),
+                Text = BuildButtonText(type, 0, _match.Sim.BuildCost(type, _match.LocalFactionId)),
                 Icon = Icons.Building(type.Id, FactionColors.Get(_match.LocalFactionId)),
                 IconAlignment = HorizontalAlignment.Left,
                 ToggleMode = true,

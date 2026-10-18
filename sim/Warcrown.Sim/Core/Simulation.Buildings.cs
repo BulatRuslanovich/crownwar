@@ -66,7 +66,7 @@ public sealed partial class Simulation
         if (!HasUnitNear(factionId, Building.CenterOf(anchor, type.Size), Rules.BuildRadius))
             return BuildError.NoUnitsNearby;
 
-        if (checkGold && !faction.Treasury.CanAfford(BuildCost(type)))
+        if (checkGold && !faction.Treasury.CanAfford(BuildCost(type, factionId)))
             return BuildError.NotEnoughGold;
         return BuildError.None;
     }
@@ -131,7 +131,7 @@ public sealed partial class Simulation
                 if (!Map.IsWalkable(cell) || DepositAt(cell) != null)
                     throw new ArgumentException($"A {capitalType.Name} does not fit at start position {anchor}.");
             }
-            var capital = AddBuilding(capitalType, factionId, anchor, constructionTicks: 0);
+            var capital = AddBuilding(capitalType, factionId, anchor, constructionTicks: 0, invested: BuildCost(capitalType, factionId));
             GetFaction(factionId)!.CapitalId = capital.Id;
 
             foreach (var group in Rules.StartingUnits)
@@ -143,10 +143,11 @@ public sealed partial class Simulation
         }
     }
 
-    private Building AddBuilding(BuildingType type, int factionId, Cell anchor, int constructionTicks)
+    /// <param name="invested">What the owner paid for it (loot and demolition refunds are shares of it).</param>
+    private Building AddBuilding(BuildingType type, int factionId, Cell anchor, int constructionTicks, int invested)
     {
         var deposit = type.IsMine ? DepositAt(anchor) : null;
-        var building = new Building(_nextEntityId++, type, factionId, anchor, constructionTicks, deposit) { Invested = BuildCost(type) };
+        var building = new Building(_nextEntityId++, type, factionId, anchor, constructionTicks, deposit) { Invested = invested };
         _buildings.Add(building);
         _entitiesById.Add(building.Id, building);
         if (deposit != null)
@@ -170,14 +171,15 @@ public sealed partial class Simulation
         }
 
         var type = Rules.GetBuildingType(build.BuildingTypeId);
-        GetFaction(build.FactionId)!.Treasury.TrySpend(BuildCost(type));
-        PlaceSite(type, build.FactionId, build.Anchor);
+        int cost = BuildCost(type, build.FactionId);
+        GetFaction(build.FactionId)!.Treasury.TrySpend(cost);
+        PlaceSite(type, build.FactionId, build.Anchor, cost);
     }
 
     /// <summary>Lays out a construction site that has been paid for, and tells the views.</summary>
-    private Building PlaceSite(BuildingType type, int factionId, Cell anchor)
+    private Building PlaceSite(BuildingType type, int factionId, Cell anchor, int paid)
     {
-        var building = AddBuilding(type, factionId, anchor, Ticks.AtLeastOne(BuildSeconds(type)));
+        var building = AddBuilding(type, factionId, anchor, Ticks.AtLeastOne(BuildSeconds(type)), paid);
         if (type.IsCapital)
             GetFaction(factionId)!.CapitalId = building.Id; // a new outpost (Defense)
         _events.Add(new BuildingPlaced(factionId, building.Id));
