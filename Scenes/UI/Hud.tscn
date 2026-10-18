@@ -3,6 +3,8 @@
 [ext_resource type="Script" path="res://Scripts/UI/Hud.cs" id="1_hud"]
 [ext_resource type="Script" path="res://Scripts/UI/AlertIndicator.cs" id="2_alert"]
 [ext_resource type="Script" path="res://Scripts/UI/Minimap.cs" id="3_minimap"]
+[ext_resource type="Texture2D" path="res://Assets/UI/info.png" id="4_info"]
+[ext_resource type="Texture2D" path="res://Assets/UI/info_hover.png" id="5_info_hover"]
 
 [node name="Hud" type="CanvasLayer"]
 script = ExtResource("1_hud")
@@ -75,12 +77,25 @@ grow_vertical = 0
 custom_minimum_size = Vector2(340, 0)
 layout_mode = 2
 
-[node name="Title" type="Label" parent="BuildingPanel/Rows"]
-theme_type_variation = &"HeaderSmall"
-custom_minimum_size = Vector2(340, 0)
+[node name="TitleRow" type="HBoxContainer" parent="BuildingPanel/Rows"]
 layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="BuildingPanel/Rows/TitleRow"]
+theme_type_variation = &"HeaderSmall"
+layout_mode = 2
+size_flags_horizontal = 3
 text = "Castle"
 autowrap_mode = 3
+
+[node name="About" type="TextureButton" parent="BuildingPanel/Rows/TitleRow"]
+layout_mode = 2
+size_flags_vertical = 4
+focus_mode = 0
+mouse_default_cursor_shape = 16
+texture_normal = ExtResource("4_info")
+texture_hover = ExtResource("5_info_hover")
+texture_pressed = ExtResource("5_info_hover")
 
 [node name="Info" type="Label" parent="BuildingPanel/Rows"]
 layout_mode = 2

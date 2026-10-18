@@ -26,7 +26,8 @@ public static partial class ArtGenerator
     /// <summary>
     /// The interface's nine-slice pictures (Assets/UI/*.png, used by theme.tres): framed panels, buttons in their four
     /// states, text fields, tooltips and bar backs, drawn at two screen pixels a pixel so they are as chunky as the
-    /// world; the realm's arms for the title screen, the engraved title, and the crown that marks a winner.
+    /// world; the "i" badge by a building's title; the realm's arms for the title screen, the engraved title, and the crown
+    /// that marks a winner.
     /// </summary>
     private static void Interface(string uiDir)
     {
@@ -41,6 +42,8 @@ public static partial class ArtGenerator
         Save(BarBack(), "bar_back");
         Save(Emblem().Composite(new Color("3c6fd8")), "logo");
         Save(SmallCrown(), "crown");
+        Save(InfoBadge(hover: false), "info");
+        Save(InfoBadge(hover: true), "info_hover");
         var title = Title("WARCROWN");
         title.Resize(title.GetWidth() * 3, title.GetHeight() * 3, Image.Interpolation.Nearest);
         title.SavePng(System.IO.Path.Combine(uiDir, "title.png"));
@@ -177,6 +180,52 @@ public static partial class ArtGenerator
                     color = Colors.Transparent;
                 image.SetPixel(x, y, color);
             }
+        return image;
+    }
+
+    /// <summary>
+    /// 15×15: the "i" by a building's title — a round iron boss like the panel's rivets, grown big: a black outline, a
+    /// brass rim lit to the top-left, a dark iron face shading downwards, and a plain "i" (a dot over a stem, two pixels
+    /// wide) engraved in gold with a shadow cut under it. <paramref name="hover"/>: the rim and the letter brighten, as
+    /// the buttons' brass does under the cursor.
+    /// </summary>
+    private static Image InfoBadge(bool hover)
+    {
+        const int size = 15;
+        const float centre = size / 2f;
+        var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float nx = x + 0.5f - centre, ny = y + 0.5f - centre;
+                float d = Mathf.Sqrt(nx * nx + ny * ny);
+                if (d > 7.4f)
+                    continue;
+                Color color;
+                if (d > 6.4f)
+                    color = UiOutline;
+                else if (d > 5.3f)
+                {
+                    float lit = -(nx + ny) / d; // 1 towards the light, -1 away
+                    color = lit > 0.45f ? (hover ? new Color("fff1c4") : BrassLight)
+                        : lit > -0.45f ? (hover ? BrassLight : Brass)
+                        : (hover ? Brass : BrassDark);
+                }
+                else
+                    color = (hover ? new Color("4b4f5b") : IronMid).Lerp(IronDeep, (y - 2f) / 10f);
+                image.SetPixel(x, y, color);
+            }
+        // The letter, two pixels wide and small in the face, a margin of iron all round it: a dot, a gap, a stem. No
+        // serifs: with one at the top the letter reads as a "1".
+        var letterLight = hover ? new Color("fff1c4") : BrassLight;
+        var letter = hover ? BrassLight : Brass;
+        var pixels = new List<(int X, int Y, bool Lit)> { (7, 4, true), (8, 4, false) };
+        for (int y = 6; y <= 9; y++)
+            pixels.AddRange(new[] { (7, y, true), (8, y, false) });
+        foreach (var (x, y, _) in pixels)
+            image.SetPixel(x + 1, y + 1, UiOutline); // the cut's shadow, under and right of the letter
+        foreach (var (x, y, lit) in pixels)
+            image.SetPixel(x, y, lit ? letterLight : letter);
         return image;
     }
 

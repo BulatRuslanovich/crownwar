@@ -55,6 +55,8 @@ public partial class Hud : CanvasLayer
     private Control _buildingPanel = null!;
     private Label _title = null!;
     private Label _info = null!;
+    /// <summary>The "i" by the title: what the building does, in its tooltip.</summary>
+    private Control _about = null!;
     private Container _recruitRow = null!;
     private Label _queue = null!;
     private ProgressBar _progress = null!;
@@ -84,7 +86,8 @@ public partial class Hud : CanvasLayer
         _army = GetNode<Label>("ResourceBar/Row/Army");
         _buildHint = GetNode<Label>("BuildBar/Rows/Hint");
         _buildingPanel = GetNode<Control>("BuildingPanel");
-        _title = GetNode<Label>("BuildingPanel/Rows/Title");
+        _title = GetNode<Label>("BuildingPanel/Rows/TitleRow/Title");
+        _about = GetNode<Control>("BuildingPanel/Rows/TitleRow/About");
         _info = GetNode<Label>("BuildingPanel/Rows/Info");
         _recruitRow = GetNode<Container>("BuildingPanel/Rows/RecruitButtons");
         CreateDoctrineRow(GetNode("BuildingPanel/Rows"), _recruitRow);

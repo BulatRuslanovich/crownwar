@@ -31,6 +31,7 @@ namespace Warcrown.Dev;
 ///   --demo-autoplay          a Hard bot plays the player's faction (to watch a match unfold)
 ///   --demo-time-scale=&lt;x&gt;    run the game x times faster (timers, including --screenshot-delay, scale too)
 ///   --demo-select=&lt;type&gt;     right before the screenshot, select the player's first building of that type (e.g. mine)
+///   --hover-info             with --demo-select, hold the cursor on the panel's "i" so its tooltip shows
 ///   --demo-upgrade           keep upgrading the player's finished towers and mines to their highest level
 ///   --demo-no-fog            show the whole map (no fog of war)
 ///   --demo-scoreboard        keep the players table (Tab) open

@@ -61,7 +61,7 @@ public partial class Main
         if (DevTools.Arg(args, "--screenshot") is { } screenshot)
         {
             double delay = double.Parse(DevTools.Arg(args, "--screenshot-delay") ?? "2", CultureInfo.InvariantCulture);
-            _ = TakeScreenshotAndQuit(screenshot, delay, DevTools.Arg(args, "--demo-select"));
+            _ = TakeScreenshotAndQuit(screenshot, delay, DevTools.Arg(args, "--demo-select"), DevTools.Has(args, "--hover-info"));
         }
     }
 
@@ -177,7 +177,7 @@ public partial class Main
         QuitGame();
     }
 
-    private async System.Threading.Tasks.Task TakeScreenshotAndQuit(string path, double delay, string? selectType)
+    private async System.Threading.Tasks.Task TakeScreenshotAndQuit(string path, double delay, string? selectType, bool hoverInfo)
     {
         // Process even while the game is paused, so paused screens can be captured too.
         await ToSignal(GetTree().CreateTimer(delay, processAlways: true), SceneTreeTimer.SignalName.Timeout);
@@ -185,6 +185,15 @@ public partial class Main
         {
             DevTools.SelectFirst(match, selectType);
             await ToSignal(GetTree().CreateTimer(0.2, processAlways: true), SceneTreeTimer.SignalName.Timeout);
+            if (hoverInfo)
+            {
+                // The cursor on the panel's "i", long enough for its tooltip to show.
+                // A motion event pushed into the viewport: warping the real cursor does nothing in an unfocused window.
+                var about = match.GetNode<Control>("Hud/BuildingPanel/Rows/TitleRow/About");
+                var at = about.GetGlobalRect().GetCenter();
+                GetViewport().PushInput(new InputEventMouseMotion { Position = at, GlobalPosition = at }, inLocalCoords: true);
+                await ToSignal(GetTree().CreateTimer(1.2, processAlways: true), SceneTreeTimer.SignalName.Timeout);
+            }
         }
         await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
         var error = GetViewport().GetTexture().GetImage().SavePng(path);

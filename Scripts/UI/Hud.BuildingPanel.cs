@@ -37,7 +37,10 @@ public partial class Hud
 
     private (int Id, int Health, int Tier, int Built, int Slots, int Reserve, int Regen, int Text) _infoShown;
 
-    /// <summary>The title (kind, level, owner) and what the building does, with its health.</summary>
+    /// <summary>
+    /// The title (kind, level, owner) and the building's state: its health, how far it is built, and for a mine what it
+    /// brings in and what is left. What the building does sits in the tooltip of the "i" by the title, not in the panel.
+    /// </summary>
     private void UpdateBuildingInfo(Building building, bool own)
     {
         int built = building.IsComplete ? 101 : (int)(building.ConstructionProgress * 100f);
@@ -48,10 +51,15 @@ public partial class Hud
         string level = building.Type.MaxTier > 1 ? " " + string.Format(Tr("HUD_TIER"), building.Type.Tier) : "";
         // Own buildings need no owner in the title (and the short title keeps the panel clear of the build bar).
         _title.Text = $"{Names.Of(building.Type)}{level}" + (own ? "" : $" ({Names.Faction(building.FactionId)})");
-        string status = building.IsComplete
-            ? HudText.DescribeBuildingType(_match.Sim, building.Type, building)
-            : string.Format(Tr("HUD_UNDER_CONSTRUCTION"), building.ConstructionProgress * 100f);
-        _info.Text = string.Format(Tr("HUD_HEALTH"), building.Health, building.MaxHealth) + "\n" + status;
+        string info = string.Format(Tr("HUD_HEALTH"), building.Health, building.MaxHealth);
+        if (!building.IsComplete)
+            info += "\n" + string.Format(Tr("HUD_UNDER_CONSTRUCTION"), building.ConstructionProgress * 100f);
+        else if (building.Deposit is { } deposit)
+            info += "\n" + HudText.DescribeDeposit(deposit, building.Type.YieldBonus);
+        _info.Text = info;
+        // A mine's yield and reserve are in the panel already: its tooltip says what a mine is.
+        _about.TooltipText = HudText.DescribeBuildingType(_match.Sim, building.Type, building.Type.IsMine ? null : building)
+            .Replace("  ·  ", "\n");
     }
 
     /// <summary>What each recruit button last showed: why it is refused (if it is), the price (the doctrine changes it),

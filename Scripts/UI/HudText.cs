@@ -144,7 +144,8 @@ public static class HudText
         _ => T("ERR_NOT_OWNER"),
     };
 
-    private static string DescribeDeposit(GoldDeposit d, int levelBonus)
+    /// <summary>A working mine's line: what it brings in and how much the deposit has left (or when it refills).</summary>
+    public static string DescribeDeposit(GoldDeposit d, int levelBonus)
     {
         if (d.IsExhausted)
             return string.Format(T("INFO_DEPOSIT_EXHAUSTED"), Mathf.CeilToInt(d.RegenTicksLeft / (float)Simulation.TicksPerSecond));
