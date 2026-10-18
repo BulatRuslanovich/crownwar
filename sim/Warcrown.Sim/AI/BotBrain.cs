@@ -38,6 +38,8 @@ public sealed partial class BotBrain
     private const int SoldiersPerRam = 6;
     private const int MonkEvery = 8;
     private const int TowersPerMine = 1;
+    /// <summary>An army worth less than this share of the strongest enemy one counts as outmatched.</summary>
+    private const float BehindShare = 0.8f;
 
     private readonly Simulation _sim;
     private readonly BotProfile _profile;
@@ -124,14 +126,28 @@ public sealed partial class BotBrain
         var threats = FindThreats();
         AddCitadelThreats(threats);
 
-        int reserve = PlanConstruction(me, capital, army, threatened: threats.Count > 0);
-        if (threats.Count == 0)
+        // Outmatched: troops first; towers and upgrades wait until the army has caught up.
+        bool behind = armyValue < StrongestEnemyArmy() * BehindShare;
+        int reserve = PlanConstruction(me, capital, army, threatened: threats.Count > 0, behind);
+        if (threats.Count == 0 && !behind)
             reserve += PlanUpgrades(me, reserve, armyValue);
         Recruit(me, capital, reserve, urgent: threats.Count > 0);
         CommandArmy(capital, army, armyValue, threats);
     }
 
     private List<Building> OwnBuildings() => _own;
+
+    /// <summary>Worth of the largest enemy army (bots see the whole map, as the player could by scouting).</summary>
+    private int StrongestEnemyArmy()
+    {
+        var worth = new Dictionary<int, int>();
+        foreach (var u in _sim.Units)
+        {
+            if (u.FactionId >= 0 && _sim.AreEnemies(FactionId, u.FactionId))
+                worth[u.FactionId] = worth.GetValueOrDefault(u.FactionId) + u.Type.Cost;
+        }
+        return worth.Count == 0 ? 0 : worth.Values.Max();
+    }
 
     private List<Unit> FindThreats()
     {

@@ -30,7 +30,7 @@ public enum Biome : byte
 /// water where they can and bridging rivers where they must — so every
 /// castle reaches every other.</item>
 /// <item>Gold: two deposits by every castle at the same distances; rich ones in the gaps between neighbours (and the
-/// middle), as far from one castle as from the next; the rest scattered as it falls, all of it inside the circle the
+/// middle), as far from one castle as from the next; one or two more per player scattered as they fall, all of it inside the circle the
 /// castles stand on, so the corners of the square are no hidden treasure for whoever starts next to them.</item>
 /// </list>
 /// For the Defense mode the layout turns inside out: the shared citadel in the middle, the players' outposts in a
@@ -51,12 +51,18 @@ public static class MapGenerator
     private const int CitadelSize = 4;
     private const float OutpostRing = 20f;
 
-    /// <summary>The side of the square map for a match of <paramref name="players"/> (more players, more room).</summary>
-    public static int SizeFor(int players) => Math.Clamp(players, MinPlayers, MaxPlayers) switch
+    /// <summary>
+    /// The side of the square map for a match of <paramref name="players"/> (more players, more room). Versus maps are
+    /// tight, so the sides meet early and every deposit is fought over; Defense needs room for the waves.
+    /// </summary>
+    public static int SizeFor(int players, MatchMode mode = MatchMode.Versus) => (Math.Clamp(players, MinPlayers, MaxPlayers), mode) switch
     {
-        2 => 128,
-        3 => 144,
-        _ => 160,
+        (2, MatchMode.Defense) => 128,
+        (3, MatchMode.Defense) => 144,
+        (_, MatchMode.Defense) => 160,
+        (2, _) => 96,
+        (3, _) => 112,
+        _ => 128,
     };
 
     /// <param name="players">Sides at the start of the match (players and bots): one castle each.</param>
@@ -64,7 +70,7 @@ public static class MapGenerator
     public static MapDefinition Generate(int seed, int players = MaxPlayers, MatchMode mode = MatchMode.Versus)
     {
         // One random stream for everything, drawn in a fixed order: the same seed gives the same map on every peer.
-        var build = new Builder(SizeFor(players), new Random(seed));
+        var build = new Builder(SizeFor(players, mode), new Random(seed));
         int sides = Math.Clamp(players, MinPlayers, MaxPlayers);
         build.GrowLand();
         build.SeparateBiomes();
@@ -436,7 +442,7 @@ public static class MapGenerator
         /// <summary>
         /// Two deposits by every castle at the same distances (one close, one a little further); a rich one in every gap
         /// between neighbouring castles and, for three or four players, in the middle — as far from each of them as from
-        /// the others; and some more per player scattered as they fall. All of it inside the castles' circle.
+        /// the others; and one or two more per player scattered as they fall. All of it inside the castles' circle.
         /// </summary>
         public List<DepositSpawn> PlaceGold(TileGrid grid, List<Cell> starts, int home)
         {
@@ -477,8 +483,8 @@ public static class MapGenerator
             if (castles.Count >= 3)
                 Add(Near(Middle, 0f, 4f) ?? Near(Middle, 4f, 9f), RichYield);
 
-            // The rest as it falls, a few per player, away from the castles.
-            int scattered = castles.Count * _rng.Next(5, 8);
+            // The rest as it falls, one or two per player, away from the castles: gold is scarce, every mine counts.
+            int scattered = castles.Count * _rng.Next(1, 3);
             for (int i = 0; i < scattered; i++)
                 Add(Place(grid, taken, home, RandomCell, c => InCircle(c) && Nearest(c) > 12f), MapLoader.DefaultDepositYield);
             return deposits;

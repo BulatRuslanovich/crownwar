@@ -16,6 +16,16 @@ public sealed partial class BotBrain
             return;
         }
 
+        // A raid on an outlying building by a stronger force is not worth the army: let it fall and hold the castle,
+        // whose arrows join the fight, instead of feeding soldiers in one by one.
+        if (threats.Count > 0 && !threats.Any(t => capital.SurfaceDistance(t.Position) <= ThreatRadius)
+            && threats.Sum(t => t.Type.Cost) > armyValue)
+        {
+            Mode = BotMode.Gather;
+            Send(army, RallyPoint(capital), MoveMode.AttackMove);
+            return;
+        }
+
         if (threats.Count > 0)
         {
             Mode = BotMode.Defend;

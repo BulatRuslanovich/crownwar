@@ -36,15 +36,15 @@ public class MapGeneratorTests
         Assert.That(mixed, Is.GreaterThan(20), "most maps mix two or three biomes");
     }
 
-    [TestCase(2, 128)]
-    [TestCase(3, 144)]
-    [TestCase(4, 160)]
+    [TestCase(2, 96)]
+    [TestCase(3, 112)]
+    [TestCase(4, 128)]
     public void MapsAreSquaresSizedForThePlayers(int players, int size)
     {
         var map = MapGenerator.Generate(5, players);
         Assert.That((map.Grid.Width, map.Grid.Height), Is.EqualTo((size, size)));
         Assert.That(map.StartPositions, Has.Count.EqualTo(players), "one castle per side");
-        Assert.That(map.Deposits.Count, Is.InRange(players * 7, players * 11), "fewer deposits on a smaller map, a share per player");
+        Assert.That(map.Deposits.Count, Is.InRange(players * 3, players * 6), "gold is scarce: own two, the rich ones between, a couple scattered");
     }
 
     /// <summary>
@@ -68,7 +68,7 @@ public class MapGeneratorTests
             Assert.That(toMiddle.Max() - toMiddle.Min(), Is.LessThan(12f), $"seed {seed}: as far from the middle");
             var toNeighbour = castles.Select((c, i) => castles.Where((_, j) => j != i).Min(o => System.Numerics.Vector2.Distance(c, o))).ToList();
             Assert.That(toNeighbour.Max() - toNeighbour.Min(), Is.LessThan(14f), $"seed {seed}: as far from the nearest enemy");
-            Assert.That(toNeighbour.Min(), Is.GreaterThan(75f), $"seed {seed}: room to grow");
+            Assert.That(toNeighbour.Min(), Is.GreaterThan(55f), $"seed {seed}: room to grow (tight maps, but not on top of each other)");
 
             foreach (var c in castles)
             {

@@ -18,7 +18,7 @@ public class BalanceReport
     private static MatchResult Play(int seed, BotDifficulty[] difficulties)
     {
         var rules = TestSim.RealRules();
-        var sim = new Simulation(MapGenerator.Generate(seed), rules, new MatchSetup(difficulties.Length, seed));
+        var sim = new Simulation(MapGenerator.Generate(seed, difficulties.Length), rules, new MatchSetup(difficulties.Length, seed));
         var bots = difficulties.Select((d, i) => new BotBrain(sim, i, d, seed * 31 + i)).ToList();
         var recruited = new Dictionary<string, int>();
         int peak = 0;

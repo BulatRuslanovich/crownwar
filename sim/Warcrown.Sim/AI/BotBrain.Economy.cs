@@ -14,8 +14,11 @@ public sealed partial class BotBrain
         _sim.Tick >= _profile.FirstMineDelay * Simulation.TicksPerSecond
         && _sim.Tick - _lastMineTick >= _profile.MineInterval * Simulation.TicksPerSecond;
 
-    /// <summary>Places buildings it can afford and returns gold to keep aside for a planned one.</summary>
-    private int PlanConstruction(Faction me, Building capital, List<Unit> army, bool threatened)
+    /// <summary>
+    /// Places buildings it can afford and returns gold to keep aside for a planned one. While <paramref name="behind"/>
+    /// it saves for no towers: gold put aside for a tower is gold the army lacks.
+    /// </summary>
+    private int PlanConstruction(Faction me, Building capital, List<Unit> army, bool threatened, bool behind)
     {
         int gold = me.Treasury.Gold;
         int reserve = 0;
@@ -46,7 +49,7 @@ public sealed partial class BotBrain
         }
         // Exhausted mines do not count: while they refill, the bot may open new ones elsewhere.
         if (OwnBuildings().Count(b => b.Type.IsMine && b.Deposit is not { IsExhausted: true }) < _profile.MaxMines && MayStartMine())
-            _expansion ??= ChooseExpansion(capital);
+            _expansion ??= ChooseExpansion(capital, behind);
         else
             _expansion = null;
 
@@ -73,7 +76,7 @@ public sealed partial class BotBrain
 
         // 3. Towers next to own mines.
         var towerType = _sim.Rules.BuildingTypes.FirstOrDefault(t => t.Attack is { IsSplash: false } && t.IsBuildable);
-        if (_profile.BuildsTowers && towerType != null && !threatened
+        if (_profile.BuildsTowers && towerType != null && !threatened && !behind
             && (towerType.MaxCount == 0 || _sim.CountBuildings(FactionId, towerType.Id) < towerType.MaxCount))
         {
             foreach (var mine in OwnBuildings().Where(b => b.Type.IsMine && b.IsComplete))
@@ -212,9 +215,13 @@ public sealed partial class BotBrain
             : t.IsRanged ? 0.25f : t.RangedArmor > 0f ? 0.25f : 0.5f;
     }
 
-    /// <summary>Nearest free deposit that is closer to our castle than to any enemy castle and not guarded.</summary>
-    private GoldDeposit? ChooseExpansion(Building capital)
+    /// <summary>
+    /// Nearest free deposit that is closer to our castle than to any enemy castle and not guarded; while
+    /// <paramref name="behind"/>, only one well on our side, so a weak escort is not walked into the enemy army.
+    /// </summary>
+    private GoldDeposit? ChooseExpansion(Building capital, bool behind)
     {
+        float margin = behind ? 1.5f : 0.8f;
         var enemyCapitals = _sim.Factions
             .Where(f => _sim.AreEnemies(FactionId, f.Id) && !f.IsEliminated)
             .Select(f => _sim.GetBuilding(f.CapitalId)).OfType<Building>().ToList();
@@ -223,7 +230,7 @@ public sealed partial class BotBrain
         return _sim.Deposits
             .Where(d => d.MineId == 0 && !d.IsExhausted && IsSafe(d.Center))
             .Where(d => NearbyComponent(d.Center) == home)
-            .Where(d => enemyCapitals.All(e => Vector2.Distance(d.Center, e.Position) > Vector2.Distance(d.Center, capital.Position) * 0.8f))
+            .Where(d => enemyCapitals.All(e => Vector2.Distance(d.Center, e.Position) > Vector2.Distance(d.Center, capital.Position) * margin))
             .OrderBy(d => Vector2.Distance(d.Center, capital.Position) / d.Yield)
             .FirstOrDefault();
     }
