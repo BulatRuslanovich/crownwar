@@ -19,19 +19,19 @@ public class GoldenReplayTests
     /// <summary>Fingerprints at ticks 1000, 2000, ... and one more where the match ends (or at 10 minutes).</summary>
     private static readonly ulong[] Expected =
     {
-        0x0FCF461985AEE20EUL,
-        0xFF7D2E1D499135F3UL,
-        0xAB210C3F2C9A6916UL,
-        0x9366556196CFD606UL,
-        0x0B62BED493708EFAUL,
-        0x75C2F44BF14B5691UL,
-        0x844FFF2C69C45D25UL,
-        0xEE12484F35854A72UL,
-        0xDF39560BA388CBD8UL,
-        0xA061BABCA83E2A68UL,
-        0x6DECCA6A82B11778UL,
-        0x83018A38CF77CD0DUL,
-        0x158A3D4535787483UL,
+        0xD872432987C1179BUL,
+        0x8275754467FD655AUL,
+        0xF0DFCA40B18094CDUL,
+        0x1F361855940915B9UL,
+        0xBB705D242E0CA9ABUL,
+        0x308A4ECAFFF9CECFUL,
+        0xA171C7DA399AAE95UL,
+        0x300BD55384BC1BDBUL,
+        0xE2327728A9C61501UL,
+        0x3F97AE6D6324F56AUL,
+        0xA0353316142B0620UL,
+        0x551809F0B6415A68UL,
+        0x05106A4D6FF17961UL,
     };
 
     [Test]

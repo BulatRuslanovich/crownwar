@@ -48,8 +48,16 @@ public sealed record BuildingType(
     int YieldBonus = 0,
     bool UnlocksUnits = false,
     bool IsCitadel = false,
-    int CostGrowthPercent = 100)
+    int CostGrowthPercent = 100,
+    bool IsCapturable = false,
+    float LightRadius = 0f)
 {
+    // IsCapturable: a fort. It stands on the map from the start, held by a neutral guard; whoever brings it down takes
+    // it over instead of razing it (see Simulation.Capture), and it pays its owner Income like any building.
+
+    // LightRadius: tiles round the building lit at night (a watchtower's beacon): the owner's and allies' towers there
+    // shoot as far as by day (see Simulation.AttackRangeOf).
+
     // CostGrowthPercent: every one the owner already has (or has ordered) makes the next this much dearer, in
     // percent of the previous price (125: 150, 190, 230, 290...). 100 keeps the price flat.
 
@@ -58,9 +66,9 @@ public sealed record BuildingType(
 
     /// <summary>
     /// Capitals are placed at match start and cannot be built by players (except a new outpost in the Defense mode,
-    /// see <c>Simulation.CanBuild</c>); nor can the Defense mode's citadel.
+    /// see <c>Simulation.CanBuild</c>); nor can the Defense mode's citadel, nor forts (they are only ever captured).
     /// </summary>
-    public bool IsBuildable => !IsCapital && !IsCitadel;
+    public bool IsBuildable => !IsCapital && !IsCitadel && !IsCapturable;
 
     /// <summary>The highest level this kind can reach.</summary>
     public int MaxTier => NextTier?.MaxTier ?? Tier;

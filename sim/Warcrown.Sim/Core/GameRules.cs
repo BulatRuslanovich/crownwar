@@ -24,7 +24,8 @@ public sealed class GameRules
         float peaceOfferSeconds = DefaultPeaceOfferSeconds, float warWarningSeconds = DefaultWarWarningSeconds,
         DefenseRules? defense = null, VeterancyRules? veterancy = null,
         int upkeepSurchargeFrom = 0, int upkeepSurchargePercent = 0, int mineRaidPercent = 0,
-        IReadOnlyList<Doctrine>? doctrines = null, int doctrineBarracks = 0)
+        IReadOnlyList<Doctrine>? doctrines = null, int doctrineBarracks = 0,
+        float nightTowerRangeFactor = 1f, FortRules? forts = null)
     {
         if (startingGold < 0)
             throw new ArgumentOutOfRangeException(nameof(startingGold));
@@ -40,8 +41,8 @@ public sealed class GameRules
             throw new ArgumentOutOfRangeException(nameof(lootPercent), "Loot, refund and mine raids are percentages.");
         if (upkeepSurchargeFrom < 0 || upkeepSurchargePercent < 0)
             throw new ArgumentOutOfRangeException(nameof(upkeepSurchargePercent), "The upkeep surcharge cannot be negative.");
-        if (daySeconds < 0f || nightSeconds < 0f || nightSightFactor is <= 0f or > 1f)
-            throw new ArgumentOutOfRangeException(nameof(nightSeconds), "Day and night last a non-negative time; night sight is a factor in (0, 1].");
+        if (daySeconds < 0f || nightSeconds < 0f || nightSightFactor is <= 0f or > 1f || nightTowerRangeFactor is <= 0f or > 1f)
+            throw new ArgumentOutOfRangeException(nameof(nightSeconds), "Day and night last a non-negative time; night sight and tower range are factors in (0, 1].");
         if (peaceOfferSeconds <= 0f || warWarningSeconds < 0f)
             throw new ArgumentOutOfRangeException(nameof(warWarningSeconds), "An offer of peace must stand a while; the war warning cannot be negative.");
         Defense = defense ?? DefenseRules.Default;
@@ -75,6 +76,9 @@ public sealed class GameRules
         DaySeconds = daySeconds;
         NightSeconds = nightSeconds;
         NightSightFactor = nightSightFactor;
+        NightTowerRangeFactor = nightTowerRangeFactor;
+        Forts = forts ?? FortRules.Default;
+        Forts.Validate(units);
         DepositReserveSeconds = depositReserveSeconds;
         DepositRegenSeconds = depositRegenSeconds;
         UpkeepAllowance = upkeepAllowance;
@@ -120,6 +124,7 @@ public sealed class GameRules
         Capital = _buildingTypeOrder.SingleOrDefault(t => t.IsCapital)
                   ?? throw new ArgumentException("Exactly one building type must be the capital.");
         Citadel = _buildingTypeOrder.SingleOrDefault(t => t.IsCitadel);
+        Fort = _buildingTypeOrder.SingleOrDefault(t => t.IsCapturable);
     }
 
     public int StartingGold { get; }
@@ -172,6 +177,15 @@ public sealed class GameRules
     /// <summary>At night units see this share of their sight range (buildings see as far as by day).</summary>
     public float NightSightFactor { get; }
 
+    /// <summary>
+    /// At night shooting buildings reach this share of their range, unless a beacon of their side lights them
+    /// (<see cref="BuildingType.LightRadius"/>): night is the time to raid, and a watchtower the answer.
+    /// </summary>
+    public float NightTowerRangeFactor { get; }
+
+    /// <summary>The forts' guard and how much health a captured one keeps.</summary>
+    public FortRules Forts { get; }
+
     /// <summary>Seconds an offer of peace waits for an answer.</summary>
     public float PeaceOfferSeconds { get; }
 
@@ -188,6 +202,9 @@ public sealed class GameRules
 
     /// <summary>The Defense mode's shared citadel; null if the rules have none (then that mode cannot be played).</summary>
     public BuildingType? Citadel { get; }
+
+    /// <summary>The neutral fort a match places between the castles; null if the rules have none (then no forts stand).</summary>
+    public BuildingType? Fort { get; }
 
     /// <summary>The numbers of the Defense mode.</summary>
     public DefenseRules Defense { get; }
@@ -250,8 +267,16 @@ public sealed class GameRules
             OptionalInt(root, "upkeepSurchargePercent"),
             OptionalInt(root, "mineRaidPercent"),
             root.TryGetProperty("doctrines", out var doctrines) ? doctrines.EnumerateArray().Select(ParseDoctrine).ToList() : null,
-            OptionalInt(root, "doctrineBarracks"));
+            OptionalInt(root, "doctrineBarracks"),
+            OptionalSingle(dayNight, "towerRangeFactor", 1f),
+            root.TryGetProperty("forts", out var forts) ? ParseForts(forts) : null);
     }
+
+    private static FortRules ParseForts(JsonElement f) => new(
+        (int)MathF.Round(OptionalSingle(f, "captureHealth", FortRules.Default.CaptureHealthPercent / 100f) * 100f),
+        f.TryGetProperty("guard", out var guard)
+            ? guard.EnumerateArray().Select(g => new StartingUnits(RequiredString(g, "unit"), g.GetProperty("count").GetInt32())).ToArray()
+            : Array.Empty<StartingUnits>());
 
     private static Doctrine ParseDoctrine(JsonElement d) => new(
         RequiredString(d, "id"),
@@ -352,7 +377,9 @@ public sealed class GameRules
             UnlocksUnits: OptionalBool(b, "unlocksUnits"),
             IsCitadel: OptionalBool(b, "citadel"),
             // Kept as an integer percentage: prices must come out the same on every lockstep peer.
-            CostGrowthPercent: b.TryGetProperty("costGrowth", out var growth) ? (int)Math.Round(growth.GetDouble() * 100) : 100);
+            CostGrowthPercent: b.TryGetProperty("costGrowth", out var growth) ? (int)Math.Round(growth.GetDouble() * 100) : 100,
+            IsCapturable: OptionalBool(b, "capturable"),
+            LightRadius: OptionalSingle(b, "light"));
         return b.TryGetProperty("tiers", out var tiers) ? WithTiers(type, tiers.EnumerateArray().ToList()) : type;
     }
 

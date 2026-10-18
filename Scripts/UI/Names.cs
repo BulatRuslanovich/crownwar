@@ -33,7 +33,9 @@ public static class Names
         return faction == match.LocalFactionId ? $"{name} {TranslationServer.Translate("NET_YOU")}".Trim() : name;
     }
 
-    public static string Faction(int factionId) => string.Format(TranslationServer.Translate("FACTION_N"), factionId);
+    public static string Faction(int factionId) => factionId < 0
+        ? TranslationServer.Translate("FACTION_NEUTRAL")
+        : string.Format(TranslationServer.Translate("FACTION_N"), factionId);
 
     private static string Translated(string key, string fallback)
     {

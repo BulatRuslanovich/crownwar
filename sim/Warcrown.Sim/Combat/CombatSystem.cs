@@ -207,19 +207,19 @@ internal sealed class CombatSystem
         return best;
     }
 
-    /// <summary>A finished tower shoots the nearest enemy unit in range.</summary>
-    public void UpdateTower(Building tower, IReadOnlyList<Unit> units, int tick)
+    /// <summary>A finished tower shoots the nearest enemy unit within <paramref name="range"/> (shorter at night in the dark).</summary>
+    public void UpdateTower(Building tower, IReadOnlyList<Unit> units, int tick, float range)
     {
         if (tower.Type.Attack is not { } attack || !tower.IsComplete || !tower.IsAlive)
             return;
         if (tower.AttackCooldownTicks > 0)
             tower.AttackCooldownTicks--;
 
-        if (tower.Target is { } current && (!current.IsAlive || tower.SurfaceDistance(current.Position) > attack.Range
+        if (tower.Target is { } current && (!current.IsAlive || tower.SurfaceDistance(current.Position) > range
                                             || !_areEnemies(tower.FactionId, current.FactionId) || !CanHit(attack.HitsAir, current)))
             tower.Target = null;
         if (tower.Target == null && (tick + tower.Id) % ScanIntervalTicks == 0)
-            tower.Target = FindEnemyUnit(tower, units, attack.Range, attack.HitsAir);
+            tower.Target = FindEnemyUnit(tower, units, range, attack.HitsAir);
         if (tower.Target is not { } target || tower.AttackCooldownTicks > 0)
             return;
 

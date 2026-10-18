@@ -17,8 +17,12 @@ public sealed record MapDefinition(
     IReadOnlyList<Cell> StartPositions,
     IReadOnlyList<DepositSpawn> Deposits,
     IReadOnlyList<Biome>? Biomes = null,
-    Cell? Citadel = null)
+    Cell? Citadel = null,
+    IReadOnlyList<Cell>? Forts = null)
 {
+    /// <summary>Where the neutral forts stand (top-left cells); none if the map has none.</summary>
+    public IReadOnlyList<Cell> FortAnchors => Forts ?? Array.Empty<Cell>();
+
     public Biome BiomeAt(Cell cell) => Biomes?[cell.Y * Grid.Width + cell.X] ?? Biome.Meadow;
 }
 
@@ -32,6 +36,7 @@ public sealed record MapDefinition(
 /// start &lt;x&gt; &lt;y&gt;                         possible capital location (top-left cell)
 /// gold &lt;x&gt; &lt;y&gt; [yield]                  2×2 gold deposit (top-left cell), default yield 3
 /// unit &lt;typeId&gt; &lt;faction&gt; &lt;x&gt; &lt;y&gt; [count]  pre-placed units (tests, scenarios)
+/// fort &lt;x&gt; &lt;y&gt;                          a neutral fort (top-left cell), held by its guard
 /// </code>
 /// Unit type ids and whether a capital fits at a start are checked when the match is created.
 /// </summary>
@@ -46,6 +51,7 @@ public static class MapLoader
         var starts = new List<Cell>();
         var deposits = new List<DepositSpawn>();
         var citadels = new List<Cell>();
+        var forts = new List<Cell>();
         string? section = null;
         int lineNo = 0;
 
@@ -70,7 +76,7 @@ public static class MapLoader
                     rows.Add(line);
                     break;
                 case "objects":
-                    ParseObject(line, lineNo, units, starts, deposits, citadels);
+                    ParseObject(line, lineNo, units, starts, deposits, citadels, forts);
                     break;
                 default:
                     throw Error(lineNo, "content before the first section header");
@@ -118,11 +124,11 @@ public static class MapLoader
         }
         if (citadels.Count > 1)
             throw new FormatException("A map has at most one citadel.");
-        return new MapDefinition(grid, units, starts, deposits, Citadel: citadels.Count == 1 ? citadels[0] : null);
+        return new MapDefinition(grid, units, starts, deposits, Citadel: citadels.Count == 1 ? citadels[0] : null, Forts: forts);
     }
 
     private static void ParseObject(string line, int lineNo, List<UnitSpawn> units, List<Cell> starts, List<DepositSpawn> deposits,
-        List<Cell> citadels)
+        List<Cell> citadels, List<Cell> forts)
     {
         string[] parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         switch (parts[0])
@@ -152,6 +158,11 @@ public static class MapLoader
                 if (parts.Length != 3)
                     throw Error(lineNo, "expected: citadel <x> <y>");
                 citadels.Add(ParseCell(parts, 1, lineNo));
+                break;
+            case "fort":
+                if (parts.Length != 3)
+                    throw Error(lineNo, "expected: fort <x> <y>");
+                forts.Add(ParseCell(parts, 1, lineNo));
                 break;
             default:
                 throw Error(lineNo, $"unknown object '{parts[0]}'");

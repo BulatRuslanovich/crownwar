@@ -15,6 +15,23 @@ public class BotTests
             StepWithBots(sim, bots);
     }
 
+    [Test]
+    public void BotsTakeTheFortsBetweenThem()
+    {
+        var sim = new Simulation(MapGenerator.Generate(5, 2), RealRules(), new MatchSetup(2, 5));
+        var bots = new[] { new BotBrain(sim, 0, BotDifficulty.Hard, 1), new BotBrain(sim, 1, BotDifficulty.Normal, 2) };
+        var taken = new List<FortCaptured>();
+
+        for (int i = 0; i < 20 * 60 * Simulation.TicksPerSecond && !sim.IsOver && taken.Count == 0; i++)
+        {
+            StepWithBots(sim, bots);
+            taken.AddRange(sim.TakeEvents().OfType<FortCaptured>().Where(e => e.FactionId >= 0));
+        }
+
+        Assert.That(taken, Is.Not.Empty, "a bot must go for a fort once its army can take one");
+        Assert.That(sim.Buildings.Single(b => b.Id == taken[0].BuildingId).FactionId, Is.EqualTo(taken[0].FactionId));
+    }
+
     [TestCase(BotDifficulty.Easy)]
     [TestCase(BotDifficulty.Normal)]
     [TestCase(BotDifficulty.Hard)]

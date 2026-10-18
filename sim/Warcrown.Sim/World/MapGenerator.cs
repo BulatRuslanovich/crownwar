@@ -32,6 +32,8 @@ public enum Biome : byte
 /// <item>Gold: two deposits by every castle at the same distances; rich ones in the gaps between neighbours (and the
 /// middle), as far from one castle as from the next; one or two more per player scattered as they fall, all of it inside the circle the
 /// castles stand on, so the corners of the square are no hidden treasure for whoever starts next to them.</item>
+/// <item>Forts: a neutral fort in every gap between neighbouring castles, out beyond that gap's rich gold, as far from
+/// the one as from the other (none in the Defense mode).</item>
 /// </list>
 /// For the Defense mode the layout turns inside out: the shared citadel in the middle, the players' outposts in a
 /// close ring round it, roads in from the middle of every edge (where the waves come from), and the gold beyond the
@@ -41,6 +43,8 @@ public static class MapGenerator
 {
     public const int MinPlayers = 2, MaxPlayers = 4;
     private const int CastleSize = 3;
+    /// <summary>A fort's footprint (the "fort" building of the rules is as big).</summary>
+    private const int FortSize = 3;
     private const int RichYield = 5;
     private const int Attempts = 80;
     /// <summary>Open ground cleared around each castle (tiles from its centre).</summary>
@@ -87,7 +91,8 @@ public static class MapGenerator
         var doors = build.LayRoads(starts);
         var grid = new TileGrid(build.Width, build.Height, build.Tiles);
         var deposits = build.PlaceGold(grid, starts, home: grid.ComponentOf(doors[0]));
-        return new MapDefinition(grid, Array.Empty<UnitSpawn>(), starts, deposits, build.Biomes);
+        var forts = build.PlaceForts(grid, starts, deposits, home: grid.ComponentOf(doors[0]));
+        return new MapDefinition(grid, Array.Empty<UnitSpawn>(), starts, deposits, build.Biomes, Forts: forts);
     }
 
     /// <summary>
@@ -490,6 +495,49 @@ public static class MapGenerator
             return deposits;
         }
 
+        // ---------------------------------------------------------------- forts
+
+        /// <summary>
+        /// A neutral fort in every gap between neighbouring castles (both sides of the line between two), out beyond
+        /// the rich gold of that gap: on the line where the two castles beside it are equally far (the castles stand a
+        /// little off their ideal places, so it is sought from where they really are), so every side has forts as close
+        /// as anyone else's. Clear of the castles and the gold, with room round it for its guard.
+        /// </summary>
+        public List<Cell> PlaceForts(TileGrid grid, List<Cell> starts, List<DepositSpawn> deposits, int home)
+        {
+            const int margin = 3; // room for the guard round the walls
+            var taken = starts.Select(s => (Anchor: new Cell(s.X - margin, s.Y - margin), Size: CastleSize + 2 * margin)).ToList();
+            taken.AddRange(deposits.Select(d => (new Cell(d.Anchor.X - margin, d.Anchor.Y - margin), GoldDeposit.Size + 2 * margin)));
+            // Round the circle, so each castle's neighbours are the ones beside it in the list.
+            var castles = starts.Select(s => s.CenterOfSquare(CastleSize))
+                .OrderBy(c => MathF.Atan2(c.Y - Middle.Y, c.X - Middle.X)).ToList();
+            var forts = new List<Cell>();
+            int gaps = castles.Count == 2 ? 2 : castles.Count;
+            for (int i = 0; i < gaps; i++)
+            {
+                var a = castles[i % castles.Count];
+                var b = castles[(i + 1) % castles.Count];
+                // Out from the middle along the line of points as far from a as from b.
+                var midway = (a + b) / 2f;
+                var across = Vector2.Normalize(new Vector2(a.Y - b.Y, b.X - a.X));
+                if (castles.Count == 2 ? i == 1 : Vector2.Dot(across, midway - Middle) < 0f)
+                    across = -across;
+                var point = midway + across * (CastleRadius * 0.95f - Vector2.Dot(midway - Middle, across));
+                bool Fair(Cell c)
+                {
+                    var at = new Vector2(c.X + FortSize / 2f, c.Y + FortSize / 2f);
+                    return MathF.Abs(Vector2.Distance(at, a) - Vector2.Distance(at, b)) <= 3f;
+                }
+                var anchor = Place(grid, taken, home, () => Around(point, 0f, 4f), Fair, FortSize)
+                             ?? Place(grid, taken, home, () => Around(point, 3f, 9f), Fair, FortSize);
+                if (anchor is not { } fort)
+                    continue; // no room this time: one fort fewer
+                taken.Add((new Cell(fort.X - margin, fort.Y - margin), FortSize + 2 * margin));
+                forts.Add(fort);
+            }
+            return forts;
+        }
+
         private Cell RandomCell() => new(_rng.Next(2, Width - 3), _rng.Next(2, Height - 3));
 
         private Cell Around(Vector2 center, float minDistance, float maxDistance)
@@ -499,21 +547,21 @@ public static class MapGenerator
             return new Cell((int)(center.X + MathF.Cos((float)angle) * distance) - 1, (int)(center.Y + MathF.Sin((float)angle) * distance) - 1);
         }
 
-        private Cell? Place(TileGrid grid, List<(Cell Anchor, int Size)> taken, int home, Func<Cell> candidate, Func<Cell, bool>? where = null)
+        private Cell? Place(TileGrid grid, List<(Cell Anchor, int Size)> taken, int home, Func<Cell> candidate, Func<Cell, bool>? where = null,
+            int size = GoldDeposit.Size)
         {
             for (int i = 0; i < Attempts; i++)
             {
                 var anchor = candidate();
-                if ((where == null || where(anchor)) && Fits(grid, taken, home, anchor))
+                if ((where == null || where(anchor)) && Fits(grid, taken, home, anchor, size))
                     return anchor;
             }
             return null; // no room this time: one deposit fewer
         }
 
-        /// <summary>A deposit fits on open ground (not road), clear of other things, with a walkable neighbour the castles can reach.</summary>
-        private bool Fits(TileGrid grid, List<(Cell Anchor, int Size)> taken, int home, Cell anchor)
+        /// <summary>A deposit (or a fort, <paramref name="size"/> wide) fits on open ground (not road), clear of other things, with a walkable neighbour the castles can reach.</summary>
+        private bool Fits(TileGrid grid, List<(Cell Anchor, int Size)> taken, int home, Cell anchor, int size)
         {
-            const int size = GoldDeposit.Size;
             if (anchor.X < 1 || anchor.Y < 1 || anchor.X + size >= Width - 1 || anchor.Y + size >= Height - 1)
                 return false;
             for (int y = anchor.Y; y < anchor.Y + size; y++)

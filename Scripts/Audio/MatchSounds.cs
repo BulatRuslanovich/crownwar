@@ -106,6 +106,12 @@ public partial class MatchSounds : Node
             case BuildingCompleted completed when completed.FactionId == player:
                 PlayUi(Sound.BuildingCompleted, -4f);
                 break;
+            case FortCaptured taken when taken.FactionId == player:
+                PlayUi(Sound.BuildingCompleted, -2f);
+                break;
+            case FortCaptured lost when lost.FromFactionId == player:
+                PlayAt(Sound.BuildingDestroyed, lost.Position, -2f, margin: 600f);
+                break;
             case RecruitRejected rejected when rejected.FactionId == player:
             case BuildRejected built when built.FactionId == player:
             case UpgradeRejected upgrade when upgrade.FactionId == player:

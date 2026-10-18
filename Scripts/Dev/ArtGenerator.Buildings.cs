@@ -33,6 +33,7 @@ public static partial class ArtGenerator
     private static readonly Ramp PlasterR = Ramp.Of(new Color("a39780"), 0.8f, mood: BuildingMood);
     private static readonly Ramp SlateR = Ramp.Of(new Color("454a57"), mood: BuildingMood);
     private static readonly Ramp CourtR = Ramp.Of(new Color("5c5853"), 0.8f, mood: BuildingMood);
+    private static readonly Ramp EarthR = Ramp.Of(new Color("7a6448"), 0.7f, mood: BuildingMood * 0.5f);
     private static readonly Ramp GlassR = Ramp.Of(new Color("2c2630"), mood: BuildingMood);
     private static readonly Ramp DoorR = Ramp.Of(new Color("4e3320"), mood: BuildingMood);
     private static readonly Ramp RockR = Ramp.Of(new Color("8a7f72"), mood: BuildingMood * 0.5f);
@@ -606,6 +607,79 @@ public static partial class ArtGenerator
             Banner(c, tx - 5, 104, 11, 18);
         }
     });
+
+    /// <summary>
+    /// 96×128 frames, bottom-centre origin; the footprint is 3×3 tiles. A neutral fort, the prize between the castles:
+    /// a ring of sharpened logs round a yard, a square stone keep at the back with battlements, a banner and the flag,
+    /// two timber houses roofed in the owner's colours (grey while it belongs to nobody), and a gate of planks between
+    /// torches in the front palisade. Rougher than a castle: timber where a castle has stone.
+    /// </summary>
+    private static PixelCanvas Fort() => Sheet(96, 128, (c, frame) =>
+    {
+        // The palisade along the back and the yard inside it.
+        Palisade(c, 6, 90, 44, 60, -0.3f);
+        for (int y = 60; y < 100; y++)
+            for (int x = 8; x < 88; x++)
+                c.Shade(x, y, EarthR, (y < 63 ? -0.9f : 0f) + (Hash(x / 3, y / 2, 21) % 9 == 0 ? -0.6f : 0f), solid: false); // trodden earth
+        // The keep at the back, its flat top seen from above, battlements along its front.
+        Flag(c, 48, 2, frame, pole: 24);
+        Flagstones(c, 33, 24, 30, 8, FlagstoneR, 22);
+        Battlement(c, 33, 24, 30, WallLightR);
+        Ashlar(c, 33, 32, 30, 56, WallLightR, salt: 23, grime: false);
+        Battlement(c, 33, 32, 30, WallLightR);
+        ArchWindow(c, 37, 40, 3, 6);
+        ArchWindow(c, 56, 40, 3, 6);
+        Banner(c, 42, 36, 12, 20);
+        ArchDoor(c, 42, 72, 12, 16);
+        // The houses either side of the keep: plastered timber frames under slate roofs in the owner's colours.
+        foreach (int x in new[] { 8, 66 })
+        {
+            SlateRoof(c, x, x + 22, 52, 58, 0.5f, x + 24);
+            SlateRoof(c, x, x + 22, 58, 67, -0.1f, x + 25);
+            for (int y = 67; y < 84; y++)
+                for (int i = 0; i < 20; i++)
+                {
+                    bool beam = i == 0 || i == 19 || y == 67 || y == 83 || i == 10;
+                    c.Shade(x + 1 + i, y, beam ? DarkWoodR : PlasterR, (beam ? 0f : 0.2f) + (i < 2 ? 0.3f : i > 17 ? -0.6f : 0f) + (y < 70 ? -0.6f : 0f));
+                }
+            ShutteredWindow(c, x + 5, 72, 3, 3);
+            ShutteredWindow(c, x + 14, 72, 3, 3);
+        }
+        // The palisade's sides, then its front with the gate.
+        Palisade(c, 2, 8, 52, 104, 0.3f);
+        Palisade(c, 88, 94, 52, 104, -0.7f);
+        Palisade(c, 2, 38, 98, 124, 0.1f);
+        Palisade(c, 58, 94, 98, 124, -0.2f);
+        for (int y = 102; y < 124; y++)
+            for (int x = 40; x < 56; x++)
+                c.Shade(x, y, GlassR, y < 105 ? -2f : -1.4f); // the way in, into the dark yard
+        c.Block(39, 103, 4, 21, WoodR, bias: 0.2f); // the gate's leaves, swung open
+        c.Block(53, 103, 4, 21, WoodR, bias: -0.5f);
+        c.Stroke(36, 98, 36, 124, 3.4f, DarkWoodR, 0.3f); // the gate posts and the beam across them
+        c.Stroke(59, 98, 59, 124, 3.4f, DarkWoodR, -0.4f);
+        c.Stroke(34, 97, 61, 97, 3f, DarkWoodR, 0.5f);
+        Torch(c, 31, 104, frame);
+        Torch(c, 64, 104, (frame + 2) % 4);
+        Banner(c, 13, 104, 9, 12);
+        Banner(c, 74, 104, 9, 12);
+    });
+
+    /// <summary>
+    /// A palisade of sharpened logs from x0 to x1 (exclusive), their points at <paramref name="top"/>, their feet at
+    /// <paramref name="bottom"/>: each log lit like a post, every other one a little darker, a pale cut point on top.
+    /// </summary>
+    private static void Palisade(PixelCanvas c, int x0, int x1, int top, int bottom, float bias)
+    {
+        for (int x = x0; x < x1; x += 4)
+        {
+            int w = Math.Min(4, x1 - x);
+            int tip = top + (Hash(x, top, 24) % 3); // the points not all level
+            c.Column(x, tip + 2, w, bottom - tip - 2, (x - x0) / 4 % 2 == 0 ? WoodR : DarkWoodR, bias);
+            c.Shade(x + w / 2, tip, WoodR, 1.2f + bias);
+            c.Shade(x + w / 2 - 1, tip + 1, WoodR, 0.9f + bias);
+            c.Shade(x + w / 2, tip + 1, WoodR, 0.3f + bias);
+        }
+    }
 
     /// <summary>
     /// 128×184 frames, bottom-centre origin; the footprint is 4×4 tiles. The Defense mode's citadel: a high curtain wall

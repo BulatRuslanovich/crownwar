@@ -28,6 +28,7 @@ public sealed partial class Simulation
         foreach (var building in _buildings)
         {
             hash.Add(building.Id);
+            hash.Add(building.FactionId); // forts change hands
             hash.Add(building.Health);
             hash.Add(building.ConstructionTicksLeft);
             hash.Add(building.Queue.Count);

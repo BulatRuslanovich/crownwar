@@ -18,8 +18,8 @@ public abstract class Entity
 
     public int Id { get; }
 
-    /// <summary>Owner faction, or -1 for neutral.</summary>
-    public int FactionId { get; }
+    /// <summary>Owner faction, or -1 for neutral. Only a captured fort changes hands.</summary>
+    public int FactionId { get; internal set; }
 
     /// <summary>Center (buildings) or feet (units), in tile units.</summary>
     public Vector2 Position { get; internal set; }

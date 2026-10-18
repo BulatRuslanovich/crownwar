@@ -64,6 +64,7 @@ public sealed partial class Simulation
         PlaceCapitals(map.StartPositions, setup);
         if (setup.Mode == MatchMode.Defense)
             SetUpDefense(map, setup);
+        PlaceForts(map.FortAnchors);
 
         foreach (var spawn in map.UnitSpawns)
         {
@@ -141,7 +142,7 @@ public sealed partial class Simulation
             _combat.UpdateBehaviour(unit, _units, _buildings, Tick);
         _combat.ResumeMarches();
         foreach (var building in _buildings)
-            _combat.UpdateTower(building, _units, Tick);
+            _combat.UpdateTower(building, _units, Tick, AttackRangeOf(building));
         foreach (var unit in _units)
             unit.Move(TickDuration);
         _combat.AdvanceProjectiles(TickDuration, _units);

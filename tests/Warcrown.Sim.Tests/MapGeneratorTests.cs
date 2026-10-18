@@ -85,6 +85,33 @@ public class MapGeneratorTests
         }
     }
 
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    public void FortsStandInTheGapsAsFarFromEitherNeighbour(int players)
+    {
+        var rules = TestSim.RealRules();
+        for (int seed = 1; seed <= 25; seed++)
+        {
+            var map = MapGenerator.Generate(seed, players);
+            var castles = map.StartPositions.Select(s => new System.Numerics.Vector2(s.X + 1.5f, s.Y + 1.5f)).ToList();
+            Assert.That(map.FortAnchors, Has.Count.InRange(players - 1, players == 2 ? 2 : players), $"seed {seed}: a fort in (nearly) every gap");
+            foreach (var fort in map.FortAnchors)
+            {
+                var at = new System.Numerics.Vector2(fort.X + 1.5f, fort.Y + 1.5f);
+                var nearest = castles.Select(c => System.Numerics.Vector2.Distance(at, c)).Order().ToList();
+                Assert.That(nearest[1] - nearest[0], Is.LessThan(12f), $"seed {seed}: fort at {fort} as far from both neighbours");
+                Assert.That(nearest[0], Is.GreaterThan(25f), $"seed {seed}: fort at {fort} is nobody's back yard");
+            }
+
+            // The real rules put a fort with its guard on every spot.
+            var sim = new Simulation(map, rules, new MatchSetup(players, seed));
+            Assert.That(sim.Buildings.Count(b => b.Type.IsCapturable && b.FactionId == Simulation.NeutralFactionId), Is.EqualTo(map.FortAnchors.Count));
+            int guard = rules.Forts.Guard.Sum(g => g.Count);
+            Assert.That(sim.Units.Count(u => u.FactionId == Simulation.NeutralFactionId), Is.EqualTo(guard * map.FortAnchors.Count));
+        }
+    }
+
     [Test]
     public void SameSeedSameMapOtherSeedOtherMap()
     {

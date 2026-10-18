@@ -74,6 +74,7 @@ public partial class MatchController
         BuildingDestroyed destroyed => IsFriendly(destroyed.FactionId) || Fog.IsVisible(destroyed.Position),
         BuildingDemolished demolished => IsFriendly(demolished.FactionId) || Fog.IsVisible(demolished.Position),
         BuildingCompleted completed => IsFriendly(completed.FactionId),
+        FortCaptured taken => IsFriendly(taken.FactionId) || IsFriendly(taken.FromFactionId) || Fog.IsVisible(taken.Position),
         _ => true,
     };
 

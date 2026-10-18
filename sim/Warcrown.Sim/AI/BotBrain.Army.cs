@@ -53,9 +53,9 @@ public sealed partial class BotBrain
         if (Mode == BotMode.Attack)
         {
             var target = _sim.GetBuilding(_attackTargetId);
-            if (target == null)
+            if (target == null || !_sim.AreEnemies(FactionId, target.FactionId))
             {
-                Mode = BotMode.Gather; // destroyed: pick the next target below
+                Mode = BotMode.Gather; // destroyed (or a fort taken): pick the next target below
             }
             else if (armyValue < _launchValue * _profile.RetreatFraction)
             {
@@ -102,7 +102,8 @@ public sealed partial class BotBrain
 
     /// <summary>
     /// Cheapest prize for the effort: distance plus how well it is defended. Castles only once
-    /// the army is big enough for a siege; their fall wins the war.
+    /// the army is big enough for a siege; their fall wins the war. Forts (neutral or an enemy's) draw the army a little
+    /// more than other buildings: brought down, they become the bot's own.
     /// </summary>
     private Building? ChooseAttackTarget(Building capital, int armyValue)
     {
@@ -122,6 +123,8 @@ public sealed partial class BotBrain
                 score -= deposit.Reserve * _sim.Rules.MineRaidPercent / 100 / 20f; // a full deposit is worth the walk
             if (building.Type.IsCapital)
                 score *= 0.6f; // the decisive target
+            else if (building.Type.IsCapturable)
+                score *= 0.7f; // taken, not razed: it pays for the rest of the match
             if (score < bestScore)
             {
                 bestScore = score;

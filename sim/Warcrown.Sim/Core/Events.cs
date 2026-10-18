@@ -54,6 +54,8 @@ public enum DemolishError
     NotOwner,
     /// <summary>The castle cannot be pulled down.</summary>
     Capital,
+    /// <summary>A fort is held, not pulled down.</summary>
+    Fort,
 }
 
 public enum BuildError
@@ -116,6 +118,12 @@ public sealed record UnitPromoted(int FactionId, int UnitId, int Rank, Vector2 P
 
 /// <summary>The faction's capital fell: its army disbands and its buildings collapse.</summary>
 public sealed record FactionEliminated(int FactionId) : SimEvent(FactionId);
+
+/// <summary>
+/// A fort changed hands: <see cref="SimEvent.FactionId"/> took it from <paramref name="FromFactionId"/> (-1: it was
+/// neutral); <see cref="SimEvent.FactionId"/> is -1 when the fort went back to nobody, its owner eliminated.
+/// </summary>
+public sealed record FortCaptured(int FactionId, int FromFactionId, int BuildingId, Vector2 Position) : SimEvent(FactionId);
 
 public enum DiplomacyError
 {

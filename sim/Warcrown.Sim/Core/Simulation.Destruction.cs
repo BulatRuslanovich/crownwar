@@ -10,7 +10,7 @@ public sealed partial class Simulation
         for (int i = _buildings.Count - 1; i >= 0; i--)
         {
             var building = _buildings[i];
-            if (building.IsAlive)
+            if (building.IsAlive || TryCapture(building))
                 continue;
             RemoveBuilding(building);
             _events.Add(new BuildingDestroyed(building.FactionId, building.Id, building.Type.Id, building.KilledByFactionId,
@@ -50,6 +50,8 @@ public sealed partial class Simulation
             return DemolishError.NotOwner;
         if (building.Type.IsCapital)
             return DemolishError.Capital;
+        if (building.Type.IsCapturable)
+            return DemolishError.Fort;
         refund = building.Invested * Rules.DemolishRefundPercent / 100 + building.Queue.Sum(item => item.Type.Cost);
         return DemolishError.None;
     }
@@ -132,7 +134,7 @@ public sealed partial class Simulation
         }
     }
 
-    /// <summary>The army disbands and every remaining building of the faction collapses.</summary>
+    /// <summary>The army disbands and every remaining building of the faction collapses; its forts go back to nobody.</summary>
     private void Eliminate(Faction faction)
     {
         faction.IsEliminated = true;
@@ -150,6 +152,11 @@ public sealed partial class Simulation
         {
             if (_buildings[i].FactionId != faction.Id)
                 continue;
+            if (_buildings[i].Type.IsCapturable)
+            {
+                ReleaseFort(_buildings[i]);
+                continue;
+            }
             RemoveBuilding(_buildings[i--], relabel: false);
             collapsed = true;
         }

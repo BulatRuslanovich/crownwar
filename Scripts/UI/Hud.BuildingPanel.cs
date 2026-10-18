@@ -35,7 +35,7 @@ public partial class Hud
         UpdateQueue(building, own);
     }
 
-    private (int Id, int Health, int Tier, int Built, int Slots, int Reserve, int Regen, int Text) _infoShown;
+    private (int Id, int Health, int Tier, int Built, int Slots, int Reserve, int Regen, int Text, int Night) _infoShown;
 
     /// <summary>
     /// The title (kind, level, owner) and the building's state: its health, how far it is built, and for a mine what it
@@ -45,8 +45,10 @@ public partial class Hud
     {
         int built = building.IsComplete ? 101 : (int)(building.ConstructionProgress * 100f);
         int slots = building.Type.Recruits.Count > 0 ? _match.Sim.TrainingSlots(building) : 0;
+        // 0 by day; at night, for a building that shoots: 1 in the dark, 2 lit by a beacon.
+        int night = !_match.Sim.IsNight || building.Type.Attack == null || !building.IsComplete ? 0 : _match.Sim.IsLit(building) ? 2 : 1;
         if (!Changed(ref _infoShown, (building.Id, building.Health, building.Type.Tier, built, slots, building.Deposit?.Reserve ?? 0,
-                building.Deposit?.RegenTicksLeft / Simulation.TicksPerSecond ?? 0, _textVersion)))
+                building.Deposit?.RegenTicksLeft / Simulation.TicksPerSecond ?? 0, _textVersion, night)))
             return;
         string level = building.Type.MaxTier > 1 ? " " + string.Format(Tr("HUD_TIER"), building.Type.Tier) : "";
         // Own buildings need no owner in the title (and the short title keeps the panel clear of the build bar).
@@ -56,6 +58,8 @@ public partial class Hud
             info += "\n" + string.Format(Tr("HUD_UNDER_CONSTRUCTION"), building.ConstructionProgress * 100f);
         else if (building.Deposit is { } deposit)
             info += "\n" + HudText.DescribeDeposit(deposit, building.Type.YieldBonus);
+        if (night > 0)
+            info += "\n" + (night == 2 ? Tr("HUD_NIGHT_LIT") : string.Format(Tr("HUD_NIGHT_DARK"), _match.Sim.AttackRangeOf(building)));
         _info.Text = info;
         // A mine's yield and reserve are in the panel already: its tooltip says what a mine is.
         _about.TooltipText = HudText.DescribeBuildingType(_match.Sim, building.Type, building.Type.IsMine ? null : building)

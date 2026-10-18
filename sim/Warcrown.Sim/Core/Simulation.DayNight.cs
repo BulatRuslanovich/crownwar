@@ -1,3 +1,5 @@
+using System.Numerics;
+using Warcrown.Sim.Buildings;
 using Warcrown.Sim.Units;
 
 namespace Warcrown.Sim.Core;
@@ -32,4 +34,28 @@ public sealed partial class Simulation
 
     /// <summary>How far a unit sees now: by night, a share of its sight range.</summary>
     public float SightOf(Unit unit) => IsNight ? unit.Type.SightRange * Rules.NightSightFactor : unit.Type.SightRange;
+
+    /// <summary>
+    /// How far a shooting building reaches now (0 if it does not shoot): its range by day, and by night too where a
+    /// beacon of its side lights it (<see cref="IsLit"/>); otherwise a share of it (<see cref="GameRules.NightTowerRangeFactor"/>).
+    /// </summary>
+    public float AttackRangeOf(Building building)
+    {
+        if (building.Type.Attack is not { } attack)
+            return 0f;
+        return IsNight && !IsLit(building) ? attack.Range * Rules.NightTowerRangeFactor : attack.Range;
+    }
+
+    /// <summary>Whether a finished beacon (a building with a <see cref="BuildingType.LightRadius"/>) of the building's own side or an ally lights it.</summary>
+    public bool IsLit(Building building)
+    {
+        foreach (var beacon in _buildings)
+        {
+            if (beacon.Type.LightRadius > 0f && beacon.IsComplete && beacon.IsAlive
+                && StanceBetween(beacon.FactionId, building.FactionId) == Stance.Ally
+                && Vector2.Distance(beacon.Position, building.Position) <= beacon.Type.LightRadius)
+                return true;
+        }
+        return false;
+    }
 }

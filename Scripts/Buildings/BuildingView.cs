@@ -157,6 +157,13 @@ public partial class BuildingView : Node2D
         }
         UpdateFeedback((float)delta);
         var b = _building;
+        if (FactionColors.Get(b.FactionId) is var owner && owner != _owner)
+        {
+            // A fort changed hands: its banners and roofs take the new owner's colour.
+            _owner = owner;
+            _team.Modulate = owner;
+            _overlay.QueueRedraw();
+        }
         bool idle = b.Deposit is { IsExhausted: true };
         Animate((float)delta, b, idle);
 
@@ -260,6 +267,13 @@ public partial class BuildingView : Node2D
         // A pool of light on the ground in front of the building.
         float g = _building.Type.Size * SimConvert.TileSize * 0.75f;
         _glow.DrawTextureRect(_haloTexture, new Rect2(new Vector2(-g, -g * 0.45f), new Vector2(g * 2f, g * 0.9f)), false, HaloColor with { A = 0.3f });
+        // A beacon lights the land round it, as far as its light reaches by the rules: towers there shoot as by day.
+        if (_building.Type.LightRadius > 0f)
+        {
+            float l = _building.Type.LightRadius * SimConvert.TileSize;
+            var middle = new Vector2(0f, -_building.Type.Size * SimConvert.TileSize / 2f);
+            _glow.DrawTextureRect(_haloTexture, new Rect2(middle - new Vector2(l, l), new Vector2(l, l) * 2f), false, HaloColor with { A = 0.18f });
+        }
     }
 
     /// <summary>Puffs rising from the chimney and drifting with the wind, growing and thinning as they go.</summary>

@@ -16,7 +16,9 @@ namespace Warcrown.Interaction;
 /// LMB click / drag: select a unit / box-select (Shift adds, Shift+click toggles);
 /// double click: all units of that type on screen; Ctrl+A: all own units;
 /// RMB: go there no matter what (the order beats any fight) / attack the clicked enemy;
-/// Ctrl+RMB: advance, fighting whatever is met on the way.
+/// Ctrl+RMB: advance, fighting whatever is met on the way;
+/// Ctrl+digit: bind the selection to a group, Shift+digit: add it to the group, digit: select the group (twice: and
+/// look at it).
 /// </summary>
 public partial class SelectionController : Node2D
 {
@@ -98,6 +100,49 @@ public partial class SelectionController : Node2D
                 _match.Selection.Select(OwnUnits().Select(u => u.Id), additive: false);
                 GetViewport().SetInputAsHandled();
                 break;
+
+            case InputEventKey { Pressed: true, Echo: false, PhysicalKeycode: >= Key.Key0 and <= Key.Key9 } digit:
+                OnGroupKey((int)(digit.PhysicalKeycode - Key.Key0), digit.CtrlPressed, digit.ShiftPressed);
+                GetViewport().SetInputAsHandled();
+                break;
+        }
+    }
+
+    // ---- Control groups ---------------------------------------------------------------------------------------------
+
+    /// <summary>The units bound to each digit key (0–9). Client-side, like the selection itself.</summary>
+    private readonly HashSet<int>[] _groups = Enumerable.Range(0, 10).Select(_ => new HashSet<int>()).ToArray();
+    /// <summary>The last group recalled and when: pressing its key again soon after moves the camera to it.</summary>
+    private (int Group, ulong AtMs) _lastRecall = (-1, 0);
+    private const ulong DoubleTapMs = 400;
+
+    /// <summary>
+    /// Ctrl+digit binds the selected units to the group (nothing selected: empties it); Shift+digit adds them to it;
+    /// the digit alone selects the group's living units, and pressed twice quickly centres the camera on them.
+    /// </summary>
+    private void OnGroupKey(int group, bool bind, bool add)
+    {
+        var members = _groups[group];
+        if (bind || add)
+        {
+            if (bind)
+                members.Clear();
+            members.UnionWith(_match.Selection.Ids);
+            return;
+        }
+        members.RemoveWhere(id => _match.Sim.GetUnit(id) is not { IsAlive: true } unit || unit.FactionId != _match.LocalFactionId);
+        if (members.Count == 0)
+            return;
+        ulong now = Time.GetTicksMsec();
+        bool again = _lastRecall.Group == group && now - _lastRecall.AtMs < DoubleTapMs;
+        _lastRecall = (group, now);
+        _match.Selection.Select(members, additive: false);
+        if (again)
+        {
+            var sum = System.Numerics.Vector2.Zero;
+            foreach (int id in members)
+                sum += _match.Sim.GetUnit(id)!.Position;
+            _match.Camera.CenterOn(SimConvert.ToWorld(sum / members.Count));
         }
     }
 

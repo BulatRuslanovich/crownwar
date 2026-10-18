@@ -3,7 +3,8 @@
   "goldCap": 5000,
   "lootPercent": 30,
   "demolishRefundPercent": 30,
-  "dayNight": { "day": 240, "night": 140, "sightFactor": 0.8 },
+  "dayNight": { "day": 240, "night": 140, "sightFactor": 0.8, "towerRangeFactor": 0.7 },
+  "forts": { "captureHealth": 0.5, "guard": [ { "unit": "infantry", "count": 4 }, { "unit": "archer", "count": 3 } ] },
   "buildRadius": 5,
   "depositReserveSeconds": 240,
   "depositRegenSeconds": 90,
@@ -128,7 +129,11 @@
     },
     {
       "id": "watchtower", "name": "Watchtower", "size": 3, "cost": 300, "buildTime": 25, "health": 2000, "rangedArmor": 0.8, "maxCount": 10,
-      "sight": 16
+      "sight": 16, "light": 10
+    },
+    {
+      "id": "fort", "name": "Fort", "size": 3, "cost": 0, "buildTime": 0, "health": 1500, "rangedArmor": 0.6,
+      "capturable": true, "income": 2, "sight": 8
     }
   ]
 }

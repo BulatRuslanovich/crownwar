@@ -56,6 +56,9 @@ public partial class BuildingsView : Node2D
             case Sim.Core.BuildingUpgraded upgraded:
                 PopOrLater(upgraded.BuildingId, UpgradedSquash);
                 break;
+            case Sim.Core.FortCaptured taken:
+                PopOrLater(taken.BuildingId, UpgradedSquash); // new banners go up
+                break;
         }
     }
 

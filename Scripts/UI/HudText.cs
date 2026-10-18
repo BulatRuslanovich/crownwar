@@ -71,6 +71,10 @@ public static class HudText
             parts.Add(T(shooting.HitsAir ? "INFO_HITS_AIR" : "INFO_NO_AIR"));
         else if (type.SightRange > 0f && !type.IsCapital)
             parts.Add(string.Format(T("INFO_SIGHT"), type.SightRange));
+        if (type.LightRadius > 0f)
+            parts.Add(string.Format(T("INFO_LIGHT"), type.LightRadius));
+        if (type.IsCapturable)
+            parts.Add(T("INFO_FORT"));
         if (type.IsCapital)
             parts.Add(T("INFO_CAPITAL"));
         return string.Join("  ·  ", parts);

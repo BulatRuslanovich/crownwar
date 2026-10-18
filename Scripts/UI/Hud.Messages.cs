@@ -86,6 +86,13 @@ public partial class Hud
             case FactionEliminated eliminated when eliminated.FactionId != player:
                 ShowMessage(string.Format(Tr("MSG_FACTION_FELL"), Names.Faction(eliminated.FactionId)));
                 break;
+            case FortCaptured taken when taken.FactionId == player:
+                ShowMessage(string.Format(Tr("MSG_FORT_TAKEN"), _match.Sim.Rules.Fort?.Income ?? 0));
+                break;
+            case FortCaptured lost when lost.FromFactionId == player && lost.FactionId >= 0:
+                ShowMessage(Tr("MSG_FORT_LOST"));
+                _alert.PointAt(lost.Position);
+                break;
         }
     }
 

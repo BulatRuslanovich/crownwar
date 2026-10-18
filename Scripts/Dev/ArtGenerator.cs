@@ -85,7 +85,7 @@ public static partial class ArtGenerator
 
         foreach (var (name, canvas) in new (string, PixelCanvas)[]
                  {
-                     ("castle", Castle()), ("citadel", Citadel()), ("barracks", Barracks()), ("tower", Tower()), ("tower_t2", Tower(2)), ("tower_t3", Tower(3)), ("watchtower", Watchtower()),
+                     ("castle", Castle()), ("citadel", Citadel()), ("barracks", Barracks()), ("tower", Tower()), ("tower_t2", Tower(2)), ("tower_t3", Tower(3)), ("watchtower", Watchtower()), ("fort", Fort()),
                      ("mine", Mine()), ("mine_t2", Mine(2)), ("mine_t3", Mine(3)),
                      ("catapult", Catapult()), ("catapult_t2", Catapult(2)), ("catapult_t3", Catapult(3)),
                  })
