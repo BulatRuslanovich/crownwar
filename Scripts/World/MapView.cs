@@ -28,9 +28,14 @@ public partial class MapView : TileMapLayer
     /// <summary>Share of open cells with decor: in a clump, and elsewhere.</summary>
     private const int ClumpDecorPerMille = 190, SparseDecorPerMille = 45;
 
+    private TileGrid _map = null!;
+    private System.Collections.Generic.IReadOnlyList<Biome>? _biomes;
+
     /// <param name="biomes">The biome of every cell, row by row; null for an all-meadow map.</param>
     public void Build(TileGrid map, System.Collections.Generic.IReadOnlyList<Biome>? biomes = null)
     {
+        _map = map;
+        _biomes = biomes;
         TileSet = CreateTileSet();
         _edges = new TileMapLayer { Name = "BiomeEdges", TileSet = TileSet };
         _edges2 = new TileMapLayer { Name = "BiomeEdges2", TileSet = TileSet };
@@ -55,6 +60,12 @@ public partial class MapView : TileMapLayer
                 int source = (int)(biomes?[y * map.Width + x] ?? Biome.Meadow); // the atlas source of the cell's biome
                 SetCell(coords, source, AtlasFor(map, cell));
                 bool edge = biomes != null && map.GetTerrain(cell) == Terrain.Grass && AddBiomeEdges(map, biomes, cell, (Biome)source);
+                // Land by the water: the water bites into its corners and edges along a smooth coast.
+                if (IsLand(map, x, y) && WaterMask(map, cell) is var water and not 0)
+                {
+                    _shore.SetCell(coords, source, ArtLayout.CoastTile(water));
+                    edge = true; // no decor under the beach
+                }
                 if (!edge && map.GetTerrain(cell) == Terrain.Grass)
                     AddDecor(cell, (Biome)source);
                 if (map.GetTerrain(cell) == Terrain.Bridge)
@@ -63,14 +74,22 @@ public partial class MapView : TileMapLayer
                 {
                     // Each side's shore in the colours of the land it lies against (white snow, sand, meadow sand),
                     // so a lake across a biome border changes its shore with the land, not with the water's own cell.
+                    // All eight neighbours count, so the coast rounds the corners of the land instead of following
+                    // the grid.
                     var layer = _shore;
                     foreach (var biome in System.Enum.GetValues<Biome>())
                     {
-                        int land = NeighbourMask(map, cell, (m, nx, ny) =>
-                            IsLand(m, nx, ny) && (biomes?[ny * m.Width + nx] ?? Biome.Meadow) == biome);
+                        int land = 0;
+                        for (int i = 0; i < 8; i++)
+                        {
+                            var (dx, dy) = ArtLayout.BlendNeighbours[i];
+                            int nx = x + dx, ny = y + dy;
+                            if (IsLand(map, nx, ny) && (biomes?[ny * map.Width + nx] ?? Biome.Meadow) == biome)
+                                land |= 1 << i;
+                        }
                         if (land == 0)
                             continue;
-                        layer.SetCell(coords, (int)biome, new Vector2I(land, ArtLayout.ShoreRow));
+                        layer.SetCell(coords, (int)biome, ArtLayout.ShoreTile(land));
                         layer = _shore2;
                     }
                 }
@@ -129,6 +148,32 @@ public partial class MapView : TileMapLayer
         uint pick = clump < 280 ? (clump + Hash(cell.X, cell.Y, 31) % 3) : Hash(cell.X, cell.Y, 37);
         int kind = pool[pick % (uint)pool.Length];
         _decor.SetCell(new Vector2I(cell.X, cell.Y), (int)biome, new Vector2I(kind % 16, ArtLayout.DecorRow + kind / 16));
+    }
+
+    /// <summary>
+    /// Shows the clearing under a building: the woods on its site were felled when it was founded (the map's cells are
+    /// open ground now), so the footprint is drawn afresh as its biome's ground, with the fringes of neighbouring
+    /// biomes, and so are the woods around it, whose edge has moved.
+    /// </summary>
+    public void ClearWoods(Cell anchor, int size)
+    {
+        for (int y = anchor.Y - 1; y <= anchor.Y + size; y++)
+            for (int x = anchor.X - 1; x <= anchor.X + size; x++)
+            {
+                var cell = new Cell(x, y);
+                if (!_map.InBounds(cell) || _map.GetTerrain(cell) is not (Terrain.Grass or Terrain.Forest))
+                    continue;
+                var coords = new Vector2I(x, y);
+                var biome = _biomes?[y * _map.Width + x] ?? Biome.Meadow;
+                SetCell(coords, (int)biome, AtlasFor(_map, cell));
+                bool site = x >= anchor.X && y >= anchor.Y && x < anchor.X + size && y < anchor.Y + size;
+                if (site && _biomes != null && _map.GetTerrain(cell) == Terrain.Grass)
+                {
+                    _edges.EraseCell(coords);
+                    _edges2.EraseCell(coords);
+                    AddBiomeEdges(_map, _biomes, cell, biome);
+                }
+            }
     }
 
     /// <summary>Takes the decor off a building's (or a deposit's) footprint.</summary>
@@ -213,6 +258,20 @@ public partial class MapView : TileMapLayer
     private static int NeighbourMask(TileGrid map, Cell c, System.Func<TileGrid, int, int, bool> test) =>
         (test(map, c.X, c.Y - 1) ? 1 : 0) | (test(map, c.X + 1, c.Y) ? 2 : 0)
         | (test(map, c.X, c.Y + 1) ? 4 : 0) | (test(map, c.X - 1, c.Y) ? 8 : 0);
+
+    /// <summary>8-bit mask of the neighbours (<see cref="ArtLayout.BlendNeighbours"/>) that are water (or a bridge over it).</summary>
+    private static int WaterMask(TileGrid map, Cell c)
+    {
+        int mask = 0;
+        for (int i = 0; i < 8; i++)
+        {
+            var (dx, dy) = ArtLayout.BlendNeighbours[i];
+            int x = c.X + dx, y = c.Y + dy;
+            if (map.InBounds(x, y) && map.GetTerrain(new Cell(x, y)) is Terrain.Water or Terrain.Bridge)
+                mask |= 1 << i;
+        }
+        return mask;
+    }
 
     /// <summary>A road or a bridge: roads and decks join up with either.</summary>
     private static bool IsWay(TileGrid map, int x, int y) =>

@@ -11,10 +11,10 @@ public static partial class ArtGenerator
     private static readonly Color FlowerYellow = new("f2d04a");
     private static readonly Color FlowerWhite = new("f4f1e6");
     private static readonly Color FlowerBlue = new("7f8fe6");
-    private static readonly Ramp BerryR = Ramp.Of(new Color("c42a4a"), mood: FigureMood);
-    private static readonly Ramp BoneR = Ramp.Of(new Color("e2dac4"), 0.7f);
+    private static readonly Ramp BerryR = Ramp.Of(new Color("a8304a"), mood: FigureMood);
+    private static readonly Ramp BoneR = Ramp.Of(new Color("cbc2aa"), 0.7f, mood: FigureMood);
     private static readonly Ramp IceR = Ramp.Of(new Color("a9daf0"), 0.7f);
-    private static readonly Ramp CapR = Ramp.Of(new Color("c8502e"), mood: FigureMood);
+    private static readonly Ramp CapR = Ramp.Of(new Color("a84a30"), mood: FigureMood);
     private static readonly Ramp CactusR = Ramp.Of(new Color("5e8f3c"), mood: FigureMood);
 
     /// <summary>

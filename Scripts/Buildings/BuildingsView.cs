@@ -92,7 +92,12 @@ public partial class BuildingsView : Node2D
             }
             bool hidden = _match.IsHidden(building);
             if (!hidden && _seen.Add(building.Id))
-                _match.Map.ClearDecor(building.Anchor, building.Type.Size); // no flowers growing through its walls
+            {
+                // No flowers growing through its walls, and no trees: the site was cleared (shown only once it is seen,
+                // so a clearing does not give away a hidden building).
+                _match.Map.ClearDecor(building.Anchor, building.Type.Size);
+                _match.Map.ClearWoods(building.Anchor, building.Type.Size);
+            }
             view.Visible = _seen.Contains(building.Id);
             view.Ghost = hidden;
             if (hidden && _match.Selection.BuildingId == building.Id)

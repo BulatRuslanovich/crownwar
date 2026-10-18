@@ -45,6 +45,7 @@ public sealed partial class Simulation
         {
             int capacity = (int)MathF.Round(deposit.Yield * rules.DepositReserveSeconds);
             _deposits.Add(new GoldDeposit(_deposits.Count + 1, deposit.Anchor, deposit.Yield, capacity, regenTicks));
+            Map.ClearWoods(deposit.Anchor, GoldDeposit.Size); // the ore lies in the open, not under trees
         }
 
         var factionIds = Enumerable.Range(0, setup.FactionCount)

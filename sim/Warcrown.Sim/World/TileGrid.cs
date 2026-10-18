@@ -57,6 +57,26 @@ public sealed class TileGrid
     public bool IsOccupied(Cell cell) => InBounds(cell) && _occupied[Index(cell.X, cell.Y)];
 
     /// <summary>
+    /// Fells the woods on the <paramref name="size"/>×<paramref name="size"/> square at <paramref name="anchor"/>: its
+    /// forest cells become open ground. Woods and open ground are alike to the rules (both walkable, both buildable), so
+    /// paths and regions stay as they are; the picture shows a clearing under what stands there.
+    /// </summary>
+    /// <returns>Whether any trees were felled.</returns>
+    public bool ClearWoods(Cell anchor, int size)
+    {
+        bool felled = false;
+        for (int y = anchor.Y; y < anchor.Y + size; y++)
+            for (int x = anchor.X; x < anchor.X + size; x++)
+            {
+                if (!InBounds(x, y) || _tiles[Index(x, y)] != Terrain.Forest)
+                    continue;
+                _tiles[Index(x, y)] = Terrain.Grass;
+                felled = true;
+            }
+        return felled;
+    }
+
+    /// <summary>
     /// Marks a building footprint (the <paramref name="size"/>×<paramref name="size"/> square at <paramref name="anchor"/>)
     /// as solid, or frees it, and recomputes connectivity unless <paramref name="relabel"/> is false — then the caller
     /// changes several footprints in a row and calls <see cref="Relabel"/> once at the end.

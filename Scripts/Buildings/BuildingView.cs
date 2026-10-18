@@ -18,7 +18,8 @@ namespace Warcrown.Buildings;
 /// </summary>
 public partial class BuildingView : Node2D
 {
-    private static readonly Color Scaffold = new("c8a26a");
+    private static readonly Color Scaffold = new("5e4330");
+    private static readonly Color ScaffoldLit = new("9a7650");
     private static readonly Color SelectionColor = UiPalette.Friendly;
     private static readonly Color BarBack = new(0f, 0f, 0f, 0.65f);
     private static readonly Color TrainingFill = UiPalette.Friendly;
@@ -41,8 +42,8 @@ public partial class BuildingView : Node2D
     /// <summary>Where smoke rises from, in the picture's pixels (from its top-left corner).</summary>
     private static readonly Dictionary<string, Vector2> Chimneys = new()
     {
-        ["barracks"] = new Vector2(51f, 12f),
-        ["watchtower"] = new Vector2(48f, 38f),
+        ["barracks"] = new Vector2(48f, 8f),
+        ["watchtower"] = new Vector2(48f, 44f),
     };
 
     /// <summary>Middle and reach of each picture's lights (worked out once from its lights sheet).</summary>
@@ -285,12 +286,32 @@ public partial class BuildingView : Node2D
         float half = b.Type.Size * SimConvert.TileSize / 2f;
         if (!b.IsComplete)
         {
+            // Scaffolding of dark timber, lit along one edge: planks at three heights, poles a bay apart over them and a
+            // brace across every other bay, zigzagging up.
             float height = SpriteHeight * 0.8f;
-            // Poles and planks of the scaffolding, a timber's breadth thick.
-            for (float x = -half + 4; x <= half - 4; x += 16)
-                _overlay.DrawRect(new Rect2(x, -height, 2, height), Scaffold);
-            _overlay.DrawRect(new Rect2(-half + 4, -height / 2, half * 2 - 8, 2), Scaffold);
-            _overlay.DrawRect(new Rect2(-half + 4, -height, half * 2 - 8, 2), Scaffold);
+            float left = -half + 4f, right = half - 4f;
+            int bays = Mathf.Max(1, Mathf.RoundToInt((right - left) / 20f));
+            float bay = (right - left) / bays;
+            for (int level = 1; level <= 3; level++)
+            {
+                float plank = -height * level / 3f;
+                _overlay.DrawRect(new Rect2(left - 2f, plank, right - left + 4f, 3f), Scaffold);
+                _overlay.DrawRect(new Rect2(left - 2f, plank, right - left + 4f, 1f), ScaffoldLit);
+            }
+            for (int i = 0; i <= bays; i++)
+            {
+                float x = left + i * bay;
+                if (i < bays)
+                    for (int level = 0; level < 3; level++)
+                    {
+                        if ((i + level) % 2 != 0)
+                            continue;
+                        float low = -height * level / 3f, high = -height * (level + 1) / 3f;
+                        _overlay.DrawLine(new Vector2(x, low), new Vector2(x + bay, high), Scaffold, 1.5f);
+                    }
+                _overlay.DrawRect(new Rect2(x - 1f, -height - 4f, 2f, height + 4f), Scaffold);
+                _overlay.DrawRect(new Rect2(x - 1f, -height - 4f, 1f, height + 4f), ScaffoldLit);
+            }
         }
 
         const float width = 60f;

@@ -9,25 +9,31 @@ public static partial class ArtGenerator
 {
     /// <summary>
     /// The materials of one biome's terrain: open ground, the canopy of its woods, bark, rock and what caps the peaks,
-    /// road dirt, the sand of its shores; and the colour of grass tufts. Each biome's sheet is drawn with its own.
+    /// road dirt, the sand of its shores; and the colour of grass tufts. Each biome's sheet is drawn with its own. The
+    /// colours are muted, earthy and a little dark, to sit with the grim figures and stone on them, yet light and even
+    /// enough that soldiers stand out against them.
     /// </summary>
     private sealed record TerrainPalette(string Name, Ramp Ground, Ramp Leaf, Ramp Bark, Ramp Rock, Ramp Cap, Ramp Dirt, Ramp Sand,
-        Color Tuft, bool Conifers = false, bool Palms = false);
+        Color Tuft, bool Conifers = false, bool Palms = false)
+    {
+        public bool Snow => Conifers;
+    }
 
-    private static readonly TerrainPalette MeadowLand = new("meadow", Ramp.Of(new Color("5c9b3d"), 0.75f), Ramp.Of(new Color("3b7a33")),
-        Ramp.Of(new Color("5e3c20")), Ramp.Of(new Color("7f7972")), Ramp.Of(new Color("eef2f6"), 0.5f), Ramp.Of(new Color("a8864f"), 0.8f),
-        Ramp.Of(new Color("d8c48a"), 0.7f), new Color("8cc35a"));
+    private static readonly TerrainPalette MeadowLand = new("meadow", Ramp.Of(new Color("5b7e3e"), 0.7f), Ramp.Of(new Color("355f35")),
+        Ramp.Of(new Color("553722")), Ramp.Of(new Color("76716b")), Ramp.Of(new Color("e8edf0"), 0.5f), Ramp.Of(new Color("8b7150"), 0.75f),
+        Ramp.Of(new Color("bba878"), 0.7f), new Color("94b463"));
 
-    private static readonly TerrainPalette WinterLand = new("winter", Ramp.Of(new Color("dbe4ea"), 0.45f), Ramp.Of(new Color("2b5d4a")),
-        Ramp.Of(new Color("4a3424")), Ramp.Of(new Color("85878d")), Ramp.Of(new Color("f4f8fa"), 0.4f), Ramp.Of(new Color("9c8f80"), 0.7f),
-        Ramp.Of(new Color("c9d6de"), 0.5f), new Color("f4f8fa"), Conifers: true);
+    private static readonly TerrainPalette WinterLand = new("winter", Ramp.Of(new Color("d3dce4"), 0.45f), Ramp.Of(new Color("28503f")),
+        Ramp.Of(new Color("443226")), Ramp.Of(new Color("7e8086")), Ramp.Of(new Color("f2f6f8"), 0.4f), Ramp.Of(new Color("8a8178"), 0.7f),
+        Ramp.Of(new Color("b6c4ce"), 0.5f), new Color("eef3f6"), Conifers: true);
 
-    private static readonly TerrainPalette DesertLand = new("desert", Ramp.Of(new Color("d9b77a"), 0.55f), Ramp.Of(new Color("5f8a3a")),
-        Ramp.Of(new Color("7a5430")), Ramp.Of(new Color("a8693f")), Ramp.Of(new Color("e8c89a"), 0.5f), Ramp.Of(new Color("b08850"), 0.7f),
-        Ramp.Of(new Color("f0dca0"), 0.55f), new Color("e8cb92"), Palms: true);
+    private static readonly TerrainPalette DesertLand = new("desert", Ramp.Of(new Color("cba672"), 0.55f), Ramp.Of(new Color("56783a")),
+        Ramp.Of(new Color("6e4a2c")), Ramp.Of(new Color("9b6a45")), Ramp.Of(new Color("e3c497"), 0.5f), Ramp.Of(new Color("a5824f"), 0.7f),
+        Ramp.Of(new Color("dfc790"), 0.55f), new Color("dec089"), Palms: true);
 
-    private static readonly Ramp WaterR = Ramp.Of(new Color("2f6db0"), 0.7f);
-    private static readonly Color FoamColor = new("e2f2ff");
+    /// <summary>Water: the same in every biome, so a lake or a river across a biome border is one sheet of water.</summary>
+    private static readonly Ramp WaterR = Ramp.Of(new Color("2b5a84"), 0.75f);
+    private static readonly Color FoamColor = new("d9e7ea");
 
     /// <summary>The biome being drawn.</summary>
     private static TerrainPalette Land = MeadowLand;
@@ -41,9 +47,11 @@ public static partial class ArtGenerator
     /// modulo 4 in each direction (row); rows 27–42 this biome's ground reaching into a neighbouring cell of another
     /// biome, by the 8-bit mask of its neighbours of this biome (row = mask / 16, column = mask % 16).
     /// Animated tiles keep their frames in the rows under the first one (<see cref="ArtLayout.TileFrames"/>): water
-    /// (4 variants) from row 43, shore overlays by mask from row 47, and woods by mask and by the cell's position
-    /// modulo 2 from row 51 (four positions, each with its frames). Rows 67–68 hold the decor (one kind a column).
-    /// Rows 2, 5 and 7–10 are free.
+    /// (4 variants) from row 43, and woods by mask and by the cell's position modulo 2 from row 51 (four positions, each
+    /// with its frames). Rows 67–68 hold the decor (one kind a column); from row 69, the shores of water cells by the
+    /// 8-bit mask of the land around them, and from row 133 the coasts of land cells by the mask of the water around
+    /// them (sixteen masks a row, each row followed by its frames).
+    /// Rows 2, 5, 7–10 and 47–50 are free.
     /// </summary>
     private static PixelCanvas Terrain(TerrainPalette land)
     {
@@ -66,8 +74,6 @@ public static partial class ArtGenerator
             Cell(c, mask, ArtLayout.BridgeRow); BridgeTile(c, mask);
             for (int frame = 0; frame < ArtLayout.TileFrames; frame++)
             {
-                Cell(c, mask, ArtLayout.ShoreRow + frame);
-                ShoreTile(c, mask, frame);
                 for (int parity = 0; parity < 4; parity++)
                 {
                     Cell(c, mask, ArtLayout.ForestRangeRow + parity * ArtLayout.TileFrames + frame);
@@ -84,6 +90,15 @@ public static partial class ArtGenerator
         {
             Cell(c, mask % 16, ArtLayout.BiomeBlendRow + mask / 16);
             BiomeBlendTile(c, mask);
+            for (int frame = 0; frame < ArtLayout.TileFrames; frame++)
+            {
+                var shore = ArtLayout.ShoreTile(mask);
+                Cell(c, shore.X, shore.Y + frame);
+                CoastTile(c, mask, frame, onLand: false);
+                var coast = ArtLayout.CoastTile(mask);
+                Cell(c, coast.X, coast.Y + frame);
+                CoastTile(c, mask, frame, onLand: true);
+            }
         }
         for (int kind = 0; kind < ArtLayout.DecorKinds; kind++)
         {
@@ -113,8 +128,9 @@ public static partial class ArtGenerator
     }
 
     /// <summary>
-    /// Open ground: soft patches of lighter and darker ground (the same everywhere, so tiles join), speckled texture,
-    /// and the variant's own tufts of grass (snow drifts' ripples, wind-blown sand).
+    /// Open ground: broad soft patches of lighter and darker ground (the same on every tile, so they run on across
+    /// tiles), then the variant's own texture: short blades over the lusher patches and a few tufts fanning out over a
+    /// dab of shadow in a meadow, ripples and a glitter of frost in the snow, wind ripples and grit in the sand.
     /// </summary>
     private static void GrassTile(PixelCanvas c, int v)
     {
@@ -122,51 +138,112 @@ public static partial class ArtGenerator
         for (int y = 0; y < T; y++)
             for (int x = 0; x < T; x++)
             {
-                float patch = (TileNoise(x, y, 8f, 3) - 0.5f) * 1.4f + (TileNoise(x, y, 4f, 4) - 0.5f) * 0.6f;
-                int h = Hash(x / 2, y / 2, v + 1);
-                float speck = h < 90 ? -0.7f : h > 920 ? 0.7f : 0f;
-                c.Shade(x, y, g, Mathf.Clamp(patch + speck, -1.4f, 1.2f), solid: false);
+                // Rounded to a tone with a grain of noise rather than dithered: the patches get ragged, organic edges.
+                float patch = (TileNoise(x, y, 16f, 3) - 0.5f) * 1.1f + (TileNoise(x, y, 8f, 4) - 0.5f) * 0.55f - 0.05f
+                              + (Hash(x, y, 2) % 100 / 100f - 0.5f) * 0.4f;
+                c.Px(x, y, g[(int)Mathf.Round(Mathf.Clamp(patch, -1.2f, 1f))], solid: false);
             }
-        // Tufts: a few blades, lit tips over darker roots.
-        for (int t = 0; t < 7; t++)
+        if (Land.Snow || Land.Palms)
         {
-            int x = Hash(t, v, 7) % 28 + 2, y = Hash(v, t, 9) % 26 + 4;
-            for (int b = -1; b <= 1; b++)
+            // Now and then a ripple: a soft arc lit on its windward side, its shadow only under the crest; and a
+            // glint of frost or of a grain of quartz.
+            for (int r = 0; r < Hash(v, 5, 24) % 2; r++)
             {
-                int tall = 2 + Hash(t, b + 2, v + 11) % 2;
+                int length = 7 + Hash(r, v, 23) % 7;
+                int y0 = 4 + Hash(r, v, 21) % 25, x0 = 1 + Hash(v, r, 22) % (T - length - 2);
+                for (int i = 0; i < length; i++)
+                {
+                    int y = y0 + (int)Mathf.Round(Mathf.Sin(i * 0.45f + r) * 1.2f);
+                    bool crest = i > length / 4 && i < length * 3 / 4;
+                    c.Px(x0 + i, y, crest ? g.Light : g.Base, solid: false);
+                    if (crest)
+                        c.Px(x0 + i, y + 1, g.Shade, solid: false);
+                }
+            }
+            for (int k = 0; k < 4; k++)
+            {
+                int x = 1 + Hash(k, v, 25) % (T - 2), y = 1 + Hash(v, k, 26) % (T - 2);
+                c.Px(x, y, Land.Snow ? g.Glint : Land.Rock.Light, solid: false);
+                if (Land.Palms)
+                    c.Px(x + 1, y, Land.Rock.Shade, solid: false);
+            }
+            return;
+        }
+        // Short blades scattered over the lusher patches: a lit tip over a dark root.
+        for (int y = 1; y < T; y++)
+            for (int x = 0; x < T; x++)
+            {
+                float lush = TileNoise(x, y, 8f, 5);
+                int h = Hash(x, y, v * 7 + 1);
+                if (h >= 8 + lush * 40f)
+                    continue;
+                c.Px(x, y, g.Shade, solid: false);
+                c.Px(x, y - 1, h % 3 == 0 ? Land.Tuft : g.Light, solid: false);
+            }
+        // Tufts: blades fanning out of a dab of shadow, the ones on the sunny side lit.
+        for (int t = 0; t < 4; t++)
+        {
+            int x = 3 + Hash(t, v, 7) % 26, y = 6 + Hash(v, t, 9) % 23;
+            for (int i = -2; i <= 3; i++)
+                c.Px(x + i, y + 1, g.Deep with { A = Mathf.Abs(i - 0.5f) > 2f ? 0.25f : 0.5f }, solid: false);
+            int blades = 3 + Hash(t, v, 13) % 3;
+            float mid = (blades - 1) / 2f;
+            for (int b = 0; b < blades; b++)
+            {
+                int tall = 3 + Hash(t * 5 + b, v, 11) % 3;
                 for (int i = 0; i < tall; i++)
-                    c.Px(x + b * 2 + (i == tall - 1 ? b : 0), y - i, i == tall - 1 ? Land.Tuft : g.Shade, solid: false);
+                {
+                    float k = i / (float)(tall - 1);
+                    int px = x + (int)Mathf.Round((b - mid) * 1.2f * (0.4f + 0.6f * k));
+                    var color = i == tall - 1 ? Land.Tuft : i == 0 ? g.Deep : b < mid ? g.Light : g.Shade;
+                    c.Px(px, y - i, color, solid: false);
+                }
             }
         }
     }
 
-    /// <summary>A leafy crown: a lit ball broken into overlapping clumps of leaves, each clump lit on its upper left.</summary>
+    /// <summary>
+    /// A leafy crown: a ring of clumps round a high middle one, so the outline billows; each clump lit on its upper left
+    /// and shadowed where it tucks under the next, the whole lit as one ball, and broken into small leaves.
+    /// </summary>
     private static void Crown(PixelCanvas c, float cx, float cy, float r, int salt, int sway, Func<int, int, bool>? clip = null)
     {
         var leaf = Land.Leaf;
-        for (int y = (int)Mathf.Floor(cy - r); y <= (int)Mathf.Ceil(cy + r); y++)
-            for (int x = (int)Mathf.Floor(cx - r); x <= (int)Mathf.Ceil(cx + r); x++)
-            {
-                float nx = (x + 0.5f - cx) / r, ny = (y + 0.5f - cy) / r;
-                // A ragged rim: clumps bulge out of the circle.
-                float edge = 1f + (Hash((int)Mathf.Floor((Mathf.Atan2(ny, nx) + 4f) * 3f), salt, 23) % 5 - 2) * 0.035f;
-                float d = nx * nx + ny * ny;
-                if (d > edge * edge)
-                    continue;
-                int px = x + (ny < -0.2f ? sway : 0);
-                if (clip != null && !clip(px, y))
-                    continue;
-                float nz = Mathf.Sqrt(Mathf.Max(0f, 1f - d));
-                float ball = (-0.55f * nx - 0.62f * ny + 0.56f * nz) * 2.6f - 0.6f;
-                int row = (y + 64) / 4;
-                int col = (x + 64 + row % 2 * 2) / 4;
-                int fx = (x + 64 + row % 2 * 2) % 4, fy = (y + 64) % 4;
-                float clump = (fx + fy <= 1 ? 0.7f : fx + fy >= 5 ? -0.8f : 0f) + (Hash(col, row, salt) % 5 - 2) * 0.15f;
-                float light = ball * 0.85f + clump * 0.75f;
-                if (d > 0.82f && nx + ny > -0.3f)
-                    light = -2f; // the shadowed rim
-                c.Shade(px, y, leaf, light, solid: false);
-            }
+        var clumps = new System.Collections.Generic.List<(float X, float Y, float R)>();
+        float turn = Hash(salt, 1, 41) % 60 * Mathf.Pi / 180f;
+        for (int k = 0; k < 6; k++)
+        {
+            float a = turn + k * Mathf.Tau / 6f;
+            float d = r * (0.46f + Hash(salt, k, 43) % 10 * 0.012f);
+            clumps.Add((cx + Mathf.Cos(a) * d, cy + Mathf.Sin(a) * d * 0.9f, r * (0.5f + Hash(k, salt, 44) % 10 * 0.012f)));
+        }
+        clumps.Sort((p, q) => p.Y.CompareTo(q.Y));
+        clumps.Add((cx - r * 0.1f, cy - r * 0.16f, r * 0.6f)); // the top of the crown, nearest the sun, over the rest
+        foreach (var k in clumps)
+        {
+            for (int y = (int)Mathf.Floor(k.Y - k.R); y <= (int)Mathf.Ceil(k.Y + k.R); y++)
+                for (int x = (int)Mathf.Floor(k.X - k.R); x <= (int)Mathf.Ceil(k.X + k.R); x++)
+                {
+                    float nx = (x + 0.5f - k.X) / k.R, ny = (y + 0.5f - k.Y) / k.R;
+                    float d = nx * nx + ny * ny;
+                    // Leaves breaking the clump's rim.
+                    float rim = 1f + (Hash(x, y, salt + 3) % 5 - 2) * 0.06f;
+                    if (d > rim)
+                        continue;
+                    int px = x + (y < cy - r * 0.2f ? sway : 0);
+                    if (clip != null && !clip(px, y))
+                        continue;
+                    float nz = Mathf.Sqrt(Mathf.Max(0f, 1f - d));
+                    float local = (-0.55f * nx - 0.62f * ny + 0.56f * nz) * 2.4f - 0.5f;
+                    float gx = (x + 0.5f - cx) / r, gy = (y + 0.5f - cy) / r;
+                    float global = -0.9f * gx - 1.1f * gy;
+                    float leaves = (Hash(x / 2, y / 2, salt) % 5 - 2) * 0.22f;
+                    float light = local * 0.55f + global * 0.6f + leaves - 0.15f;
+                    if (d > 0.72f && nx + ny > 0.2f)
+                        light = Mathf.Min(light, -1.4f); // where the clump tucks under its neighbour
+                    c.Shade(px, y, leaf, light, solid: false);
+                }
+        }
     }
 
     /// <summary>A fir: tiers of drooping boughs, each lit on the left, snow along their tops in the winter.</summary>
@@ -343,7 +420,15 @@ public static partial class ArtGenerator
         foreach (var (x, y, h) in range.Points(16))
         {
             var room = range.Room(x, y);
-            float r = Mathf.Min(8.8f + h % 4 * 0.9f, Mathf.Min(Mathf.Min(room.Left, room.Right), Mathf.Min(room.Up, room.Down - 4f)) + 1.2f);
+            float open = Mathf.Min(Mathf.Min(room.Left, room.Right), Mathf.Min(room.Up, room.Down - 4f));
+            float r = 8.8f + h % 4 * 0.9f;
+            if (open < r + 1f)
+            {
+                // On the wood's edge the crowns stand back from it unevenly, and some are missing: a ragged fringe.
+                if (h % 4 == 0)
+                    continue;
+                r = Mathf.Min(r, open - 1f - h / 7 % 4);
+            }
             if (r >= 4.4f)
                 crowns.Add((x, y, r, h));
         }
@@ -488,6 +573,30 @@ public static partial class ArtGenerator
     }
 
     /// <summary>
+    /// The pull on pixel (x, y) of a cell of the neighbours set in <paramref name="mask"/> (bit order of
+    /// <see cref="ArtLayout.BlendNeighbours"/>) against the cell itself and the others, from 0 to 1. Every cell pulls with
+    /// a weight that falls off smoothly with the distance from its centre, and reaches only a little over a tile, so
+    /// only the eight neighbours matter and two tiles on either side of a border, each with its own mask, agree on it.
+    /// </summary>
+    private static float Share(int mask, int x, int y)
+    {
+        const float reach = 42f;
+        static float Weight(float d) => d >= reach ? 0f : (1f - d / reach) * (1f - d / reach);
+        float half = T / 2f, px = x + 0.5f, py = y + 0.5f;
+        float own = Weight(Mathf.Sqrt((px - half) * (px - half) + (py - half) * (py - half))), other = 0f;
+        for (int i = 0; i < 8; i++)
+        {
+            var (dx, dy) = ArtLayout.BlendNeighbours[i];
+            float w = Weight(Mathf.Sqrt((px - half - dx * T) * (px - half - dx * T) + (py - half - dy * T) * (py - half - dy * T)));
+            if ((mask & (1 << i)) != 0)
+                other += w;
+            else
+                own += w;
+        }
+        return other / (own + other);
+    }
+
+    /// <summary>
     /// This biome's ground over the part of a cell of another biome where this one prevails. Every cell around (the
     /// eight neighbours in <paramref name="mask"/> are of this biome, the cell itself and the rest are not) pulls on
     /// each pixel with a weight that falls off smoothly with the distance from its centre; the pixel takes this biome
@@ -497,26 +606,12 @@ public static partial class ArtGenerator
     private static void BiomeBlendTile(PixelCanvas c, int mask)
     {
         GrassTile(c, 60 + mask % 7);
-        const float reach = 42f; // px: a little over a tile, so only the eight neighbours matter
-        static float Weight(float d) => d >= reach ? 0f : (1f - d / reach) * (1f - d / reach);
-        float half = T / 2f;
         for (int y = 0; y < T; y++)
             for (int x = 0; x < T; x++)
             {
-                float px = x + 0.5f, py = y + 0.5f;
-                float own = Weight(Mathf.Sqrt((px - half) * (px - half) + (py - half) * (py - half))), other = 0f;
-                for (int i = 0; i < 8; i++)
-                {
-                    var (dx, dy) = ArtLayout.BlendNeighbours[i];
-                    float w = Weight(Mathf.Sqrt((px - half - dx * T) * (px - half - dx * T) + (py - half - dy * T) * (py - half - dy * T)));
-                    if ((mask & (1 << i)) != 0)
-                        other += w;
-                    else
-                        own += w;
-                }
                 // A gentle wobble, so long borders are not ruled straight.
                 float wobble = (Hash(x / 5, y / 5, 13) % 5 - 2) * 0.012f;
-                float share = other / (own + other);
+                float share = Share(mask, x, y);
                 if (share <= 0.5f + wobble)
                     c.Erase(x, y);
                 else if (share <= 0.53f + wobble && (x + y) % 2 == 0)
@@ -534,11 +629,11 @@ public static partial class ArtGenerator
             for (int x = 0; x < T; x++)
             {
                 float band = Mathf.Sin((y + TileNoise(x, y, 8f, 40) * 6f) * Mathf.Tau / 16f + frame * Mathf.Pi / 2f);
-                float light = band * 0.35f - 0.2f + (TileNoise(x, y, 16f, 41) - 0.5f) * 0.6f;
+                float light = band * 0.3f - 0.45f + (TileNoise(x, y, 16f, 41) - 0.5f) * 0.7f;
                 c.Shade(x, y, WaterR, light, solid: false);
             }
         // Wavelets: short arcs, lit on top, drifting a pixel a frame.
-        for (int w = 0; w < 4; w++)
+        for (int w = 0; w < 3; w++)
         {
             int x = Hash(w, v, 3) % T + frame * 2, y = Hash(v, w, 5) % (T - 4) + 2;
             int length = 4 + (frame + w) % 3 * 2;
@@ -549,12 +644,11 @@ public static partial class ArtGenerator
                 c.Px((x + i) % T, y - lift + 1, WaterR.Shade, solid: false);
             }
         }
-        if (Hash(v, frame, 77) % 2 == 0)
+        if (Hash(v, frame, 77) % 3 == 0)
         {
             int gx = Hash(frame, v, 78) % (T - 4) + 2, gy = Hash(v, frame, 79) % (T - 4) + 2;
-            c.Px(gx, gy, FoamColor, solid: false);
-            c.Px(gx + 1, gy, WaterR.Glint, solid: false);
-            c.Px(gx, gy - 1, WaterR.Glint, solid: false);
+            c.Px(gx, gy, WaterR.Glint, solid: false);
+            c.Px(gx + 1, gy, WaterR.Light, solid: false);
         }
     }
 
@@ -677,39 +771,81 @@ public static partial class ArtGenerator
     }
 
     /// <summary>
-    /// Transparent tile with sand and foam along the sides where land is. Through the frames the surf washes in and
-    /// out: the foam line comes up to the sand, wets it, and falls back leaving bubbles.
+    /// The coast's bands by the land's share of a pixel (see <see cref="Share"/>): the turf ends at <c>TurfLine</c>, dry
+    /// sand runs down to <c>WetLine</c>, wet sand to the waterline at an even share, the water beyond.
     /// </summary>
-    private static void ShoreTile(PixelCanvas c, int mask, int frame)
+    private const float TurfLine = 0.68f, WetLine = 0.535f, WaterLine = 0.495f;
+
+    /// <summary>
+    /// A stretch of coast, drawn where water meets land on either side of the cell border so that the coastline cuts
+    /// across the grid's steps in one smooth, slightly wandering curve, as biomes meet: on a water cell
+    /// (<paramref name="onLand"/> false) the land's turf and beach reaching into it, by the 8-bit mask of the land
+    /// around it; on a land cell, the water biting into its corners and edges, by the mask of the water around it. Then
+    /// the turf's edge, a beach of dry then wet sand with pebbles in it, the waterline and the shallows. The overlay is
+    /// transparent where the cell's own ground or water shows. Through the frames the surf washes in over the wet sand
+    /// and falls back, leaving bubbles.
+    /// </summary>
+    private static void CoastTile(PixelCanvas c, int mask, int frame, bool onLand)
     {
-        int reach = frame is 1 or 2 ? 4 : 6;
-        for (int i = 0; i < T; i++)
-        {
-            int wobble = Hash(i / 3, mask, 7) % 2;
-            bool bubble = frame == 3 && (i + mask) % 5 == 0 || frame == 0 && (i + mask) % 7 == 2;
-            void Side(Func<int, Vector2I> at)
+        var g = Land.Ground;
+        var sand = Land.Sand;
+        float foam = frame switch { 0 => 0.43f, 1 => 0.46f, 2 => 0.51f, _ => 0.445f };
+        if (onLand)
+            WaterTile(c, mask % ArtLayout.TerrainVariants, frame);
+        else
+            GrassTile(c, 70 + mask % 5);
+        for (int y = 0; y < T; y++)
+            for (int x = 0; x < T; x++)
             {
-                for (int d = 0; d < 3 + wobble; d++)
+                float share = Share(mask, x, y);
+                float land = (onLand ? 1f - share : share) + (TileNoise(x, y, 16f, 80) - 0.5f) * 0.12f + (TileNoise(x, y, 8f, 81) - 0.5f) * 0.08f + (TileNoise(x, y, 4f, 82) - 0.5f) * 0.03f;
+                if (land >= TurfLine + 0.03f)
                 {
-                    var p = at(d);
-                    c.Shade(p.X, p.Y, Land.Sand, d == 0 ? 0.6f : d >= 2 ? -0.6f : 0f, solid: false);
+                    if (onLand)
+                        c.Erase(x, y);
+                    continue;
                 }
-                var wet = at(3 + wobble);
-                c.Px(wet.X, wet.Y, frame == 2 ? WaterR.Light : Land.Sand.Deep, false);
-                var foam = at(reach + wobble);
-                c.Px(foam.X, foam.Y, FoamColor, false);
-                var under = at(reach + wobble + 1);
-                c.Px(under.X, under.Y, WaterR.Light, false);
-                if (bubble)
+                if (land >= TurfLine)
                 {
-                    var b = at(reach + wobble + 2);
-                    c.Px(b.X, b.Y, FoamColor, false);
+                    c.Shade(x, y, g, -1.1f, solid: false); // the turf's edge
+                    continue;
                 }
+                if (Mathf.Abs(land - foam) <= 0.018f)
+                {
+                    c.Erase(x, y);
+                    c.Px(x, y, Hash(x, y, frame + 90) % 7 == 0 ? WaterR.Light : FoamColor, solid: false);
+                    continue;
+                }
+                if (land > foam)
+                {
+                    if (land >= WetLine)
+                    {
+                        float light = land >= TurfLine - 0.025f ? -0.9f // the turf's shadow on the sand
+                            : 0.6f - (TurfLine - land) / (TurfLine - WetLine) * 1.1f + (TileNoise(x, y, 4f, 83) - 0.5f) * 0.6f;
+                        c.Shade(x, y, sand, light, solid: false);
+                        if (Hash(x, y, mask % 7 + 84) % 29 == 0)
+                            c.Px(x, y, Land.Rock.Light, solid: false); // a pebble
+                    }
+                    else if (land >= WaterLine)
+                    {
+                        c.Shade(x, y, sand, -1.4f, solid: false);
+                    }
+                    else
+                    {
+                        if (!onLand)
+                            c.Erase(x, y);
+                        c.Px(x, y, WaterR.Light with { A = 0.55f }, solid: false); // a film of water over the sand
+                    }
+                    if (frame == 3 && land < WetLine && Hash(x, y, 91) % 5 == 0)
+                        c.Px(x, y, FoamColor, solid: false); // bubbles the wave left
+                    continue;
+                }
+                if (!onLand)
+                    c.Erase(x, y);
+                if (land > foam - 0.06f)
+                    c.Px(x, y, WaterR.Light with { A = 0.45f }, solid: false);
+                else if (land > foam - 0.18f)
+                    c.Px(x, y, WaterR.Light with { A = 0.18f }, solid: false); // the shallows
             }
-            if ((mask & 1) != 0) Side(d => new Vector2I(i, d));
-            if ((mask & 4) != 0) Side(d => new Vector2I(i, T - 1 - d));
-            if ((mask & 8) != 0) Side(d => new Vector2I(d, i));
-            if ((mask & 2) != 0) Side(d => new Vector2I(T - 1 - d, i));
-        }
     }
 }

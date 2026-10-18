@@ -11,8 +11,15 @@ public static class ArtLayout
     public const int GrassRow = 0, ForestRow = 1, MountainRow = 3, RoadRow = 4, BridgeRow = 6;
     /// <summary>Frames of the animated terrain tiles (water, surf, woods), in the rows under each tile's first frame.</summary>
     public const int TileFrames = 4;
-    /// <summary>Animated: water variants and shore overlays (by mask), each followed by its frames.</summary>
-    public const int WaterRow = 43, ShoreRow = 47;
+    /// <summary>Animated: water variants, each followed by its frames.</summary>
+    public const int WaterRow = 43;
+    /// <summary>
+    /// Animated: the shores of water cells by the 8-bit mask of the land around them (<see cref="BlendNeighbours"/>),
+    /// sixteen masks a row, each row followed by its frames: mask m is at column m % 16, row ShoreRow + m / 16 × frames.
+    /// </summary>
+    public const int ShoreRow = 69;
+    /// <summary>Animated: the coasts of land cells, the water biting into them, by the 8-bit mask of the water around them (laid out as the shores).</summary>
+    public const int CoastRow = ShoreRow + 16 * TileFrames;
     /// <summary>
     /// Woods (animated: four positions modulo 2 in x and y, each <see cref="TileFrames"/> rows) and mountain ranges
     /// (sixteen positions modulo 4), by neighbour mask.
@@ -24,14 +31,23 @@ public static class ArtLayout
     public const int BiomeBlendRow = 27;
     /// <summary>Decor: small things lying about on open ground, one kind a column over two rows.</summary>
     public const int DecorRow = 67, DecorKinds = 32;
-    public const int TerrainRows = 69;
+    public const int TerrainRows = CoastRow + 16 * TileFrames;
+
+    /// <summary>Where the shore of a water cell with land round it by <paramref name="mask"/> (8-bit) is in the atlas.</summary>
+    public static Vector2I ShoreTile(int mask) => new(mask % 16, ShoreRow + mask / 16 * TileFrames);
+
+    /// <summary>Where the coast of a land cell with water round it by <paramref name="mask"/> (8-bit) is in the atlas.</summary>
+    public static Vector2I CoastTile(int mask) => new(mask % 16, CoastRow + mask / 16 * TileFrames);
 
     /// <summary>The animated tiles: first row, how many columns, how long each frame shows, and whether neighbours
-    /// start at different moments (water glitters at random; surf and woods move together, in one wind).</summary>
+    /// start at different moments (woods move together, in one wind; open water, shores and the water biting into the
+    /// land keep in step too, so the ripples run on unbroken from tile to tile).</summary>
     public static IEnumerable<(int Row, int Columns, float[] Durations, bool RandomStart)> AnimatedTiles()
     {
-        yield return (WaterRow, TerrainVariants, new[] { 0.5f, 0.5f, 0.5f, 0.5f }, true);
-        yield return (ShoreRow, 16, new[] { 0.7f, 0.5f, 0.6f, 0.5f }, false);
+        var waves = new[] { 0.7f, 0.5f, 0.6f, 0.5f };
+        yield return (WaterRow, TerrainVariants, waves, false);
+        for (int row = 0; row < 32; row++)
+            yield return (ShoreRow + row * TileFrames, 16, waves, false); // shores, then coasts
         for (int parity = 0; parity < 4; parity++)
             yield return (ForestRangeRow + parity * TileFrames, 16, new[] { 1.4f, 0.45f, 1.1f, 0.45f }, false);
     }

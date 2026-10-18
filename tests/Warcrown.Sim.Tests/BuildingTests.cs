@@ -165,6 +165,39 @@ public class BuildingPlacementTests
         }
         Assert.That(Vector2.Distance(unit.Position, new Vector2(17.5f, 2.5f)), Is.LessThan(0.01f));
     }
+
+    private static readonly string[] Woods =
+    {
+        "..........",
+        "..ffffff..",
+        "..ffffff..",
+        "..ffffff..",
+        "..ffffff..",
+        "..........",
+    };
+
+    [Test]
+    public void FoundingABuildingFellsTheWoodsOnItsSite()
+    {
+        var sim = TestMaps.WithCapitals(1, Woods, "start 0 0", "unit infantry 0 4 5");
+        sim.Issue(new BuildCommand(0, "barracks", new Cell(3, 2)));
+        sim.Step();
+
+        Assert.That(sim.Buildings.Count(b => b.Type.Id == "barracks"), Is.EqualTo(1));
+        foreach (var cell in Building.FootprintOf(new Cell(3, 2), 2))
+            Assert.That(sim.Map.GetTerrain(cell), Is.EqualTo(Terrain.Grass), $"{cell}: felled for the site");
+        Assert.That(sim.Map.GetTerrain(new Cell(5, 2)), Is.EqualTo(Terrain.Forest), "the woods around it stand");
+        Assert.That(sim.Map.GetTerrain(new Cell(3, 1)), Is.EqualTo(Terrain.Forest));
+    }
+
+    [Test]
+    public void GoldDepositsLieInTheOpen()
+    {
+        var sim = TestMaps.Sandbox(Woods, "gold 4 2");
+        foreach (var cell in Building.FootprintOf(new Cell(4, 2), GoldDeposit.Size))
+            Assert.That(sim.Map.GetTerrain(cell), Is.EqualTo(Terrain.Grass), $"{cell}: no trees on the ore");
+        Assert.That(sim.Map.GetTerrain(new Cell(3, 2)), Is.EqualTo(Terrain.Forest));
+    }
 }
 
 public class ConstructionAndEconomyTests

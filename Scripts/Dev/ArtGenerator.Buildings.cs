@@ -4,7 +4,14 @@ using Warcrown.World;
 
 namespace Warcrown.Dev;
 
-/// <summary>The buildings, every level, with faction-colour masks and night lights; and the gold ore.</summary>
+/// <summary>
+/// The buildings, every level, with faction-colour masks and night lights; and the gold ore. They are drawn in the
+/// soldiers' three-quarter view: the fronts of walls and towers face the viewer and the tops (wall-walks, platforms,
+/// roofs) are seen from above, foreshortened by half, so a building stands on the front part of its footprint and rises
+/// over the rest. The look is grim and weathered: dark, cool stone in uneven courses, grimy and mossy at the foot, dark
+/// timber and iron, roofs of slate stained in the owner's colours with a grey slate here and there, and the full
+/// faction colour kept for banners and flags.
+/// </summary>
 public static partial class ArtGenerator
 {
     /// <summary>Warm light of a lit window at night.</summary>
@@ -14,17 +21,28 @@ public static partial class ArtGenerator
     private static readonly Color Fire = new("ff7a1a");
     private static readonly Color FireLight = new("ffd25a");
 
-    private static readonly Ramp WallR = Ramp.Of(new Color("8e8983"), mood: FigureMood);
-    private static readonly Ramp WallLightR = Ramp.Of(new Color("a8a39b"), mood: FigureMood);
-    private static readonly Ramp GlassR = Ramp.Of(new Color("2c2630"), mood: FigureMood);
-    private static readonly Ramp DoorR = Ramp.Of(new Color("5a3a22"), mood: FigureMood);
-    private static readonly Ramp ThatchR = Ramp.Of(new Color("b99a5a"), mood: FigureMood);
-    private static readonly Ramp RockR = Ramp.Of(new Color("7a736b"), mood: FigureMood);
-    private static readonly Ramp OreR = Ramp.Of(new Color("f2c440"), mood: FigureMood);
+    /// <summary>How far the buildings' mid tones and shadows sink towards the dusk (see <see cref="Ramp.Of"/>).</summary>
+    private const float BuildingMood = 0.3f;
+    /// <summary>How much darker than the banners the slates stained in the owner's colours are (light levels).</summary>
+    private const float RoofStain = 1.05f;
+
+    private static readonly Ramp WallR = Ramp.Of(new Color("6d6a67"), mood: BuildingMood);
+    private static readonly Ramp WallLightR = Ramp.Of(new Color("807b75"), mood: BuildingMood);
+    private static readonly Ramp FlagstoneR = Ramp.Of(new Color("8a847b"), 0.8f, mood: BuildingMood);
+    private static readonly Ramp MossR = Ramp.Of(new Color("4f5b35"), 0.8f, mood: BuildingMood);
+    private static readonly Ramp PlasterR = Ramp.Of(new Color("a39780"), 0.8f, mood: BuildingMood);
+    private static readonly Ramp SlateR = Ramp.Of(new Color("454a57"), mood: BuildingMood);
+    private static readonly Ramp CourtR = Ramp.Of(new Color("5c5853"), 0.8f, mood: BuildingMood);
+    private static readonly Ramp GlassR = Ramp.Of(new Color("2c2630"), mood: BuildingMood);
+    private static readonly Ramp DoorR = Ramp.Of(new Color("4e3320"), mood: BuildingMood);
+    private static readonly Ramp RockR = Ramp.Of(new Color("6c655f"), mood: BuildingMood);
+    private static readonly Ramp OreR = Ramp.Of(new Color("e9b93c"), mood: BuildingMood);
+    private static readonly Ramp QuartzR = Ramp.Of(new Color("d8d2c4"), 0.8f, mood: BuildingMood);
 
     /// <summary>
     /// A building's sheet: <see cref="ArtLayout.BuildingFrames"/> frames of <paramref name="w"/>×<paramref name="h"/>
-    /// side by side (flags waving, wheels turning, fires flickering), each drawn with local coordinates and outlined.
+    /// side by side (flags waving, wheels turning, fires flickering), each drawn with local coordinates, rim-lit and
+    /// outlined.
     /// </summary>
     private static PixelCanvas Sheet(int w, int h, Action<PixelCanvas, int> draw)
     {
@@ -36,109 +54,277 @@ public static partial class ArtGenerator
             c.Clip = new Rect2I(cell, new Vector2I(w, h));
             draw(c, frame);
             c.Origin = Vector2I.Zero;
-            c.RimLight(new Rect2I(cell, new Vector2I(w, h)), SkyRim, 0.4f);
+            c.RimLight(new Rect2I(cell, new Vector2I(w, h)), SkyRim, 0.35f);
             c.SelOut(SilhouetteRim, new Rect2I(cell, new Vector2I(w, h)));
         }
         return c;
     }
 
+    // ---- Stone ------------------------------------------------------------------------------------------------------
+
     /// <summary>
-    /// Stone masonry: staggered blocks 7 wide and 4 high with mortar joints, each block its own shade, lit along its top
-    /// and shaded along its bottom; a <paramref name="round"/> wall (a tower) is lit like a cylinder, a flat one evenly,
-    /// and the last rows darken where the wall meets the ground.
+    /// The light of masonry <paramref name="along"/> px along a wall and <paramref name="up"/> px above its foot (both
+    /// ≥ 0): courses 4 px high of blocks 5–9 long, each block its own shade (now and then a weathered dark one), lit
+    /// along its top and shaded above the joint under it; the joints dark.
     /// </summary>
-    private static void Masonry(PixelCanvas c, int x, int y, int w, int h, Ramp r, bool round = false, int salt = 0, float bias = 0f)
+    private static float MasonryLight(int along, int up, int salt, out bool joint)
+    {
+        int course = up >> 2, row = up & 3;
+        int start = -(Hash(course, salt, 51) % 6), block = 0;
+        int length = 5 + Hash(course, 0, salt) % 5;
+        while (start + length <= along)
+        {
+            start += length;
+            block++;
+            length = 5 + Hash(course, block, salt) % 5;
+        }
+        joint = row == 0 || along == start;
+        if (joint)
+            return -1.25f;
+        int h = Hash(block, course, salt + 2);
+        return (h % 7 - 3) * 0.11f + (h % 11 == 0 ? -0.45f : 0f) + (row == 3 ? 0.45f : row == 1 ? -0.2f : 0f)
+               + (along == start + 1 ? 0.2f : 0f);
+    }
+
+    /// <summary>
+    /// Weathering of a wall face at (x, y), <paramref name="up"/> px above the ground: grime darkening the last courses,
+    /// streaks run down by the rain. Returns the light to add; <paramref name="moss"/> says whether moss grows there.
+    /// </summary>
+    private static float Weathering(int x, int y, int up, int salt, out bool moss)
+    {
+        moss = up < 2 + Hash(x / 3, salt, 7) % 4 && Hash(x, y, salt + 5) % 3 != 0;
+        float grime = -Mathf.Max(0f, 7 - up) * 0.1f;
+        if (Hash(x, salt, 9) % 13 == 0 && up < Hash(x, salt, 10) % 40)
+            grime -= 0.35f; // a streak
+        return grime;
+    }
+
+    /// <summary>A flat face of masonry from (x, y), <paramref name="w"/>×<paramref name="h"/>, its foot on the ground (grimy, mossy) unless <paramref name="grime"/> is false.</summary>
+    private static void Ashlar(PixelCanvas c, int x, int y, int w, int h, Ramp r, int salt, float bias = 0f, bool grime = true)
     {
         for (int j = 0; j < h; j++)
-        {
-            int course = j / 4, inCourse = j % 4;
-            int offset = course % 2 * 4;
             for (int i = 0; i < w; i++)
             {
-                int brick = (i + offset) / 7;
-                bool joint = inCourse == 3 || (i + offset) % 7 == 6;
-                float across = (i + 0.5f) / w;
-                float wall = round ? 1.1f - 3.4f * Mathf.Abs(across - 0.3f) : (i == 0 ? 0.5f : i >= w - 2 ? -0.7f : 0f);
-                float ground = Mathf.Max(0f, j - (h - 6)) * 0.18f;
-                float light = joint ? -1.2f + wall * 0.4f
-                    : wall + (Hash(brick + x, course + y, 11 + salt) % 7 - 3) * 0.12f + (inCourse == 0 ? 0.55f : inCourse == 2 ? -0.35f : 0f);
-                c.Shade(x + i, y + j, r, light - ground + bias);
+                int up = h - 1 - j;
+                float light = MasonryLight(i + 3, up, salt, out bool joint) + bias + (i == 0 ? 0.35f : i >= w - 2 ? -0.5f : 0f);
+                bool moss = false;
+                if (grime)
+                    light += Weathering(x + i, y + j, up, salt, out moss);
+                if (moss && !joint)
+                    c.Shade(x + i, y + j, MossR, light * 0.5f + 0.1f);
+                else
+                    c.Shade(x + i, y + j, r, light);
             }
+    }
+
+    /// <summary>
+    /// A round tower of masonry, radius <paramref name="r"/>, its foot's front at (cx, foot), rising
+    /// <paramref name="height"/>: the courses curve round it and the blocks narrow towards its sides; lit like a
+    /// cylinder, grimy and mossy at the foot. Returns the centre of the ring at its top.
+    /// </summary>
+    private static Vector2 RoundTower(PixelCanvas c, float cx, float foot, float r, int height, Ramp ramp, int salt, bool grime = true, float bias = 0f)
+    {
+        float ry = r * 0.5f;
+        for (int x = (int)Mathf.Floor(cx - r); x <= (int)Mathf.Ceil(cx + r); x++)
+        {
+            float u = (x + 0.5f - cx) / r;
+            if (Mathf.Abs(u) > 1f)
+                continue;
+            int bottom = (int)Mathf.Round(foot - ry + ry * Mathf.Sqrt(1f - u * u));
+            int along = (int)Mathf.Floor((Mathf.Asin(u) + 1.6f) * r);
+            float shape = CylinderShade(u) + bias;
+            for (int y = bottom - height; y < bottom; y++)
+            {
+                int up = bottom - 1 - y;
+                float light = MasonryLight(along, up, salt, out bool joint) + shape;
+                bool moss = false;
+                if (grime)
+                    light += Weathering(x, y, up, salt, out moss);
+                if (moss && !joint)
+                    c.Shade(x, y, MossR, light * 0.5f + 0.1f);
+                else
+                    c.Shade(x, y, ramp, light);
+            }
+        }
+        return new Vector2(cx, foot - ry - height);
+    }
+
+    /// <summary>Light across a round body at <paramref name="u"/> (-1 left edge … 1 right edge): brightest left of the middle, falling into shade on the right.</summary>
+    private static float CylinderShade(float u)
+    {
+        float across = (u + 1f) / 2f;
+        return 1.05f - 2.6f * Mathf.Abs(across - 0.3f) - (across > 0.3f ? 0.5f * (across - 0.3f) : 0f);
+    }
+
+    /// <summary>A band of iron round a tower (radius r, centre x cx) at the height of the tower's front edge y = <paramref name="y"/> at its middle.</summary>
+    private static void IronBand(PixelCanvas c, float cx, float y, float r)
+    {
+        float ry = r * 0.5f;
+        for (int x = (int)Mathf.Floor(cx - r); x <= (int)Mathf.Ceil(cx + r); x++)
+        {
+            float u = (x + 0.5f - cx) / r;
+            if (Mathf.Abs(u) > 1f)
+                continue;
+            int py = (int)Mathf.Round(y - ry + ry * Mathf.Sqrt(1f - u * u));
+            c.Shade(x, py, IronR, CylinderShade(u) + 0.4f);
+            c.Shade(x, py + 1, IronR, CylinderShade(u) - 0.6f);
+            if ((int)((Mathf.Asin(u) + 1.6f) * r) % 6 == 0)
+                c.Px(x, py, SteelR.Light); // a rivet
         }
     }
 
-    /// <summary>A parapet of merlons 4 wide and 5 high with gaps of 3, along the top of a wall from x to x + w.</summary>
-    private static void Merlons(PixelCanvas c, int x, int y, int w, Ramp r, bool round = false)
+    /// <summary>Flagstones on a wall-walk or platform seen from above (x, y), w × d: lit by the sun, in rows foreshortened to 3 px.</summary>
+    private static void Flagstones(PixelCanvas c, int x, int y, int w, int d, Ramp r, int salt)
+    {
+        for (int j = 0; j < d; j++)
+            for (int i = 0; i < w; i++)
+            {
+                int row = j / 3;
+                int stone = (i + row % 2 * 4) / 8;
+                bool joint = j % 3 == 2 || (i + row % 2 * 4) % 8 == 7;
+                float light = joint ? -0.8f : 0.55f + (Hash(stone, row, salt + 60) % 5 - 2) * 0.15f + (j % 3 == 0 ? 0.25f : 0f);
+                c.Shade(x + i, y + j, r, light - (i >= w - 2 ? 0.5f : 0f));
+            }
+    }
+
+    /// <summary>
+    /// A parapet of merlons standing on the line y from x to x + w: each 4 wide and 5 high with gaps of 3, its front face
+    /// lit evenly, its right side turned away, its top catching the sun.
+    /// </summary>
+    private static void Battlement(PixelCanvas c, int x, int y, int w, Ramp r, Ramp? caps = null, int height = 5)
     {
         for (int i = 0; i < w; i += 7)
         {
             int mw = Math.Min(4, w - i);
-            for (int j = 0; j < 5; j++)
+            for (int j = 0; j < height; j++)
                 for (int k = 0; k < mw; k++)
                 {
-                    float across = (i + k + 0.5f) / w;
-                    float wall = round ? 1f - 3f * Mathf.Abs(across - 0.3f) : 0f;
-                    c.Shade(x + i + k, y + j, r, (j == 0 ? 1.4f : k == mw - 1 ? -0.6f : 0.2f) + wall * 0.6f);
+                    int px = x + i + k, py = y - height + j;
+                    if (j == 0)
+                        c.Shade(px, py, caps ?? r, 1.3f);
+                    else
+                        c.Shade(px, py, r, (k == mw - 1 ? -0.7f : k == 0 ? 0.4f : 0.05f) - j * 0.06f + (Hash(px, py, 3) % 7 == 0 ? -0.5f : 0f));
                 }
         }
-        // The wall-walk's lip below the merlons.
-        for (int k = 0; k < w; k++)
-            c.Shade(x + k, y + 5, r, -0.6f);
     }
 
     /// <summary>
-    /// A conical roof in faction colours from the apex (cx, top) to the eaves at <paramref name="baseY"/>, half as wide as
-    /// <paramref name="half"/>: rows of shingles, each row lit on its upper edge and shaded under the next; lit on the
-    /// left. The eaves overhang a pixel and cast a shadow line.
+    /// A parapet round the top of a round tower: a lit rim, the floor inside in shade, merlons round the ring; what
+    /// rises from within (a cone roof) is drawn by <paramref name="inside"/> after the far merlons and before the near.
     /// </summary>
-    private static void ConeRoof(PixelCanvas c, float cx, int top, int baseY, float half, bool gilded = false)
+    private static void RingBattlement(PixelCanvas c, float cx, float cy, float r, Ramp ramp, Ramp? caps = null, Action? inside = null)
     {
-        int height = baseY - top;
-        for (int y = top; y <= baseY; y++)
-        {
-            float w = half * (y - top + 1) / height;
-            int row = (y - top) % 4;
-            for (int x = (int)Mathf.Floor(cx - w); x <= (int)Mathf.Ceil(cx + w); x++)
+        float ry = r * 0.5f;
+        for (int y = (int)Mathf.Floor(cy - ry); y <= (int)Mathf.Ceil(cy + ry); y++)
+            for (int x = (int)Mathf.Floor(cx - r); x <= (int)Mathf.Ceil(cx + r); x++)
             {
-                float across = (x + 0.5f - (cx - w)) / Mathf.Max(1f, 2f * w);
-                if (across < 0f || across > 1f)
+                float nx = (x + 0.5f - cx) / r, ny = (y + 0.5f - cy) / ry;
+                float d = nx * nx + ny * ny;
+                if (d > 1f)
                     continue;
-                // Shingles: staggered tabs whose lower corners are darker.
-                int tab = (int)Mathf.Floor((x + ((y - top) / 4 % 2) * 2) / 4f);
-                float light = 1.2f - 3f * Mathf.Abs(across - 0.28f) + (row == 0 ? 0.6f : row == 3 ? -0.7f : 0f)
-                              + (Hash(tab, (y - top) / 4, 5) % 3 - 1) * 0.15f;
-                if (y == baseY)
-                {
-                    if (gilded)
-                        c.Shade(x, y, GoldR, light);
-                    else
-                        c.TeamLit(x, y, -1.5f);
-                }
-                else
-                {
-                    c.TeamLit(x, y, light);
-                }
+                c.Shade(x, y, d > 0.55f ? ramp : FlagstoneR, d > 0.55f ? 0.9f - nx * 0.6f : -0.9f + (Hash(x, y, 4) % 3 - 1) * 0.2f);
+            }
+        int n = Math.Max(6, (int)(r * 0.8f));
+        foreach (bool front in new[] { false, true })
+        {
+            if (front)
+                inside?.Invoke();
+            for (int k = 0; k < n; k++)
+            {
+                float a = (k + 0.5f) * Mathf.Tau / n;
+                if (Mathf.Sin(a) > 0f != front)
+                    continue;
+                int mx = (int)Mathf.Round(cx + Mathf.Cos(a) * (r - 1.5f)), my = (int)Mathf.Round(cy + Mathf.Sin(a) * (ry - 0.8f));
+                float side = -Mathf.Cos(a) * 0.7f;
+                for (int j = 0; j < 5; j++)
+                    for (int i = -1; i <= 1; i++)
+                        c.Shade(mx + i, my - j, j == 4 ? caps ?? ramp : ramp, j == 4 ? 1.3f : side + (i == 1 ? -0.5f : 0f) + (front ? 0f : -0.3f));
             }
         }
     }
 
-    /// <summary>A pitched roof in faction colours over a hall from x0 to x1: ridge at <paramref name="top"/>, eaves at <paramref name="baseY"/>; the gable end at the right in shade.</summary>
-    private static void HallRoof(PixelCanvas c, int x0, int x1, int top, int baseY)
+    // ---- Roofs ------------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// A cone roof seen from the front and above: the eaves an ellipse of radius <paramref name="r"/> centred at
+    /// (cx, eaves), the apex <paramref name="tall"/> above. Rows of slates follow the eaves round, lit like a cylinder
+    /// from the left; in the owner's colours stained dark, with a grey slate here and there, or in
+    /// <paramref name="material"/>; the eaves' edge dark, or gilded.
+    /// </summary>
+    private static void ConeRoof(PixelCanvas c, float cx, float eaves, float r, float tall, Ramp? material = null, bool gilded = false, int salt = 0)
     {
-        int height = baseY - top;
-        for (int y = top; y <= baseY; y++)
+        float apex = eaves - tall;
+        float Front(float t, float dx) => apex + t * tall + 0.5f * Mathf.Sqrt(Mathf.Max(0f, r * r * t * t - dx * dx));
+        for (int x = (int)Mathf.Floor(cx - r); x <= (int)Mathf.Ceil(cx + r); x++)
         {
-            int inset = (baseY - y) * 2 / 3;
-            int row = (y - top) % 4;
-            for (int x = x0 + inset / 2; x <= x1 - inset / 3; x++)
+            float dx = x + 0.5f - cx;
+            float t0 = Mathf.Abs(dx) / r;
+            if (t0 > 1f)
+                continue;
+            int yTop = (int)Mathf.Round(Front(t0, dx)), yBottom = (int)Mathf.Round(Front(1f, dx));
+            for (int y = yTop; y <= yBottom; y++)
             {
-                int tab = (x + (y - top) / 4 % 2 * 3) / 6;
-                float light = (row == 0 ? 0.9f : row == 3 ? -0.8f : 0.1f) + 0.5f - (y - top) / (float)height * 0.6f
-                              + (Hash(tab, (y - top) / 4, 9) % 3 - 1) * 0.15f - (x > x1 - inset / 3 - 4 ? 0.8f : 0f);
-                c.TeamLit(x, y, y == baseY ? -1.6f : light);
+                float py = y + 0.5f, lo = t0, hi = 1f;
+                for (int k = 0; k < 16; k++)
+                {
+                    float mid = (lo + hi) / 2f;
+                    if (Front(mid, dx) < py)
+                        lo = mid;
+                    else
+                        hi = mid;
+                }
+                float t = (lo + hi) / 2f;
+                float sin = Mathf.Clamp(dx / Mathf.Max(0.01f, r * t), -1f, 1f);
+                float rows = t * tall / 3.2f;
+                int row = (int)rows;
+                float inRow = rows - row;
+                int tab = (int)Mathf.Floor((Mathf.Asin(sin) * r * t + row % 2 * 1.5f) / 3f);
+                int h = Hash(tab, row, salt + 31);
+                float light = CylinderShade(sin) + 0.3f + (inRow > 0.72f ? -0.8f : inRow < 0.3f ? 0.25f : 0f) + (h % 3 - 1) * 0.15f;
+                bool eave = y >= yBottom - 1;
+                if (eave && gilded)
+                    c.Shade(x, y, GoldR, light);
+                else if (material is { } m)
+                    c.Shade(x, y, m, eave ? -1.4f : light);
+                else if (eave)
+                    c.Shade(x, y, SlateR, -1.2f);
+                else if (h % 9 == 0)
+                    c.Shade(x, y, SlateR, light - 0.3f);
+                else
+                    c.TeamLit(x, y, light - RoofStain);
+            }
+        }
+        if (gilded)
+            c.Ball(cx, apex, 2.2f, 2.2f, GoldR, 0.6f); // a gilded finial
+    }
+
+    /// <summary>
+    /// One plane of a pitched roof, its eaves and ridge running across: from x0 to x1, between <paramref name="top"/>
+    /// and <paramref name="bottom"/>. Rows of slates 3 px deep, staggered, lit by <paramref name="light"/>; stained in
+    /// the owner's colours with a grey slate here and there, the lower edge dark.
+    /// </summary>
+    private static void SlateRoof(PixelCanvas c, int x0, int x1, int top, int bottom, float light, int salt)
+    {
+        for (int y = top; y < bottom; y++)
+        {
+            int row = (y - top) / 3, inRow = (y - top) % 3;
+            for (int x = x0; x < x1; x++)
+            {
+                int tab = (x + row % 2 * 2) / 4;
+                int h = Hash(tab, row, salt + 70);
+                float l = light + (inRow == 0 ? 0.35f : inRow == 2 ? -0.7f : 0f) + ((x + row % 2 * 2) % 4 == 3 ? -0.4f : 0f)
+                          + (h % 3 - 1) * 0.15f - (x >= x1 - 2 ? 0.4f : 0f) + (x <= x0 + 1 ? 0.3f : 0f);
+                if (y >= bottom - 1)
+                    c.Shade(x, y, SlateR, -1.3f);
+                else if (h % 10 == 0)
+                    c.Shade(x, y, SlateR, l);
+                else
+                    c.TeamLit(x, y, l - RoofStain);
             }
         }
     }
+
+    // ---- Fittings ---------------------------------------------------------------------------------------------------
 
     /// <summary>An arched window in a stone frame, dark glass with a mullion; it shines at night.</summary>
     private static void ArchWindow(PixelCanvas c, int x, int y, int w, int h)
@@ -151,23 +337,44 @@ public static partial class ArtGenerator
                     continue;
                 bool frame = i < 0 || i >= w || j < 0 || j >= h;
                 if (frame)
-                    c.Shade(x + i, y + j, WallLightR, j == h ? 1.4f : -0.3f);
+                    c.Shade(x + i, y + j, WallLightR, j == h ? 1.2f : i < 0 ? 0.6f : -0.5f);
                 else
-                    c.Shade(x + i, y + j, GlassR, i == 0 || j == 0 ? -1f : (i + j) % 5 == 0 ? 0.6f : 0f);
+                    c.Shade(x + i, y + j, GlassR, i == 0 || j == 0 ? -1.2f : (i + j) % 5 == 0 ? 0.4f : -0.3f);
             }
         if (w >= 4)
             c.Rect(x + w / 2, y + 1, 1, h - 1, WallR.Shade);
         c.Lit(x, y, w, h, WindowGlow);
     }
 
-    /// <summary>An arched door of planks with iron bands under a stone arch.</summary>
+    /// <summary>An arrow slit: a narrow dark cut with a lit sill.</summary>
+    private static void Slit(PixelCanvas c, int x, int y, int h)
+    {
+        c.Rect(x, y, 1, h, GlassR.Deep);
+        c.Px(x, y + h, WallLightR.Light);
+        c.Px(x + 1, y + 1, WallR.Shade);
+    }
+
+    /// <summary>A small shuttered window in a timber frame; it shines at night.</summary>
+    private static void ShutteredWindow(PixelCanvas c, int x, int y, int w, int h)
+    {
+        c.Block(x - 1, y - 1, w + 2, h + 2, DarkWoodR, bias: -0.3f);
+        c.Rect(x, y, w, h, GlassR.Shade);
+        c.Rect(x + w / 2, y, 1, h, DarkWoodR.Deep);
+        c.Rect(x, y + h / 2, w, 1, DarkWoodR.Deep);
+        c.Lit(x, y, w, h, WindowGlow);
+        // A shutter hanging open on either side.
+        c.Block(x - 3, y, 2, h, WoodR, bias: 0.2f);
+        c.Block(x + w + 1, y, 2, h, WoodR, bias: -0.4f);
+    }
+
+    /// <summary>An arched door of planks with iron bands and studs under an arch of stone (or gilded).</summary>
     private static void ArchDoor(PixelCanvas c, int x, int y, int w, int h, bool gilded = false)
     {
         float cx = x + w / 2f;
         for (int j = -2; j < h; j++)
             for (int i = -2; i < w + 2; i++)
             {
-                float dx = (i - (w - 1) / 2f), dy = (j - w / 2f);
+                float dx = i - (w - 1) / 2f, dy = j - w / 2f;
                 bool inArch = j >= w / 2 || dx * dx + dy * dy <= (w / 2f) * (w / 2f);
                 bool inRim = j >= w / 2 - 1 || dx * dx + dy * dy <= (w / 2f + 2f) * (w / 2f + 2f);
                 if (!inRim)
@@ -175,40 +382,108 @@ public static partial class ArtGenerator
                 if (!inArch || i < 0 || i >= w)
                 {
                     if (j < h)
-                        c.Shade(x + i, y + j, gilded ? GoldR : WallLightR, (i < 0 || dx < 0 ? 1f : -0.4f) + (j < 0 ? 0.6f : 0f));
+                        c.Shade(x + i, y + j, gilded ? GoldR : WallLightR, (dx < 0 ? 0.8f : -0.5f) + (j < 0 ? 0.5f : 0f));
                     continue;
                 }
                 bool band = j == h / 3 || j == h * 2 / 3;
-                float light = band ? 0.3f : (i % 4 == 3 ? -1.2f : 0f) + (i < 2 ? -0.8f : 0f) + (j < w / 2 + 1 ? -0.6f : 0f);
+                float light = band ? 0.2f : (i % 3 == 2 ? -1.2f : 0f) + (i < 2 ? -0.8f : 0f) + (j < w / 2 + 1 ? -0.7f : 0f) - 0.2f;
                 c.Shade(x + i, y + j, band ? IronR : DoorR, light);
+                if (band && i % 3 == 1)
+                    c.Px(x + i, y + j, SteelR.Light); // a stud
             }
         c.Px((int)cx + 2, y + h / 2, GoldR.Light); // a ring for a handle
     }
 
-    /// <summary>A banner in faction colours hanging from a pole, a swallowtail at its foot.</summary>
+    /// <summary>
+    /// A gate: a dark arched passage under voussoirs, a portcullis half raised in it; gilded voussoirs on a grand gate.
+    /// </summary>
+    private static void Gate(PixelCanvas c, int x, int y, int w, int h, bool gilded = false)
+    {
+        float rad = w / 2f;
+        for (int j = -3; j < h; j++)
+            for (int i = -3; i < w + 3; i++)
+            {
+                float dx = i + 0.5f - rad, dy = j + 0.5f - rad;
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                bool arched = j + 0.5f < rad;
+                bool inner = i >= 0 && i < w && (!arched || d <= rad);
+                bool rim = arched ? d <= rad + 3f : i >= -3 && i < w + 3;
+                if (inner)
+                {
+                    bool bar = j < h * 0.55f && (i % 3 == 1 || j % 4 == 3);
+                    if (bar)
+                        c.Shade(x + i, y + j, IronR, i % 3 == 1 ? 0.3f - j * 0.02f : -0.4f);
+                    else
+                        c.Shade(x + i, y + j, GlassR, -1.8f + (j > h - 4 ? 0.5f : 0f));
+                }
+                else if (rim)
+                {
+                    // Voussoirs: wedges round the arch, then the jambs' blocks.
+                    int stone = arched ? (int)((Mathf.Atan2(dy, dx) + Mathf.Pi) * 5f) : j / 4;
+                    float light = (dx < 0 ? 0.6f : -0.4f) + (stone % 2 == 0 ? 0.25f : -0.1f) + (arched && d > rad + 2.2f ? -0.6f : 0f);
+                    c.Shade(x + i, y + j, gilded ? GoldR : WallLightR, light);
+                }
+            }
+        c.Lit(x + 2, y + h - 5, w - 4, 4, new Color("6e3a12")); // lamplight on the passage floor
+    }
+
+    /// <summary>
+    /// A banner in faction colours hanging from a bar with gilded ends: folds down its length, a swallowtail at its
+    /// foot, and the realm's gilded lily on it (a small cross on a narrow one).
+    /// </summary>
     private static void Banner(PixelCanvas c, int x, int y, int w, int h)
     {
-        c.Stroke(x - 1, y, x + w + 1, y, 1.6f, DarkWoodR);
+        c.Stroke(x - 1, y, x + w, y, 1.6f, DarkWoodR);
+        c.Px(x - 2, y, GoldR.Light);
+        c.Px(x + w + 1, y, GoldR.Light);
         for (int j = 1; j <= h; j++)
             for (int i = 0; i < w; i++)
             {
                 if (j > h - 3 && Mathf.Abs(i - (w - 1) / 2f) < (j - (h - 3)) * 0.8f)
                     continue; // the swallowtail notch
-                float light = (i == 0 ? 0.8f : i == w - 1 ? -1f : 0f) + (j == 1 ? 1f : 0f) - j * 0.06f;
+                float fold = Mathf.Sin((i + 0.5f) / w * Mathf.Tau * (w >= 10 ? 1.5f : 1f)) * 0.35f;
+                float light = (i == 0 ? 0.5f : i == w - 1 ? -1f : 0f) + (j == 1 ? 0.8f : 0f) - j * 0.04f + fold - 0.1f;
                 c.TeamLit(x + i, y + j, light);
             }
-        // A device on it: a pale chevron.
-        for (int i = 0; i < w - 2; i++)
-            c.Team(x + 1 + i, y + h / 2 - Math.Abs(i - (w - 3) / 2) / 2, 1f);
+        int cx = x + (w - 1) / 2, cy = y + h / 2 - 1;
+        if (w >= 8)
+            Lily(c, cx, cy);
+        else
+        {
+            c.Px(cx, cy - 1, GoldR.Light);
+            c.Px(cx - 1, cy, GoldR.Light);
+            c.Px(cx, cy, GoldR.Light);
+            c.Px(cx + 1, cy, GoldR.Base);
+            c.Px(cx, cy + 1, GoldR.Base);
+        }
+    }
+
+    /// <summary>The realm's lily, 5 px wide, gilded, centred on (cx, cy).</summary>
+    private static void Lily(PixelCanvas c, int cx, int cy)
+    {
+        string[] lily =
+        {
+            "..#..",
+            ".###.",
+            "#.#.#",
+            "#####",
+            "..#..",
+            ".#.#.",
+        };
+        for (int j = 0; j < lily.Length; j++)
+            for (int i = 0; i < 5; i++)
+                if (lily[j][i] == '#')
+                    c.Shade(cx - 2 + i, cy - 3 + j, GoldR, j < 2 ? 1.3f : i < 2 ? 0.6f : -0.1f);
     }
 
     /// <summary>
-    /// A flag on a pole, the cloth in faction colours rippling in the wind: a wave runs out from the pole along the
-    /// cloth over the four frames, the free end flapping most; folds turned from the light are darker.
+    /// A flag on a pole <paramref name="pole"/> px tall, the cloth in faction colours rippling in the wind: a wave runs
+    /// out from the pole along the cloth over the four frames, the free end flapping most; folds turned from the light
+    /// are darker.
     /// </summary>
-    private static void Flag(PixelCanvas c, int x, int y, int frame, int length = 14)
+    private static void Flag(PixelCanvas c, int x, int y, int frame, int length = 14, int pole = 20)
     {
-        c.Stroke(x, y, x, y + 20, 1.6f, DarkWoodR, 0.4f);
+        c.Stroke(x, y, x, y + pole, 1.6f, DarkWoodR, 0.4f);
         c.Ball(x, y - 0.5f, 1.3f, 1.3f, GoldR, 0.5f);
         for (int i = 0; i <= length; i++)
         {
@@ -236,315 +511,425 @@ public static partial class ArtGenerator
         c.Lit(x - 2, y - 2, 5, 6, FireGlow);
     }
 
+    /// <summary>A fire in a brazier or beacon, its tongues changing shape through the frames.</summary>
+    private static void Flames(PixelCanvas c, float x, float y, int frame, float size = 1f)
+    {
+        var flame = Ramp.Of(Fire);
+        var core = Ramp.Of(FireLight);
+        switch (frame)
+        {
+            case 0: c.Ball(x, y - 5 * size, 4.5f * size, 6.5f * size, flame, 0.6f); c.Ball(x - 1, y - 4 * size, 2 * size, 3.5f * size, core, 1f); break;
+            case 1: c.Ball(x - 1.5f, y - 4 * size, 4.5f * size, 5.5f * size, flame, 0.6f); c.Ball(x + 2, y - 8 * size, 1.8f * size, 4 * size, flame, 1f); c.Ball(x - 1.5f, y - 4 * size, 2 * size, 3 * size, core, 1f); break;
+            case 2: c.Ball(x + 1, y - 6 * size, 4 * size, 7 * size, flame, 0.6f); c.Ball(x + 1, y - 5 * size, 2 * size, 3.5f * size, core, 1f); break;
+            default: c.Ball(x, y - 4 * size, 5.5f * size, 5.5f * size, flame, 0.6f); c.Ball(x - 3, y - 8 * size, 1.4f * size, 3 * size, flame, 1f); c.Ball(x, y - 4 * size, 2.4f * size, 3 * size, core, 1f); break;
+        }
+        c.Lit((int)(x - 7 * size), (int)(y - 14 * size), (int)(14 * size), (int)(15 * size), FireGlow);
+    }
+
+    /// <summary>A barrel standing at (x, y) (its foot's centre): staves, iron hoops, a lit lid.</summary>
+    private static void Barrel(PixelCanvas c, float x, float y)
+    {
+        c.GroundShadow(x + 2, y, 4.5f, 1.6f, 0.35f);
+        c.Column((int)x - 3, (int)y - 8, 7, 7, WoodR, -0.1f);
+        for (int i = -3; i <= 3; i++)
+        {
+            c.Shade((int)x + i, (int)y - 7, IronR, CylinderShade(i / 3.5f));
+            c.Shade((int)x + i, (int)y - 3, IronR, CylinderShade(i / 3.5f) - 0.2f);
+        }
+        c.Ball(x + 0.5f, y - 8.5f, 3.5f, 1.4f, DarkWoodR, 0.8f, 1f);
+    }
+
+    /// <summary>A crate at (x, y) (its foot's left corner), w wide: a lit top, planked front, a dark side.</summary>
+    private static void Crate(PixelCanvas c, int x, int y, int w)
+    {
+        c.GroundShadow(x + w / 2f + 2, y, w * 0.7f, 1.6f, 0.35f);
+        c.Block(x, y - w + 1, w, w, WoodR, top: 2);
+        c.Stroke(x + 1, y - 1, x + w - 2, y - w + 3, 1f, DarkWoodR, -0.2f);
+    }
+
+    /// <summary>A rack of spears and a shield leaning on it, the rack's foot at (x, y).</summary>
+    private static void WeaponRack(PixelCanvas c, int x, int y)
+    {
+        c.GroundShadow(x + 6, y, 7f, 1.6f, 0.35f);
+        c.Stroke(x, y, x, y - 10, 1.4f, DarkWoodR);
+        c.Stroke(x + 9, y, x + 9, y - 10, 1.4f, DarkWoodR, -0.4f);
+        c.Stroke(x - 1, y - 7, x + 10, y - 7, 1.2f, DarkWoodR, 0.2f);
+        for (int i = 0; i < 4; i++)
+        {
+            int sx = x + 1 + i * 2;
+            c.Stroke(sx, y - 1, sx + 1, y - 15, 1f, WoodR, 0.3f);
+            c.Px(sx + 1, y - 16, SteelR.Light);
+            c.Px(sx + 1, y - 17, SteelR.Base);
+        }
+        // A round shield in faction colours with an iron boss.
+        c.TeamBall(x + 10, y - 4, 3.2f, 3.6f, -0.2f);
+        c.Px(x + 10, y - 4, SteelR.Light);
+    }
+
     // ---- The buildings -----------------------------------------------------------------------------------------
 
     /// <summary>
-    /// 96×120 frames, bottom-centre origin; the footprint is 3×3 tiles. A curtain wall between two round towers with
-    /// conical roofs in the owner's colours, a tall keep behind flying the flag, a gate between torches.
+    /// 96×144 frames, bottom-centre origin; the footprint is 3×3 tiles. A curtain wall with round towers at its four
+    /// corners under slate cones stained in the owner's colours; behind it the square keep, its battlements and the flag;
+    /// the gate with a portcullis between torches, banners on the towers and the keep.
     /// </summary>
-    private static PixelCanvas Castle() => Sheet(96, 120, (c, frame) =>
+    private static PixelCanvas Castle() => Sheet(96, 144, (c, frame) =>
     {
-        // The keep at the back.
-        Masonry(c, 28, 26, 40, 40, WallLightR, salt: 1);
-        Merlons(c, 28, 20, 40, WallLightR);
-        foreach (int x in new[] { 34, 46, 58 })
-            ArchWindow(c, x, 32, 4, 8);
-        Flag(c, 47, 0, frame);
-        // The curtain wall.
-        Masonry(c, 14, 62, 68, 54, WallR, salt: 2);
-        Merlons(c, 14, 56, 68, WallR);
-        ArchWindow(c, 28, 72, 3, 6);
-        ArchWindow(c, 65, 72, 3, 6);
-        // The towers at the corners, round, with conical roofs.
-        foreach (int tx in new[] { 0, 70 })
+        // The towers at the back corners and the wall between them, its walk and parapet.
+        foreach (int tx in new[] { 13, 83 })
         {
-            Masonry(c, tx, 38, 26, 78, WallLightR, round: true, salt: tx);
-            Merlons(c, tx, 32, 26, WallLightR, round: true);
-            ConeRoof(c, tx + 12.5f, 8, 34, 12.5f);
-            ArchWindow(c, tx + 10, 50, 4, 8);
-            ArchWindow(c, tx + 10, 74, 3, 6);
-            Banner(c, tx + 7, 86, 10, 16);
+            var top = RoundTower(c, tx, 94, 11, 48, WallR, salt: tx, grime: false, bias: -0.2f);
+            ConeRoof(c, tx, top.Y - 1, 13.5f, 26, salt: tx);
         }
-        c.Rect(0, 115, 96, 1, WallR.Shade);
-        // The gate under its arch, a torch on either side.
-        ArchDoor(c, 38, 82, 20, 34);
-        c.Rect(46, 78, 4, 3, WallLightR.Glint); // keystone
-        Torch(c, 33, 86, frame);
-        Torch(c, 63, 86, (frame + 2) % 4);
-        Banner(c, 43, 64, 10, 12);
+        Ashlar(c, 22, 52, 52, 40, WallR, salt: 2, bias: -0.3f, grime: false);
+        Flagstones(c, 22, 47, 52, 5, FlagstoneR, 3);
+        Battlement(c, 22, 47, 52, WallR);
+        Flagstones(c, 20, 92, 56, 12, CourtR, 5); // the courtyard
+        // The keep, rising from the yard.
+        Flag(c, 48, 0, frame, pole: 26);
+        Flagstones(c, 30, 20, 36, 14, FlagstoneR, 1);
+        Battlement(c, 30, 20, 36, WallLightR);
+        Ashlar(c, 30, 34, 36, 70, WallLightR, salt: 1, grime: false);
+        Battlement(c, 30, 34, 36, WallLightR);
+        ArchWindow(c, 35, 44, 4, 8);
+        ArchWindow(c, 57, 44, 4, 8);
+        ArchWindow(c, 46, 76, 4, 9);
+        ArchWindow(c, 36, 82, 3, 6);
+        ArchWindow(c, 57, 82, 3, 6);
+        Banner(c, 41, 38, 14, 24);
+        // The front wall and its gate.
+        Flagstones(c, 18, 102, 60, 6, FlagstoneR, 4);
+        Ashlar(c, 18, 108, 60, 34, WallR, salt: 4);
+        Battlement(c, 18, 108, 60, WallR);
+        Gate(c, 38, 117, 20, 25);
+        Torch(c, 31, 118, frame);
+        Torch(c, 65, 118, (frame + 2) % 4);
+        Slit(c, 27, 124, 5);
+        Slit(c, 69, 124, 5);
+        // The towers at the front corners.
+        foreach (int tx in new[] { 13, 83 })
+        {
+            var top = RoundTower(c, tx, 142, 13, 58, WallLightR, salt: tx + 7);
+            RingBattlement(c, tx, top.Y, 14.5f, WallLightR, inside: () => ConeRoof(c, tx, top.Y, 12f, 31, salt: tx + 1));
+            Slit(c, tx - 1, 89, 6);
+            Banner(c, tx - 5, 104, 11, 18);
+        }
     });
 
     /// <summary>
-    /// 128×160 frames, bottom-centre origin; the footprint is 4×4 tiles. The Defense mode's citadel: a curtain wall with
-    /// four towers, a tall keep with a gilded crown behind, a double gate between torches, and banners and flags in the
-    /// garrison's colours.
+    /// 128×184 frames, bottom-centre origin; the footprint is 4×4 tiles. The Defense mode's citadel: a high curtain wall
+    /// with four great towers, a tall keep crowned in gold behind, a double gate between torches, and banners and flags
+    /// in the garrison's colours.
     /// </summary>
-    private static PixelCanvas Citadel() => Sheet(128, 160, (c, frame) =>
+    private static PixelCanvas Citadel() => Sheet(128, 184, (c, frame) =>
     {
-        // The keep at the back, rising over everything, crowned in gold.
-        Masonry(c, 44, 26, 40, 64, WallLightR, salt: 3);
-        Merlons(c, 44, 20, 40, WallLightR);
-        for (int i = 0; i < 24; i++)
-            c.Shade(52 + i, 14 + (i % 6 == 0 ? -2 : 0), GoldR, 0.8f);
-        c.Rect(52, 15, 24, 4, GoldR.Base);
-        c.Rect(52, 18, 24, 1, GoldR.Shade);
-        foreach (int x in new[] { 52, 62, 72 })
-            ArchWindow(c, x, 36, 4, 9);
-        ArchWindow(c, 62, 56, 4, 8);
-        Flag(c, 63, 0, frame);
-        // The back towers peeping over the wall.
-        foreach (int tx in new[] { 12, 96 })
+        foreach (int tx in new[] { 16, 112 })
         {
-            Masonry(c, tx, 40, 20, 40, WallR, round: true, salt: tx);
-            Merlons(c, tx, 34, 20, WallR, round: true);
-            Flag(c, tx + 9, 14, (frame + tx / 12) % 4, 10);
+            var top = RoundTower(c, tx, 124, 13, 60, WallR, salt: tx, grime: false, bias: -0.2f);
+            Flag(c, tx, (int)top.Y - 42, (frame + tx / 16) % 4, 10, pole: 16);
+            ConeRoof(c, tx, top.Y - 1, 15.5f, 30, salt: tx);
         }
-        // The curtain wall.
-        Masonry(c, 12, 80, 104, 76, WallR, salt: 4);
-        Merlons(c, 16, 74, 96, WallR);
-        // The front towers at the corners.
-        foreach (int tx in new[] { 0, 100 })
+        Ashlar(c, 26, 74, 76, 48, WallR, salt: 4, bias: -0.3f, grime: false);
+        Flagstones(c, 26, 68, 76, 6, FlagstoneR, 5);
+        Battlement(c, 26, 68, 76, WallR);
+        Flagstones(c, 24, 122, 80, 14, CourtR, 6); // the courtyard
+        // The keep, crowned in gold.
+        Flag(c, 64, 0, frame, pole: 30);
+        Flagstones(c, 40, 26, 48, 18, FlagstoneR, 2);
+        Battlement(c, 40, 26, 48, WallLightR, GoldR);
+        Ashlar(c, 40, 44, 48, 96, WallLightR, salt: 3, grime: false);
+        Battlement(c, 40, 44, 48, WallLightR, GoldR);
+        for (int x = 40; x < 88; x++)
         {
-            Masonry(c, tx, 64, 28, 92, WallLightR, round: true, salt: tx + 5);
-            Merlons(c, tx, 58, 28, WallLightR, round: true);
-            ConeRoof(c, tx + 13.5f, 30, 60, 13.5f);
-            ArchWindow(c, tx + 11, 76, 4, 8);
-            ArchWindow(c, tx + 11, 100, 4, 8);
-            Banner(c, tx + 8, 116, 12, 22);
+            c.Shade(x, 45, GoldR, x < 46 ? 1.2f : x > 84 ? -0.6f : 0.6f);
+            c.Shade(x, 46, GoldR, -0.8f);
         }
-        c.Rect(0, 152, 128, 4, WallR.Deep); // the plinth
-        // The double gate under an arch.
-        ArchDoor(c, 48, 112, 32, 40);
-        c.Rect(63, 112, 2, 40, IronR.Shade);
-        Torch(c, 42, 116, frame);
-        Torch(c, 86, 116, (frame + 2) % 4);
-        foreach (int x in new[] { 30, 92 })
-            ArchWindow(c, x, 92, 4, 8);
-        Banner(c, 57, 86, 14, 18);
+        foreach (int x in new[] { 45, 61, 77 })
+            ArchWindow(c, x, 54, 5, 10);
+        ArchWindow(c, 47, 100, 4, 8);
+        ArchWindow(c, 77, 100, 4, 8);
+        Banner(c, 56, 70, 16, 30);
+        // The front wall and the double gate.
+        Flagstones(c, 26, 135, 76, 6, FlagstoneR, 7);
+        Ashlar(c, 26, 141, 76, 41, WallR, salt: 8);
+        Battlement(c, 26, 141, 76, WallR);
+        Gate(c, 49, 151, 30, 31, gilded: true);
+        c.Rect(63, 151 + 15, 2, 16, IronR.Shade);
+        Torch(c, 42, 152, frame);
+        Torch(c, 85, 152, (frame + 2) % 4);
+        Banner(c, 30, 145, 10, 16);
+        Banner(c, 88, 145, 10, 16);
+        foreach (int tx in new[] { 16, 112 })
+        {
+            var top = RoundTower(c, tx, 182, 16, 70, WallLightR, salt: tx + 9);
+            IronBand(c, tx, top.Y + 8 + 22, 16f);
+            RingBattlement(c, tx, top.Y, 17.5f, WallLightR, GoldR, () => ConeRoof(c, tx, top.Y, 14.5f, 38, gilded: true, salt: tx + 2));
+            Slit(c, tx - 1, 120, 7);
+            Banner(c, tx - 6, 138, 13, 24);
+        }
     });
 
     /// <summary>
-    /// 64×72 frames, bottom-centre origin; footprint 2×2 tiles. A long timber hall on a stone footing, a pitched roof in
-    /// faction colours, a smoking chimney, a door and windows, a weapon rack by the door.
+    /// 64×84 frames, bottom-centre origin; footprint 2×2 tiles. A long timber-framed hall on a stone footing under a
+    /// pitched roof of slates stained in the owner's colours, a smoking chimney, a flag on the ridge, a door between
+    /// banners, shuttered windows; a rack of spears, barrels and a crate before it.
     /// </summary>
-    private static PixelCanvas Barracks() => Sheet(64, 72, (c, frame) =>
+    private static PixelCanvas Barracks() => Sheet(64, 84, (c, frame) =>
     {
-        Flag(c, 31, 0, (frame + 1) % 4);
-        // The chimney, behind the roof.
-        Masonry(c, 48, 12, 7, 16, WallR, salt: 7);
-        // Timber walls: planks between posts.
-        for (int y = 40; y < 66; y++)
-            for (int x = 4; x < 60; x++)
+        // The chimney, rising through the back of the roof.
+        Ashlar(c, 45, 12, 7, 18, WallR, salt: 7, grime: false);
+        c.Block(44, 9, 9, 3, WallLightR, top: 1);
+        // The roof: the back plane over the ridge, catching the sun, then the front one; dark barge boards at the ends.
+        SlateRoof(c, 2, 62, 26, 40, 0.5f, 1);
+        SlateRoof(c, 2, 62, 40, 59, -0.1f, 2);
+        for (int x = 2; x < 62; x++)
+            c.Shade(x, 40, DarkWoodR, x % 6 == 0 ? -0.6f : 0.6f); // the ridge
+        c.Stroke(2, 26, 2, 58, 1.6f, DarkWoodR, 0.3f);
+        c.Stroke(61, 26, 61, 58, 1.6f, DarkWoodR, -0.6f);
+        Flag(c, 9, 16, frame, 11, pole: 23);
+        // Timber-framed walls: dark posts and rails with braces, plaster between, darkened under the eaves.
+        for (int y = 59; y < 79; y++)
+            for (int x = 6; x < 58; x++)
             {
-                bool post = x % 14 == 4 || x == 59;
-                float light = post ? (x % 14 == 4 ? 0.6f : -0.3f) : (x % 3 == 0 ? -0.9f : 0f) + (y == 40 ? -1.2f : 0f) - (x > 54 ? 0.8f : 0f);
-                c.Shade(x, y, post ? DarkWoodR : WoodR, light);
+                int bay = (x - 6) % 13;
+                bool post = bay == 0 || x == 57;
+                bool rail = y == 59 || y == 68 || y == 78;
+                bool brace = !post && (bay == y - 59 || bay == 12 - (y - 59)) && y < 68;
+                float shadow = y < 62 ? -0.7f : 0f;
+                if (post || rail || brace)
+                    c.Shade(x, y, DarkWoodR, (post && bay == 0 ? 0.3f : rail && y == 78 ? -0.5f : 0f) + shadow);
+                else
+                    c.Shade(x, y, PlasterR, (Hash(x / 2, y / 2, 17) % 5 - 2) * 0.15f + shadow - (x > 54 ? 0.6f : 0f) + (x < 9 ? 0.3f : 0f));
             }
-        Masonry(c, 2, 64, 60, 6, WallR, salt: 8);
-        HallRoof(c, 0, 63, 18, 42);
-        ArchDoor(c, 27, 48, 10, 17);
-        ArchWindow(c, 11, 47, 6, 7);
-        ArchWindow(c, 47, 47, 6, 7);
-        // A rack of spears by the door.
-        for (int i = 0; i < 3; i++)
-        {
-            c.Stroke(19 + i * 2, 49, 19 + i * 2, 64, 1f, WoodR, 0.4f);
-            c.Px(19 + i * 2, 48, SteelR.Light);
-        }
-        c.Stroke(17, 56, 25, 56, 1f, DarkWoodR);
+        Ashlar(c, 5, 79, 54, 4, WallR, salt: 8);
+        ArchDoor(c, 27, 65, 10, 14);
+        ShutteredWindow(c, 13, 63, 5, 5);
+        ShutteredWindow(c, 46, 63, 5, 5);
+        Banner(c, 21, 60, 4, 11);
+        Banner(c, 39, 60, 4, 11);
+        // Before the hall.
+        WeaponRack(c, 2, 83);
+        Barrel(c, 52, 83);
+        Barrel(c, 59, 81);
+        Crate(c, 44, 83, 6);
     });
 
     /// <summary>
-    /// 64×116 frames, bottom-centre origin; footprint 2×2 tiles. A walled plinth with a gate, a round stone keep behind
-    /// it, an archers' gallery and a conical roof in faction colours. Level 2: stone gallery, iron bands, bigger banners;
-    /// level 3: gilded eaves, finial and gate, a great banner on the keep.
+    /// 64×128 frames, bottom-centre origin; footprint 2×2 tiles. A square bastion with a gate, on it a round stone tower,
+    /// an archers' gallery under a cone roof in the owner's colours. Level 2: a stone gallery, iron bands, bigger
+    /// banners; level 3: gilded eaves, finial and gate, merlons capped in gold, a great banner on the tower.
     /// </summary>
-    private static PixelCanvas Tower(int tier = 1) => Sheet(64, 116, (c, frame) =>
+    private static PixelCanvas Tower(int tier = 1) => Sheet(64, 128, (c, frame) =>
     {
-        Flag(c, 31, 0, frame);
-        // The keep, drawn first: the plinth wall stands in front of its foot. Higher levels are bound with iron.
-        Masonry(c, 14, 46, 36, 42, WallLightR, round: true, salt: tier);
-        ArchWindow(c, 30, 56, 4, 10);
-        ArchWindow(c, 20, 62, 2, 7);
-        ArchWindow(c, 42, 62, 2, 7);
+        Flag(c, 32, 0, frame, pole: 22);
+        var caps = tier >= 3 ? GoldR : (Ramp?)null;
+        // The bastion's top, round the tower's foot.
+        Flagstones(c, 6, 80, 52, 28, FlagstoneR, tier);
+        Battlement(c, 6, 80, 52, WallR, caps);
+        // The tower, bound in iron from the second level.
+        var top = RoundTower(c, 32, 101, 14, 54, WallLightR, salt: tier + 20);
         if (tier >= 2)
-            foreach (int y in new[] { 52, 72 })
-                for (int x = 14; x < 50; x++)
-                    c.Shade(x, y, IronR, 1f - 3f * Mathf.Abs((x - 14 + 0.5f) / 36f - 0.3f));
-        // Archers' gallery under the roof, with loopholes between the posts: timber, then stone.
-        if (tier == 1)
         {
-            for (int y = 38; y < 48; y++)
-                for (int x = 6; x < 58; x++)
-                {
-                    bool post = x % 8 == 6;
-                    c.Shade(x, y, post ? DarkWoodR : WoodR, post ? 0.4f : (y == 47 ? -1.2f : y == 38 ? 0.8f : 0f) - (x > 53 ? 0.8f : 0f));
-                }
+            IronBand(c, 32, 62, 14f);
+            IronBand(c, 32, 86, 14f);
         }
-        else
-        {
-            Masonry(c, 6, 38, 52, 10, WallR, salt: 9);
-        }
-        for (int x = 11; x < 56; x += 16)
-            ArchWindow(c, x, 40, 3, 5);
-        ConeRoof(c, 31.5f, 10, 38, 28f, gilded: tier >= 3);
+        Slit(c, 25, 66, 6);
+        Slit(c, 38, 66, 6);
         if (tier >= 3)
         {
-            c.Ball(31.5f, 9f, 2.4f, 2.4f, GoldR, 0.6f); // finial
-            // A great banner on the keep, edged in gold, and gilded merlon caps on the gallery.
-            c.Rect(23, 49, 18, 28, GoldR.Shade);
-            Banner(c, 25, 50, 14, 24);
-            for (int x = 6; x < 58; x += 8)
-                c.Rect(x, 36, 4, 2, GoldR.Light);
-        }
-        // Plinth: a low wall with merlons, banners and a gate.
-        Merlons(c, 4, 78, 56, WallR);
-        Masonry(c, 4, 84, 56, 30, WallR, salt: 10);
-        c.Rect(4, 112, 56, 2, WallR.Deep);
-        ArchDoor(c, 25, 92, 14, 20, gilded: tier >= 3);
-        if (tier >= 2)
-        {
-            Banner(c, 7, 86, 10, 16);
-            Banner(c, 47, 86, 10, 16);
+            c.Rect(24, 69, 16, 26, GoldR.Shade);
+            Banner(c, 25, 69, 14, 24);
         }
         else
         {
-            Banner(c, 9, 88, 8, 12);
-            Banner(c, 47, 88, 8, 12);
+            ArchWindow(c, 30, 72, 4, 8);
+        }
+        // The archers' gallery: timber hoarding, then stone with machicolations, its loopholes between.
+        float ry = 8.5f, galleryFoot = top.Y + ry + 1f;
+        for (int x = 15; x <= 49; x++)
+        {
+            float u = (x + 0.5f - 32f) / 17f;
+            if (Mathf.Abs(u) > 1f)
+                continue;
+            int bottom = (int)Mathf.Round(galleryFoot - ry + ry * Mathf.Sqrt(1f - u * u));
+            for (int y = bottom - 10; y < bottom; y++)
+            {
+                int j = y - (bottom - 10);
+                float light = CylinderShade(u) + (j == 0 ? 0.6f : j == 9 ? -1.1f : 0f);
+                bool loophole = j >= 3 && j <= 6 && (x - 15) % 8 == 4;
+                if (loophole)
+                    c.Px(x, y, GlassR.Deep);
+                else if (tier == 1)
+                    c.Shade(x, y, (x - 15) % 8 == 0 ? DarkWoodR : WoodR, light - ((x - 15) % 8 == 0 ? 0.2f : 0f) + ((x + j) % 3 == 0 ? -0.3f : 0f));
+                else
+                    c.Shade(x, y, WallR, light + MasonryLight(x, 9 - j, 33, out _) * 0.6f);
+            }
+            // Corbels under the gallery.
+            if ((x - 15) % 5 == 0)
+                c.Shade(x, bottom, tier == 1 ? DarkWoodR : WallR, CylinderShade(u) - 0.6f);
+        }
+        ConeRoof(c, 32, top.Y - 9, 20f, 30, gilded: tier >= 3, salt: tier);
+        // The bastion's front and its gate.
+        Ashlar(c, 6, 108, 52, 18, WallR, salt: 10);
+        Battlement(c, 6, 108, 52, WallR, caps);
+        if (tier >= 3)
+            ArchDoor(c, 26, 112, 12, 14, gilded: true);
+        else
+            Gate(c, 26, 112, 12, 14);
+        if (tier >= 2)
+        {
+            Banner(c, 9, 109, 10, 14);
+            Banner(c, 45, 109, 10, 14);
+        }
+        else
+        {
+            Banner(c, 11, 110, 7, 11);
+            Banner(c, 46, 110, 7, 11);
         }
     });
 
     /// <summary>
-    /// 96×152 frames, bottom-centre origin; footprint 3×3 tiles. A walled base, a slim stone shaft and an open lookout
-    /// with a beacon fire (flickering through the frames) under a pointed roof in faction colours.
+    /// 96×176 frames, bottom-centre origin; footprint 3×3 tiles. A bastion with a gate and a slim square tower on it,
+    /// at the top an open lookout of timber with a beacon fire (flickering through the frames) under a pyramid roof in
+    /// the owner's colours.
     /// </summary>
-    private static PixelCanvas Watchtower() => Sheet(96, 152, (c, frame) =>
+    private static PixelCanvas Watchtower() => Sheet(96, 176, (c, frame) =>
     {
-        Flag(c, 47, 0, frame);
-        ConeRoof(c, 47.5f, 10, 36, 26f);
-        // Open lookout: corner posts, a beacon in a brazier, a railing and the floor.
-        c.Stroke(24, 38, 24, 62, 3f, WoodR);
-        c.Stroke(71, 38, 71, 62, 3f, DarkWoodR);
-        c.Ball(48, 56, 9, 4, IronR, -0.3f);
-        c.Rect(40, 52, 17, 4, IronR.Shade);
-        var flame = Ramp.Of(Fire);
-        switch (frame)
+        Flag(c, 48, 0, frame, pole: 24);
+        // The bastion's top and the tower.
+        Flagstones(c, 10, 136, 76, 22, FlagstoneR, 12);
+        Battlement(c, 10, 136, 76, WallR);
+        Ashlar(c, 31, 70, 34, 80, WallLightR, salt: 11, grime: false);
+        ArchWindow(c, 46, 84, 4, 9);
+        ArchWindow(c, 46, 104, 4, 8);
+        Banner(c, 41, 118, 14, 22);
+        // Struts carrying the lookout's floor.
+        c.Stroke(31, 84, 22, 72, 2f, DarkWoodR, -0.2f);
+        c.Stroke(64, 84, 74, 72, 2f, DarkWoodR, -0.6f);
+        // The lookout: back posts, the floor of planks, the beacon, the front posts and railing.
+        c.Stroke(23, 54, 23, 32, 2.4f, DarkWoodR);
+        c.Stroke(73, 54, 73, 32, 2.4f, DarkWoodR, -0.5f);
+        for (int y = 52; y < 68; y++)
+            for (int x = 20; x < 77; x++)
+                c.Shade(x, y, WoodR, (y % 4 == 3 ? -0.9f : 0.5f) + (Hash(x / 6, y / 4, 13) % 3 - 1) * 0.15f - (x > 74 ? 0.5f : 0f));
+        for (int y = 68; y < 72; y++)
+            for (int x = 20; x < 77; x++)
+                c.Shade(x, y, DarkWoodR, (y == 68 ? 0.7f : -0.4f) + (x % 9 == 0 ? -0.8f : 0f));
+        c.Ball(48, 60, 7.5f, 3.5f, IronR, -0.2f);
+        c.Rect(42, 61, 13, 3, IronR.Shade);
+        Flames(c, 48, 59, frame, 1.1f);
+        c.Stroke(22, 69, 22, 36, 2.8f, WoodR);
+        c.Stroke(74, 69, 74, 36, 2.8f, WoodR, -0.5f);
+        c.Stroke(22, 59, 74, 59, 1.6f, WoodR, 0.3f);
+        for (int x = 28; x < 72; x += 6)
+            c.Stroke(x, 60, x, 67, 1f, DarkWoodR);
+        // The roof: a pyramid of slates over the posts, its left face catching the sun.
+        c.Polygon(new[] { new Vector2(14, 38), new Vector2(48, 7), new Vector2(83, 38) }, null, (x, y) =>
         {
-            case 0: c.Ball(48, 47, 5, 7, flame, 0.6f); c.Ball(47, 46, 2, 4, Ramp.Of(FireLight), 1f); break;
-            case 1: c.Ball(46, 48, 5, 6, flame, 0.6f); c.Ball(50, 45, 2, 5, flame, 1f); c.Ball(46, 48, 2, 3, Ramp.Of(FireLight), 1f); break;
-            case 2: c.Ball(49, 46, 4, 8, flame, 0.6f); c.Ball(49, 47, 2, 4, Ramp.Of(FireLight), 1f); break;
-            default: c.Ball(48, 48, 6, 6, flame, 0.6f); c.Ball(45, 45, 1.5f, 3, flame, 1f); c.Ball(48, 48, 2.5f, 3, Ramp.Of(FireLight), 1f); break;
-        }
-        c.Lit(36, 36, 24, 22, FireGlow);
-        for (int x = 18; x < 78; x++)
-        {
-            c.Shade(x, 60, WoodR, 0.9f);
-            c.Shade(x, 61, WoodR, x % 6 == 0 ? -1f : 0f);
-            c.Shade(x, 62, WoodR, x % 6 == 0 ? -1f : -0.3f);
-        }
-        for (int x = 16; x < 80; x++)
-            for (int y = 64; y < 70; y++)
-                c.Shade(x, y, DarkWoodR, y == 64 ? 0.8f : x % 5 == 0 ? -1f : -0.2f);
-        // Shaft with lookout windows.
-        Masonry(c, 30, 70, 36, 44, WallLightR, round: true, salt: 11);
-        ArchWindow(c, 46, 78, 4, 10);
-        ArchWindow(c, 46, 96, 4, 8);
-        // Walled base with a gate and banners.
-        Merlons(c, 6, 106, 84, WallR);
-        Masonry(c, 6, 112, 84, 38, WallR, salt: 12);
-        c.Rect(6, 148, 84, 2, WallR.Deep);
-        ArchDoor(c, 38, 122, 20, 26);
-        Banner(c, 14, 118, 10, 16);
-        Banner(c, 72, 118, 10, 16);
+            int row = (y - 7) / 3;
+            float l = (x < 48 ? 0.4f : -0.6f) + ((y - 7) % 3 == 2 ? -0.7f : 0f) + (Hash((x + row % 2 * 2) / 4, row, 15) % 3 - 1) * 0.15f;
+            return l - RoofStain;
+        });
+        for (int x = 14; x < 83; x++)
+            c.Shade(x, 38, SlateR, -1.2f);
+        // The bastion's front.
+        Ashlar(c, 10, 158, 76, 16, WallR, salt: 12);
+        Battlement(c, 10, 158, 76, WallR);
+        Gate(c, 40, 160, 16, 14);
+        Torch(c, 34, 159, frame);
+        Torch(c, 62, 159, (frame + 2) % 4);
+        Banner(c, 15, 159, 10, 13);
+        Banner(c, 71, 159, 10, 13);
     });
 
     /// <summary>
-    /// 64×80 frames, bottom-centre origin; footprint 2×2 tiles. A stone platform with a timber frame, a throwing arm loaded
-    /// with a stone, a counterweight and a banner in faction colours. Level 2: merlons and iron fittings;
-    /// level 3: gilded trim and banners at the sides.
+    /// 64×92 frames, bottom-centre origin; footprint 2×2 tiles. A stone platform with a catapult on it: a timber frame,
+    /// the throwing arm loaded with a stone, a counterweight, a pile of shot; a banner in faction colours. Level 2:
+    /// merlons and iron fittings; level 3: gilded trim and banners at the sides.
     /// </summary>
-    private static PixelCanvas Catapult(int tier = 1) => Sheet(64, 80, (c, frame) =>
+    private static PixelCanvas Catapult(int tier = 1) => Sheet(64, 92, (c, frame) =>
     {
-        Flag(c, 6, 22, frame, 10);
-        var timber = tier >= 3 ? Ramp.Of(new Color("b08250"), mood: FigureMood) : WoodR;
-        // Frame: two uprights (the far one darker), a crossbar and the axle the arm swings on.
-        c.Stroke(44, 54, 44, 30, 3.4f, DarkWoodR);
-        c.Stroke(19, 54, 19, 30, 3.6f, timber);
-        c.Stroke(16, 29, 48, 29, 3f, DarkWoodR, 0.3f);
+        var timber = tier >= 3 ? Ramp.Of(new Color("8f6a40"), mood: BuildingMood) : WoodR;
+        var caps = tier >= 3 ? GoldR : (Ramp?)null;
+        Flagstones(c, 4, 50, 56, 24, FlagstoneR, tier + 30);
+        if (tier >= 2)
+            Battlement(c, 4, 50, 56, WallR, caps);
+        Flag(c, 8, 26, frame, 10, pole: 26);
+        // The engine's bed of beams, the far upright, the near one, the crossbar.
+        c.Stroke(12, 59, 52, 59, 2.4f, DarkWoodR, -0.4f);
+        c.Stroke(44, 66, 44, 36, 3.4f, DarkWoodR);
+        c.Stroke(19, 66, 19, 36, 3.6f, timber);
+        c.Stroke(16, 35, 48, 35, 3f, DarkWoodR, 0.3f);
         if (tier >= 2)
             foreach (int x in new[] { 19, 44 })
-                c.Rect(x - 2, 38, 4, 2, IronR.Base);
-        // Throwing arm, raised, with the counterweight low at one end and a stone in the cup at the other.
-        c.Stroke(14, 48, 53, 14, 3f, timber, 0.3f);
-        c.Rect(6, 42, 13, 10, tier >= 2 ? IronR.Base : WallR.Shade);
-        c.Ball(12f, 46.5f, 6.5f, 5f, tier >= 2 ? IronR : WallR, 0.2f);
-        c.Ball(53f, 12f, 5f, 3f, DarkWoodR, -0.2f);
-        c.Ball(53f, 8f, 3.4f, 3.4f, StoneR, 0.4f);
-        c.Ball(32f, 31f, 2.4f, 2.4f, tier >= 3 ? GoldR : IronR, 0.6f);
+                c.Rect(x - 2, 44, 4, 2, IronR.Base);
+        // The throwing arm, raised, a counterweight at its foot and a stone in the cup at its head.
+        c.Stroke(14, 55, 53, 17, 3f, timber, 0.3f);
+        c.Block(6, 47, 13, 11, tier >= 2 ? IronR : WallR, top: 2);
+        c.Ball(53f, 15f, 5f, 3f, DarkWoodR, -0.2f);
+        c.Ball(53f, 11f, 3.4f, 3.4f, StoneR, 0.4f);
+        c.Ball(32f, 37f, 2.4f, 2.4f, tier >= 3 ? GoldR : IronR, 0.6f);
         if (tier >= 3)
-            c.Rect(52, 15, 3, 2, GoldR.Light);
-        // Platform.
+            c.Rect(52, 18, 3, 2, GoldR.Light);
+        c.Stroke(10, 68, 54, 68, 3f, DarkWoodR, 0.2f);
+        // A pile of shot.
+        foreach (var (x, y) in new[] { (50f, 68f), (55f, 68f), (52.5f, 64.5f) })
+            c.Ball(x, y, 2.6f, 2.4f, StoneR, 0.2f);
+        // The platform's front.
+        Ashlar(c, 4, 74, 56, 16, WallR, salt: 13);
         if (tier >= 2)
-            Merlons(c, 4, 48, 56, WallR);
-        Masonry(c, 4, 54, 56, 22, WallR, salt: 13);
-        c.Rect(4, 76, 56, 2, WallR.Deep);
+            Battlement(c, 4, 74, 56, WallR, caps);
         if (tier >= 3)
             for (int x = 4; x < 60; x++)
-                c.Shade(x, 54, GoldR, 0.8f);
-        Banner(c, 26, 57, 12, 13);
+                c.Shade(x, 74, GoldR, x < 10 ? 1f : 0.4f);
+        Banner(c, 26, 75, 12, 12);
         if (tier >= 3)
         {
-            Banner(c, 8, 57, 8, 12);
-            Banner(c, 48, 57, 8, 12);
+            Banner(c, 8, 75, 8, 11);
+            Banner(c, 48, 75, 8, 11);
         }
     });
 
     /// <summary>
-    /// 64×72 frames, bottom-centre origin; footprint 2×2 tiles on a gold deposit. Through the frames the headframe's
-    /// wheel turns and the gold in the cart glints (the view holds the first frame while the mine stands idle).
-    /// Level 2: stone-framed tunnel, lantern, braced headframe, a second cart; level 3: steel headframe with a gilded
-    /// wheel, a retaining wall, a heap of gold.
+    /// 64×80 frames, bottom-centre origin; footprint 2×2 tiles on a gold deposit. A hill of rock over the shaft with a
+    /// timbered tunnel mouth, a headframe whose wheel turns through the frames, a cart of gold glinting on its rails
+    /// (the view holds the first frame while the mine stands idle). Level 2: a tunnel framed in stone, a lantern, a
+    /// braced headframe, a second cart; level 3: a steel headframe with a gilded wheel, a retaining wall, a heap of gold.
     /// </summary>
-    private static PixelCanvas Mine(int tier = 1) => Sheet(64, 72, (c, frame) =>
+    private static PixelCanvas Mine(int tier = 1) => Sheet(64, 80, (c, frame) =>
     {
         var glint = new Color("fff6c0");
-        // A rock mound with a tunnel mouth: timbered, then framed in stone; lamplight inside at night.
-        for (int y = 42; y < 70; y++)
+        Flag(c, 6, 0, frame, 11, pole: 24);
+        // The headframe over the shaft at the top of the hill: timber, then steel.
+        var post = tier >= 3 ? SteelR : WoodR;
+        c.Stroke(14, 14, 18, 44, 3f, post);
+        c.Stroke(50, 14, 46, 44, 3f, tier >= 3 ? IronR : DarkWoodR);
+        c.Stroke(11, 13, 53, 13, 3f, tier >= 3 ? SteelR : DarkWoodR, 0.4f);
+        c.Stroke(16, 22, 30, 34, 2f, post, -0.2f);
+        c.Stroke(48, 22, 34, 34, 2f, post, -0.6f);
+        if (tier >= 2)
+            c.Stroke(16, 38, 48, 24, 2f, post, -0.3f); // cross brace
+        // The hill: rock heaped up, lit from the upper left, in rough facets, stones lying on it.
+        for (int y = 36; y < 78; y++)
         {
-            float half = 12f + (y - 42) * 19f / 27f;
+            float k = (y - 36) / 42f;
+            float half = 9f + 22f * Mathf.Sqrt(k);
             for (int x = (int)(32 - half); x < (int)(32 + half); x++)
             {
-                float across = (x - (32 - half)) / (2f * half);
-                float light = 1f - 3f * Mathf.Abs(across - 0.3f) + (Hash(x / 3, y / 3, 21) % 5 - 2) * 0.25f - (y - 42) * 0.02f;
+                float nx = (x + 0.5f - 32f) / half;
+                float facet = (Hash((x + 64) / 5, (y + 64) / 4, 21) % 5 - 2) * 0.22f;
+                float light = 0.9f - 1.6f * (nx + 0.35f) * (nx > -0.35f ? 1f : -0.6f) - k * 0.6f + facet;
+                if (k > 0.9f)
+                    light -= 0.6f; // in its own shadow at the foot
                 c.Shade(x, y, RockR, light);
             }
         }
-        if (tier >= 3)
-            Masonry(c, 4, 62, 56, 8, WallR, salt: 14); // retaining wall
-        // The tunnel.
-        for (int y = 52; y < 70; y++)
-            for (int x = 23; x < 41; x++)
-                c.Shade(x, y, GlassR, y < 55 ? -1.6f : -1f + (x - 23) * 0.04f);
-        c.Lit(25, 58, 14, 12, new Color("b8641e"));
-        var frameR = tier >= 2 ? WallLightR : WoodR;
-        c.Stroke(22, 51, 22, 69, 3f, frameR);
-        c.Stroke(41, 51, 41, 69, 3f, frameR, -0.6f);
-        c.Stroke(20, 50, 43, 50, 3f, frameR, 0.4f);
-        if (tier >= 2)
-        {
-            c.Stroke(16, 54, 16, 60, 1f, IronR);
-            c.Ball(16, 56, 1.8f, 2.2f, Ramp.Of(new Color("ffd25a"), mood: FigureMood), 0.8f); // lantern by the entrance
-            c.Lit(13, 53, 7, 7, WindowGlow);
-        }
-        // Headframe with a pulley wheel: timber, then steel; the top level's wheel is gilded.
-        var post = tier >= 3 ? SteelR : WoodR;
-        c.Stroke(11, 14, 11, 50, 3f, post);
-        c.Stroke(52, 14, 52, 50, 3f, tier >= 3 ? IronR : DarkWoodR);
-        c.Stroke(8, 13, 55, 13, 3f, tier >= 3 ? SteelR : DarkWoodR, 0.4f);
-        c.Stroke(12, 18, 30, 32, 2f, post, -0.2f);
-        c.Stroke(51, 18, 34, 32, 2f, post, -0.6f);
-        if (tier >= 2)
-            c.Stroke(12, 40, 51, 24, 2f, post, -0.3f); // cross brace
+        foreach (var (x, y, r) in new[] { (12f, 66f, 3f), (54f, 70f, 2.5f), (20f, 52f, 2f), (46f, 50f, 2.2f) })
+            c.Ball(x, y, r * 1.3f, r, RockR, 0.3f);
+        // The shaft's mouth on the hilltop, the rope going down into it.
+        c.Ball(32, 40, 7f, 2.5f, GlassR, -1.5f);
+        c.Stroke(32, 26, 32, 40, 1f, RopeR, -0.3f);
+        // The wheel turning on the headframe: iron, gilded at the top level.
         var wheel = tier >= 3 ? GoldR : IronR;
         c.Ball(32, 20, 6.5f, 6.5f, wheel, 0.2f);
         c.Ball(32, 20, 4.5f, 4.5f, tier >= 3 ? GoldR : DarkWoodR, -0.5f);
@@ -555,25 +940,44 @@ public static partial class ArtGenerator
             c.Stroke(32 - Mathf.Cos(a) * 4.5f, 20 - Mathf.Sin(a) * 4.5f, 32 + Mathf.Cos(a) * 4.5f, 20 + Mathf.Sin(a) * 4.5f, 1.2f, tier >= 3 ? GoldR : WoodR, 0.5f);
         }
         c.Ball(32, 20, 1.4f, 1.4f, SteelR, 0.8f);
-        c.Stroke(32, 26, 32, 46, 1f, RopeR, -0.3f); // the rope down the shaft
-        // Carts full of gold: one, then two, then a heap beside them.
-        Cart(c, 44, 58, frame, glint, 0);
+        if (tier >= 3)
+            Ashlar(c, 4, 70, 56, 8, WallR, salt: 14); // a retaining wall
+        // The tunnel: timbered, then framed in stone; lamplight inside at night.
+        for (int y = 56; y < 78; y++)
+            for (int x = 23; x < 41; x++)
+                c.Shade(x, y, GlassR, y < 59 ? -1.8f : -1.2f + (x - 23) * 0.03f);
+        c.Lit(25, 60, 14, 12, new Color("b8641e"));
+        var frameR = tier >= 2 ? WallLightR : WoodR;
+        c.Stroke(22, 55, 22, 77, 3f, frameR);
+        c.Stroke(41, 55, 41, 77, 3f, frameR, -0.6f);
+        c.Stroke(20, 54, 43, 54, 3f, frameR, 0.4f);
+        // Rails out of the tunnel.
+        c.Stroke(26, 78, 38, 66, 1f, IronR, 0.3f);
+        c.Stroke(31, 78, 41, 68, 1f, IronR, -0.2f);
         if (tier >= 2)
-            Cart(c, 4, 58, frame, glint, 2);
+        {
+            c.Stroke(16, 58, 16, 64, 1f, IronR);
+            c.Ball(16, 60, 1.8f, 2.2f, Ramp.Of(new Color("ffd25a"), mood: FigureMood), 0.8f); // a lantern by the entrance
+            c.Lit(13, 57, 7, 7, WindowGlow);
+        }
+        // Carts full of gold: one, then two, then a heap beside them.
+        Cart(c, 44, 64, frame, glint, 0);
+        if (tier >= 2)
+            Cart(c, 4, 64, frame, glint, 2);
         if (tier >= 3)
         {
-            c.Ball(32f, 46f, 8f, 4f, GoldR, 0.4f);
-            c.Ball(30f, 44f, 4f, 2.5f, GoldR, 1f);
+            c.Ball(32f, 72f, 8f, 3.5f, GoldR, 0.4f);
+            c.Ball(30f, 70f, 4f, 2.5f, GoldR, 1f);
             if (frame == 1)
-                c.Px(29, 42, glint);
+                c.Px(29, 68, glint);
         }
-        Flag(c, 6, 0, frame, 11);
     });
 
     /// <summary>A mine cart heaped with gold at (x, y), its load glinting on the frame given by <paramref name="shine"/>.</summary>
     private static void Cart(PixelCanvas c, int x, int y, int frame, Color glint, int shine)
     {
-        c.Block(x, y + 2, 16, 7, DarkWoodR, top: 1);
+        c.GroundShadow(x + 9, y + 13, 9f, 2f, 0.35f);
+        c.Block(x, y + 2, 16, 8, DarkWoodR, top: 1);
         c.Stroke(x, y + 5, x + 15, y + 5, 1f, IronR);
         c.Ball(x + 8f, y + 1.5f, 7f, 3.5f, GoldR, 0.6f);
         c.Ball(x + 4f, y + 11f, 2.2f, 2.2f, IronR, 0f);
@@ -582,34 +986,80 @@ public static partial class ArtGenerator
             c.Px(x + 4 + frame * 3, y - 1, glint);
     }
 
-    /// <summary>64×64 ore patch drawn on the 2×2 deposit footprint (top-left origin): boulders veined with gold, nuggets about.</summary>
+    /// <summary>
+    /// 64×64 ore patch drawn on the 2×2 deposit footprint (top-left origin): a broken outcrop of rock in rough facets,
+    /// veins of gold and quartz across them, nuggets and grit about.
+    /// </summary>
     private static PixelCanvas Deposit()
     {
         var c = new PixelCanvas(64, 64);
-        var boulders = new (float X, float Y, float W, float H)[]
+        var rocks = new (float X, float Y, float W, float H, int Seed)[]
         {
-            (16, 18, 10, 8), (40, 15, 11, 9), (21, 40, 12, 10), (46, 38, 9, 9), (32, 54, 7, 5), (8, 30, 5, 4), (56, 54, 4, 3),
+            (40, 17, 11, 10, 1), (17, 20, 10, 9, 2), (8, 33, 5, 5, 3), (45, 38, 9, 9, 4), (22, 42, 13, 12, 5), (35, 55, 7, 5, 6), (57, 54, 4, 3, 7),
         };
-        foreach (var (x, y, w, h) in boulders)
+        // Grit and loose nuggets under the rocks.
+        for (int k = 0; k < 40; k++)
         {
-            c.GroundShadow(x + 2, y + h * 0.7f, w * 1.05f, h * 0.45f, 0.3f);
-            c.Ball(x, y, w, h, RockR, 0.1f, 0.25f);
-            // Gold veins running across the face.
-            for (int v = 0; v < 2; v++)
-            {
-                float vx = x - w * 0.6f + Hash((int)x, v, 31) % (int)w * 0.6f, vy = y - h * 0.3f + v * h * 0.4f;
-                for (int i = 0; i < (int)w; i++)
-                {
-                    int px = (int)(vx + i), py = (int)(vy + Mathf.Sin(i * 0.8f + v) * 1.5f);
-                    if (c.IsSolid(px, py) && c.Get(px, py) != Colors.Transparent)
-                        c.Shade(px, py, OreR, (i % 3 == 0 ? 1f : 0f) - (px - x) * 0.05f);
-                }
-            }
+            int x = 4 + Hash(k, 1, 33) % 56, y = 6 + Hash(1, k, 34) % 54;
+            c.Px(x, y, k % 5 == 0 ? OreR.Light : RockR.Shade, solid: false);
         }
-        // Loose nuggets.
-        foreach (var (x, y) in new[] { (30, 30), (34, 33), (12, 48), (52, 26), (40, 50) })
-            c.Ball(x, y, 1.6f, 1.3f, OreR, 0.8f);
+        foreach (var (x, y, w, h, seed) in rocks)
+        {
+            c.GroundShadow(x + 3, y + h * 0.75f, w * 1.15f, h * 0.45f, 0.35f);
+            Outcrop(c, x, y, w, h, seed);
+        }
+        foreach (var (x, y) in new[] { (31, 31), (35, 33), (12, 50), (55, 28), (44, 52), (28, 12) })
+        {
+            c.Ball(x, y, 1.7f, 1.4f, OreR, 0.9f);
+            c.Px(x - 1, y - 1, new Color("fff6c0"));
+        }
         c.SelOut(SilhouetteRim);
         return c;
+    }
+
+    /// <summary>
+    /// A rock of the outcrop at (cx, cy): roughly round, broken into flat facets — a broad top lit by the sun, faces
+    /// turning into shade to the right and below — crossed by a vein of gold and a streak of quartz.
+    /// </summary>
+    private static void Outcrop(PixelCanvas c, float cx, float cy, float w, float h, int seed)
+    {
+        float turn = Hash(seed, 2, 35) % 100 / 100f * Mathf.Tau;
+        for (int y = (int)Mathf.Floor(cy - h); y <= (int)Mathf.Ceil(cy + h); y++)
+            for (int x = (int)Mathf.Floor(cx - w); x <= (int)Mathf.Ceil(cx + w); x++)
+            {
+                float nx = (x + 0.5f - cx) / w, ny = (y + 0.5f - cy) / h;
+                float a = Mathf.Atan2(ny, nx);
+                // A ragged outline: the radius changes from facet to facet.
+                int sector = (int)Mathf.Floor((a + turn + Mathf.Tau) / (Mathf.Tau / 7f)) % 7;
+                float reach = 0.88f + Hash(seed, sector, 36) % 13 * 0.012f;
+                float d = Mathf.Sqrt(nx * nx + ny * ny);
+                if (d > reach)
+                    continue;
+                float light;
+                if (d < 0.42f + Hash(seed, 3, 37) % 10 * 0.012f && ny < 0.25f)
+                    light = 1.1f; // the flat top
+                else
+                {
+                    // Each facet faces one way: lit if towards the sun (up-left).
+                    float facing = (sector + 0.5f) * Mathf.Tau / 7f - turn;
+                    light = -Mathf.Cos(facing) * 0.9f - Mathf.Sin(facing) * 1.2f - 0.2f;
+                }
+                light += (Hash(x, y, seed + 38) % 5 - 2) * 0.1f;
+                c.Shade(x, y, RockR, light);
+            }
+        // A vein of gold and a streak of quartz across the face.
+        for (int v = 0; v < (seed % 2 == 0 ? 2 : 1); v++)
+        {
+            var vein = v == 0 ? OreR : QuartzR;
+            float vy = cy - h * 0.2f + v * h * 0.45f, slope = (Hash(seed, v, 39) % 5 - 2) * 0.15f;
+            for (int i = -(int)w; i <= (int)w; i++)
+            {
+                if (Hash(i, seed, v + 40) % 6 == 0)
+                    continue; // the vein breaks off now and then
+                int px = (int)cx + i, py = (int)Mathf.Round(vy + i * slope + (i / 3 % 2 == 0 ? 0f : 1f));
+                if (c.IsSolid(px, py) && !c.IsTeam(px, py))
+                    c.Shade(px, py, vein, (i % 3 == 0 ? 1.2f : 0.3f) - Mathf.Max(0f, i) / w);
+            }
+        }
     }
 }

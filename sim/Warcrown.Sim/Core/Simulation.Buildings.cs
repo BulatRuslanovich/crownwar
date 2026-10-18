@@ -152,6 +152,7 @@ public sealed partial class Simulation
         if (deposit != null)
             deposit.MineId = building.Id;
         Map.SetOccupied(building.Anchor, type.Size, true);
+        Map.ClearWoods(building.Anchor, type.Size); // the trees on the site are felled
         MakeRoomFor(building);
         return building;
     }
