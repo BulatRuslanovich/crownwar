@@ -98,7 +98,8 @@ theme_override_constants/v_separation = 4
 custom_minimum_size = Vector2(340, 0)
 layout_mode = 2
 text = "Training"
-autowrap_mode = 3
+clip_text = true
+text_overrun_behavior = 3
 
 [node name="Progress" type="ProgressBar" parent="BuildingPanel/Rows"]
 custom_minimum_size = Vector2(0, 8)

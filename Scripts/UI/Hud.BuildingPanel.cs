@@ -96,7 +96,9 @@ public partial class Hud
         int active = Mathf.Min(_match.Sim.TrainingSlots(building), building.Queue.Count);
         if (!Changed(ref _queueShown, (building.Queue.Count, active, building.Queue[0].Type.Id, _textVersion)))
             return;
-        string names = string.Join(", ", building.Queue.Take(active).Select(item => Names.Of(item.Type)));
+        // Grouped by kind ("Infantry ×3, Archer"), so the line stays short however many train at once.
+        string names = string.Join(", ", building.Queue.Take(active).GroupBy(item => item.Type)
+            .Select(g => g.Count() > 1 ? $"{Names.Of(g.Key)} ×{g.Count()}" : Names.Of(g.Key)));
         _queue.Text = string.Format(Tr("HUD_TRAINING"), names) +
             (building.Queue.Count > active ? "  " + string.Format(Tr("HUD_QUEUED"), building.Queue.Count - active) : "");
     }
