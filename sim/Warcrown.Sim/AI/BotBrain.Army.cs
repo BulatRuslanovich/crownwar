@@ -118,6 +118,8 @@ public sealed partial class BotBrain
             if (defence * _profile.AttackAdvantage > armyValue)
                 continue;
             float score = Vector2.Distance(building.Position, capital.Position) + defence / 25f;
+            if (building.Type.IsMine && building.Deposit is { IsExhausted: false } deposit)
+                score -= deposit.Reserve * _sim.Rules.MineRaidPercent / 100 / 20f; // a full deposit is worth the walk
             if (building.Type.IsCapital)
                 score *= 0.6f; // the decisive target
             if (score < bestScore)

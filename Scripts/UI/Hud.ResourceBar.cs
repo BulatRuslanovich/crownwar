@@ -14,7 +14,7 @@ public partial class Hud
     private int _hordeCountedTick = -1;
     private int _hordeAlive;
     /// <summary>The numbers the bar last showed (see <see cref="Changed{T}"/>).</summary>
-    private (int Gold, int Capacity, int Net, int Income, int Upkeep, int ArmyUpkeep, int Population, int Cap, bool Night, int Left, int Text) _barShown;
+    private (int Gold, int Capacity, int Net, int Income, int Upkeep, int ArmyUpkeep, int Surcharge, int Population, int Cap, bool Night, int Left, int Text) _barShown;
 
     /// <summary>A change of the treasury at least this big (loot, a purchase) rolls the counter and flashes it.</summary>
     private const int GoldJump = 25;
@@ -34,7 +34,7 @@ public partial class Hud
             int shown = RollGold(treasury.Gold, treasury.IsFull, delta);
             int secondsLeft = Mathf.CeilToInt(_match.Sim.SecondsToDayNightChange);
             if (!Changed(ref _barShown, (shown, treasury.Capacity, faction.NetPerMinute, faction.IncomePerSecond,
-                    faction.UpkeepPerMinute, faction.ArmyUpkeepPerMinute, faction.Population, faction.ArmyCap, _match.Sim.IsNight,
+                    faction.UpkeepPerMinute, faction.ArmyUpkeepPerMinute, faction.UpkeepSurchargePercent, faction.Population, faction.ArmyCap, _match.Sim.IsNight,
                     secondsLeft, _textVersion)))
                 return;
             _gold.Text = treasury.Capacity > 0
@@ -48,6 +48,9 @@ public partial class Hud
             _income.Modulate = net < 0f ? ProblemColor : Colors.White;
             _income.TooltipText = string.Format(Tr("HUD_INCOME_TOOLTIP"), faction.IncomePerSecond,
                 faction.UpkeepPerMinute / 60f, faction.ArmyUpkeepPerMinute, _match.Sim.Rules.UpkeepAllowance);
+            if (faction.UpkeepSurchargePercent > 0)
+                _income.TooltipText += "\n" + string.Format(Tr("HUD_UPKEEP_SURCHARGE"), faction.UpkeepSurchargePercent,
+                    _match.Sim.Rules.UpkeepSurchargeFrom, _match.Sim.Rules.UpkeepSurchargePercent);
             _army.Text = string.Format(Tr("HUD_ARMY"), faction.Population, faction.ArmyCap);
             _army.Modulate = faction.Population >= faction.ArmyCap ? ProblemColor : Colors.White;
 

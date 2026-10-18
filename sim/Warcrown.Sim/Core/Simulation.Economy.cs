@@ -31,7 +31,7 @@ public sealed partial class Simulation
     {
         foreach (var faction in _factions)
         {
-            int income = 0, cap = 0, upkeep = 0;
+            int income = 0, cap = 0, upkeep = 0, soldiers = 0;
             foreach (var building in _buildings)
             {
                 if (building.FactionId != faction.Id || !building.IsComplete || !building.IsAlive)
@@ -42,8 +42,14 @@ public sealed partial class Simulation
             foreach (var unit in _units)
             {
                 if (unit.FactionId == faction.Id && unit.IsAlive)
+                {
                     upkeep += unit.Type.Upkeep;
+                    soldiers++;
+                }
             }
+            int surcharge = Math.Max(0, soldiers - Rules.UpkeepSurchargeFrom) * Rules.UpkeepSurchargePercent;
+            upkeep += upkeep * surcharge / 100;
+            faction.UpkeepSurchargePercent = surcharge;
             faction.IncomePerSecond = income;
             faction.ArmyUpkeepPerMinute = upkeep;
             faction.UpkeepPerMinute = Math.Max(0, upkeep - Rules.UpkeepAllowance);

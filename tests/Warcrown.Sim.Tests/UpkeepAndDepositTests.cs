@@ -126,6 +126,43 @@ public class UpkeepAndDepositTests
     }
 
     [Test]
+    public void RaidedMineCarriesOffAShareOfTheDeposit()
+    {
+        var rules = new GameRules(100, 4f, Array.Empty<StartingUnits>(), Rules.Units, Rules.BuildingTypes,
+            depositReserveSeconds: ReserveSeconds, depositRegenSeconds: RegenSeconds, mineRaidPercent: 25);
+        var sim = new Simulation(TestMaps.Parse(TestMaps.Field(20, 10), "start 1 1", "start 15 6", "gold 8 1 4", "unit dummy 0 8 4"),
+            rules, new MatchSetup(2, ShuffleStarts: false));
+        var deposit = BuildMine(sim);
+        RunSeconds(sim, ReserveSeconds / 2f);
+        int reserve = deposit.Reserve;
+
+        Combat.CombatSystem.ApplyDamage(sim.Buildings.Single(b => b.Type.IsMine), 1000, ranged: false, attackerFactionId: 1);
+        sim.Step();
+
+        Assert.That(deposit.Reserve, Is.EqualTo(reserve - reserve * 25 / 100), "the raiders carry it off");
+        Assert.That(sim.TakeEvents().OfType<GoldLooted>().Single().Amount, Is.EqualTo(reserve * 25 / 100));
+    }
+
+    [Test]
+    public void LargeArmyPaysASurchargeOnItsWholeUpkeep()
+    {
+        var rules = new GameRules(100, 4f, Array.Empty<StartingUnits>(), Rules.Units, Rules.BuildingTypes,
+            upkeepSurchargeFrom: 2, upkeepSurchargePercent: 10);
+        var sim = new Simulation(TestMaps.Parse(TestMaps.Field(20, 10), "start 1 1", "unit porter 0 12 6 4"),
+            rules, new MatchSetup(1, ShuffleStarts: false));
+        var faction = sim.GetFaction(0)!;
+
+        Assert.That(faction.UpkeepSurchargePercent, Is.EqualTo(20), "two units over the threshold, 10% each");
+        Assert.That(faction.ArmyUpkeepPerMinute, Is.EqualTo(4 * 120 * 120 / 100));
+
+        foreach (var unit in sim.Units.Take(2).ToList())
+            Combat.CombatSystem.ApplyDamage(unit, 1000, ranged: false, attackerFactionId: 1);
+        sim.Step();
+        Assert.That(faction.UpkeepSurchargePercent, Is.Zero);
+        Assert.That(faction.ArmyUpkeepPerMinute, Is.EqualTo(2 * 120));
+    }
+
+    [Test]
     public void UpkeepIsPaidFromIncome()
     {
         var sim = CreateSim("unit porter 0 12 6 2");

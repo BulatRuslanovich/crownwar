@@ -19,12 +19,19 @@ public sealed partial class Simulation
         }
     }
 
-    /// <summary>Whoever brought an enemy building down takes a share of what it cost.</summary>
+    /// <summary>
+    /// Whoever brought an enemy building down takes a share of what it cost, and from a mine also a share of the gold
+    /// still in its deposit (which loses it): raiding the leader's mines pays.
+    /// </summary>
     private void Loot(Building building)
     {
-        int amount = building.Invested * Rules.LootPercent / 100;
-        if (amount <= 0 || !AreEnemies(building.KilledByFactionId, building.FactionId)
+        if (!AreEnemies(building.KilledByFactionId, building.FactionId)
             || GetFaction(building.KilledByFactionId) is not { IsEliminated: false } looter)
+            return;
+        int amount = building.Invested * Rules.LootPercent / 100;
+        if (building.Type.IsMine && building.Deposit is { } deposit)
+            amount += deposit.Plunder(Rules.MineRaidPercent);
+        if (amount <= 0)
             return;
         looter.Treasury.Add(amount);
         _events.Add(new GoldLooted(looter.Id, building.FactionId, amount, building.Position));

@@ -22,7 +22,8 @@ public sealed class GameRules
         int goldCap = 0, int lootPercent = 0, int demolishRefundPercent = 0,
         float daySeconds = 0f, float nightSeconds = 0f, float nightSightFactor = 1f,
         float peaceOfferSeconds = DefaultPeaceOfferSeconds, float warWarningSeconds = DefaultWarWarningSeconds,
-        DefenseRules? defense = null, VeterancyRules? veterancy = null)
+        DefenseRules? defense = null, VeterancyRules? veterancy = null,
+        int upkeepSurchargeFrom = 0, int upkeepSurchargePercent = 0, int mineRaidPercent = 0)
     {
         if (startingGold < 0)
             throw new ArgumentOutOfRangeException(nameof(startingGold));
@@ -34,8 +35,10 @@ public sealed class GameRules
             throw new ArgumentOutOfRangeException(nameof(upkeepAllowance));
         if (goldCap < 0)
             throw new ArgumentOutOfRangeException(nameof(goldCap));
-        if (lootPercent is < 0 or > 100 || demolishRefundPercent is < 0 or > 100)
-            throw new ArgumentOutOfRangeException(nameof(lootPercent), "Loot and refund are percentages.");
+        if (lootPercent is < 0 or > 100 || demolishRefundPercent is < 0 or > 100 || mineRaidPercent is < 0 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(lootPercent), "Loot, refund and mine raids are percentages.");
+        if (upkeepSurchargeFrom < 0 || upkeepSurchargePercent < 0)
+            throw new ArgumentOutOfRangeException(nameof(upkeepSurchargePercent), "The upkeep surcharge cannot be negative.");
         if (daySeconds < 0f || nightSeconds < 0f || nightSightFactor is <= 0f or > 1f)
             throw new ArgumentOutOfRangeException(nameof(nightSeconds), "Day and night last a non-negative time; night sight is a factor in (0, 1].");
         if (peaceOfferSeconds <= 0f || warWarningSeconds < 0f)
@@ -51,6 +54,9 @@ public sealed class GameRules
         StartingGold = startingGold;
         GoldCap = goldCap;
         LootPercent = lootPercent;
+        MineRaidPercent = mineRaidPercent;
+        UpkeepSurchargeFrom = upkeepSurchargeFrom;
+        UpkeepSurchargePercent = upkeepSurchargePercent;
         DemolishRefundPercent = demolishRefundPercent;
         DaySeconds = daySeconds;
         NightSeconds = nightSeconds;
@@ -123,6 +129,16 @@ public sealed class GameRules
 
     /// <summary>Share (percent) of what a building cost its owner, with its upgrades, that the faction destroying it takes.</summary>
     public int LootPercent { get; }
+
+    /// <summary>Share (percent) of what is left in a deposit that whoever destroys the enemy mine on it carries off.</summary>
+    public int MineRaidPercent { get; }
+
+    /// <summary>
+    /// A big army costs more to keep: past <see cref="UpkeepSurchargeFrom"/> living units, the upkeep of the whole army
+    /// grows by <see cref="UpkeepSurchargePercent"/> percent per unit beyond. The leader pays for his lead.
+    /// </summary>
+    public int UpkeepSurchargeFrom { get; }
+    public int UpkeepSurchargePercent { get; }
 
     /// <summary>Share (percent) of what a building cost that its owner gets back for pulling it down.</summary>
     public int DemolishRefundPercent { get; }
@@ -207,7 +223,10 @@ public sealed class GameRules
             OptionalSingle(diplomacy, "offerSeconds", DefaultPeaceOfferSeconds),
             OptionalSingle(diplomacy, "warWarningSeconds", DefaultWarWarningSeconds),
             defense,
-            veterancy);
+            veterancy,
+            OptionalInt(root, "upkeepSurchargeFrom"),
+            OptionalInt(root, "upkeepSurchargePercent"),
+            OptionalInt(root, "mineRaidPercent"));
     }
 
     private static VeterancyRules ParseVeterancy(JsonElement v) => new(v.GetProperty("ranks").EnumerateArray()

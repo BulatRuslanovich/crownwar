@@ -72,6 +72,22 @@ public sealed class GoldDeposit
         return true;
     }
 
+    /// <summary>Carries off <paramref name="percent"/> of what is left (a raid on the mine); returns the gold taken.</summary>
+    internal int Plunder(int percent)
+    {
+        if (IsEndless || IsExhausted)
+            return 0;
+        int taken = Reserve * percent / 100;
+        Reserve -= taken;
+        if (Reserve <= 0)
+        {
+            Reserve = 0;
+            _mineRemainder = 0;
+            RegenTicksLeft = Math.Max(1, RegenTicks);
+        }
+        return taken;
+    }
+
     /// <summary>One tick of refilling an exhausted deposit; true when it is full again.</summary>
     internal bool Regenerate()
     {

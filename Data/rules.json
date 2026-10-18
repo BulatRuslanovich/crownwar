@@ -8,6 +8,9 @@
   "depositReserveSeconds": 240,
   "depositRegenSeconds": 90,
   "upkeepAllowance": 60,
+  "upkeepSurchargeFrom": 25,
+  "upkeepSurchargePercent": 2,
+  "mineRaidPercent": 15,
   "veterancy": {
     "ranks": [
       { "experience": 100, "health": 1.15, "damage": 1.1 },
