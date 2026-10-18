@@ -35,7 +35,7 @@ public static partial class ArtGenerator
     private static readonly Ramp CourtR = Ramp.Of(new Color("5c5853"), 0.8f, mood: BuildingMood);
     private static readonly Ramp GlassR = Ramp.Of(new Color("2c2630"), mood: BuildingMood);
     private static readonly Ramp DoorR = Ramp.Of(new Color("4e3320"), mood: BuildingMood);
-    private static readonly Ramp RockR = Ramp.Of(new Color("6c655f"), mood: BuildingMood);
+    private static readonly Ramp RockR = Ramp.Of(new Color("8a7f72"), mood: BuildingMood * 0.5f);
     private static readonly Ramp OreR = Ramp.Of(new Color("e9b93c"), mood: BuildingMood);
 
     /// <summary>
@@ -915,7 +915,15 @@ public static partial class ArtGenerator
             c.Stroke(32 - Mathf.Cos(a) * 3f, 15 - Mathf.Sin(a) * 3f, 32 + Mathf.Cos(a) * 3f, 15 + Mathf.Sin(a) * 3f, 1f, tier >= 3 ? GoldR : WoodR, 0.5f);
         }
         c.Ball(32, 15, 1.1f, 1.1f, SteelR, 0.8f);
-        Flag(c, 50, 8, frame, 10, pole: 22);
+        Flag(c, 41, 0, frame, 9, pole: 11);
+        // The winding house by the left rock, roofed in the owner's colours, its rope running up to the wheel.
+        c.Block(3, 51, 17, 10, WoodR);
+        for (int x = 6; x < 18; x += 3)
+            c.Rect(x, 52, 1, 8, DarkWoodR.Shade);
+        ShutteredWindow(c, 9, 54, 4, 3);
+        SlateRoof(c, 1, 22, 39, 45, 0.5f, 5);
+        SlateRoof(c, 1, 22, 45, 52, -0.1f, 6);
+        c.Line(21, 44, 29, 17, RopeR.Base);
         // The adit cut into the front rock: a dark mouth, a frame of timber (then stone) round it, lamplight at night.
         const int left = 27, right = 38, top = foot + 35, bottom = foot + 49;
         for (int y = top; y < bottom; y++)
@@ -933,9 +941,9 @@ public static partial class ArtGenerator
         c.Stroke(right - 3, bottom - 6, right - 3, 79, 1f, IronR, 0.2f);
         if (tier >= 2)
         {
-            c.Stroke(left - 5, top + 1, left - 5, top + 6, 1f, IronR);
-            c.Ball(left - 5, top + 7, 1.6f, 2f, Ramp.Of(new Color("ffd25a"), mood: FigureMood), 0.8f); // a lantern by the adit
-            c.Lit(left - 8, top + 4, 7, 7, WindowGlow);
+            c.Stroke(right + 4, top + 1, right + 4, top + 6, 1f, IronR);
+            c.Ball(right + 4, top + 7, 1.6f, 2f, Ramp.Of(new Color("ffd25a"), mood: FigureMood), 0.8f); // a lantern by the adit
+            c.Lit(right + 1, top + 4, 7, 7, WindowGlow);
         }
         // Carts of gold beside the rails: one, then two; at the top level a heap of gold at the adit's mouth.
         Cart(c, 44, 63, frame, glint, 0);
@@ -1000,46 +1008,93 @@ public static partial class ArtGenerator
     }
 
     /// <summary>
-    /// A rock of the outcrop at (cx, cy): roughly round, broken into flat facets — a broad top lit by the sun, faces
-    /// turning into shade to the right and below — crossed by a vein of gold.
+    /// A rock of the outcrop at (cx, cy), w × h: an angular block, an irregular polygon whose base sits flat on the
+    /// ground, cut into flat facets that meet at a ridge up and left of its middle. Each facet takes one flat tone by the
+    /// way it faces — those towards the sun (up-left) light, those away in shade, a top face round the ridge brightest —
+    /// so the rock reads as hewn stone, not as a lumpy ball. A seam of gold runs across it in the tone of the facet it
+    /// crosses, so it sits in the rock; a few chips of ore glint in its lit faces.
     /// </summary>
     private static void Outcrop(PixelCanvas c, float cx, float cy, float w, float h, int seed, bool veins = true)
     {
-        float turn = Hash(seed, 2, 35) % 100 / 100f * Mathf.Tau;
+        const int n = 6;
+        var corners = new Vector2[n];
+        float turn = Hash(seed, 2, 35) % 100 / 100f * Mathf.Tau / n;
+        for (int k = 0; k < n; k++)
+        {
+            float a = turn + (k + (Hash(seed, k, 36) % 30 - 15) / 100f) * Mathf.Tau / n;
+            float r = 0.78f + Hash(k, seed, 37) % 30 * 0.01f;
+            var p = new Vector2(cx + Mathf.Cos(a) * w * r, cy + Mathf.Sin(a) * h * r);
+            if (p.Y > cy + h * 0.55f)
+                p.Y = cy + h * 0.55f + (p.Y - cy - h * 0.55f) * 0.25f; // the base sits flat
+            corners[k] = p;
+        }
+        var ridge = new Vector2(cx - w * 0.18f, cy - h * 0.3f);
+        float Cross(Vector2 a, Vector2 b, Vector2 p) => (b.X - a.X) * (p.Y - a.Y) - (b.Y - a.Y) * (p.X - a.X);
+        float FacetLight(int k)
+        {
+            // The facet's outward normal (perpendicular to its outer edge), the sun from the upper left.
+            var a = corners[k];
+            var b = corners[(k + 1) % n];
+            var normal = new Vector2(b.Y - a.Y, a.X - b.X).Normalized();
+            return Mathf.Round(Mathf.Clamp(-normal.X * 1.2f - normal.Y * 0.6f, -2f, 0f));
+        }
+
+        int Side(Vector2 p)
+        {
+            // The side facet whose triangle (ridge and its outer edge) holds p, or -1 outside the rock.
+            for (int k = 0; k < n; k++)
+            {
+                var a = corners[k];
+                var b = corners[(k + 1) % n];
+                float s0 = Cross(ridge, a, p), s1 = Cross(a, b, p), s2 = Cross(b, ridge, p);
+                if (s0 >= 0f && s1 >= 0f && s2 >= 0f || s0 <= 0f && s1 <= 0f && s2 <= 0f)
+                    return k;
+            }
+            return -1;
+        }
+
+        int Facet(float px, float py)
+        {
+            // The facet holding (px, py): -1 outside the rock, n on the top face — the rock's outline shrunk round the ridge.
+            var p = new Vector2(px, py);
+            int side = Side(p);
+            if (side < 0)
+                return -1;
+            return Side(ridge + (p - ridge) / 0.55f) >= 0 ? n : side;
+        }
+
+        float LightAt(int facet, int y) => facet == n ? 1f : FacetLight(facet) - (y > cy + h * 0.35f ? 1f : 0f);
         for (int y = (int)Mathf.Floor(cy - h); y <= (int)Mathf.Ceil(cy + h); y++)
             for (int x = (int)Mathf.Floor(cx - w); x <= (int)Mathf.Ceil(cx + w); x++)
             {
-                float nx = (x + 0.5f - cx) / w, ny = (y + 0.5f - cy) / h;
-                float a = Mathf.Atan2(ny, nx);
-                // A ragged outline: the radius changes from facet to facet.
-                int sector = (int)Mathf.Floor((a + turn + Mathf.Tau) / (Mathf.Tau / 7f)) % 7;
-                float reach = 0.88f + Hash(seed, sector, 36) % 13 * 0.012f;
-                float d = Mathf.Sqrt(nx * nx + ny * ny);
-                if (d > reach)
-                    continue;
-                float light;
-                if (d < 0.42f + Hash(seed, 3, 37) % 10 * 0.012f && ny < 0.25f)
-                    light = 1.1f; // the flat top
-                else
-                {
-                    // Each facet faces one way: lit if towards the sun (up-left).
-                    float facing = (sector + 0.5f) * Mathf.Tau / 7f - turn;
-                    light = -Mathf.Cos(facing) * 0.9f - Mathf.Sin(facing) * 1.2f - 0.2f;
-                }
-                c.Shade(x, y, RockR, light);
+                int facet = Facet(x + 0.5f, y + 0.5f);
+                if (facet >= 0)
+                    c.Shade(x, y, RockR, LightAt(facet, y));
             }
         if (!veins)
             return;
-        // A vein of gold zigzagging down across the face: a lit upper edge over a darker lower one, so it reads as a
-        // seam in the rock rather than specks; it fades into the rock's shadow on the right.
-        float vy = cy - h * 0.15f, slope = (seed % 2 == 0 ? 0.35f : -0.3f);
-        for (int i = -(int)(w * 0.8f); i <= (int)(w * 0.8f); i++)
+        // The seam: two pixels deep, gently bowed, its tone following the facets it crosses.
+        float vy = cy - h * 0.05f + (seed % 3 - 1) * 2f, slope = seed % 2 == 0 ? 0.3f : -0.25f;
+        for (int i = -(int)w; i <= (int)w; i++)
         {
-            int px = (int)cx + i, py = (int)Mathf.Round(vy + i * slope + (Mathf.Abs(i) / 3 % 2 == 0 ? 0f : 1f));
-            float light = 1.3f - Mathf.Max(0f, i) / w * 1.6f;
-            foreach (var (dy, d) in new[] { (0, 0f), (1, -1f) })
-                if (Mathf.Pow((px + 0.5f - cx) / w, 2) + Mathf.Pow((py + dy + 0.5f - cy) / h, 2) < 0.7f)
-                    c.Shade(px, py + dy, OreR, light + d);
+            int px = (int)cx + i, py = (int)Mathf.Round(vy + i * slope + Mathf.Sin(i * 0.35f + seed) * 1.2f);
+            for (int dy = 0; dy < 2; dy++)
+            {
+                int facet = Facet(px + 0.5f, py + dy + 0.5f);
+                if (facet >= 0 && Facet(px + 0.5f, py + dy + 2.5f) >= 0)
+                    c.Shade(px, py + dy, OreR, LightAt(facet, py + dy) + (dy == 0 ? 1f : 0f));
+            }
+        }
+        // Chips of ore in the lit faces.
+        for (int k = 0; k < 3; k++)
+        {
+            int px = (int)(cx - w * 0.6f + Hash(seed, k, 38) % (int)(w * 1.2f)), py = (int)(cy - h * 0.5f + Hash(k, seed, 39) % (int)(h * 0.9f));
+            int facet = Facet(px + 0.5f, py + 0.5f);
+            if (facet < 0 || LightAt(facet, py) < 0f)
+                continue;
+            c.Shade(px, py, OreR, 2f);
+            c.Shade(px + 1, py, OreR, 1f);
+            c.Shade(px, py + 1, OreR, 0f);
         }
     }
 }

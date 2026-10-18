@@ -47,11 +47,11 @@ public static partial class ArtGenerator
     /// modulo 4 in each direction (row); rows 27–42 this biome's ground reaching into a neighbouring cell of another
     /// biome, by the 8-bit mask of its neighbours of this biome (row = mask / 16, column = mask % 16).
     /// Animated tiles keep their frames in the rows under the first one (<see cref="ArtLayout.TileFrames"/>): water
-    /// (4 variants) from row 43, and woods by mask and by the cell's position modulo 2 from row 51 (four positions, each
-    /// with its frames). Rows 67–68 hold the decor (one kind a column); from row 69, the shores of water cells by the
-    /// 8-bit mask of the land around them, and from row 133 the coasts of land cells by the mask of the water around
-    /// them (sixteen masks a row, each row followed by its frames).
-    /// Rows 2, 5, 7–10 and 47–50 are free.
+    /// (4 variants) from row 43. Rows 67–68 hold the decor (one kind a column); from row 69, the shores of water cells
+    /// by the 8-bit mask of the land around them, from row 133 the coasts of land cells by the mask of the water around
+    /// them (sixteen masks a row, each row followed by its frames), and from row 197 the woods by mask and by the cell's
+    /// position modulo 4 in each direction (sixteen positions, each with its frames).
+    /// Rows 2, 5, 7–10 and 47–66 are free.
     /// </summary>
     private static PixelCanvas Terrain(TerrainPalette land)
     {
@@ -74,7 +74,7 @@ public static partial class ArtGenerator
             Cell(c, mask, ArtLayout.BridgeRow); BridgeTile(c, mask);
             for (int frame = 0; frame < ArtLayout.TileFrames; frame++)
             {
-                for (int parity = 0; parity < 4; parity++)
+                for (int parity = 0; parity < ArtLayout.ForestPeriod * ArtLayout.ForestPeriod; parity++)
                 {
                     Cell(c, mask, ArtLayout.ForestRangeRow + parity * ArtLayout.TileFrames + frame);
                     ForestRangeTile(c, mask, parity, frame);
@@ -380,8 +380,8 @@ public static partial class ArtGenerator
                             int span = _period * perTile;
                             int gx = (((_px + tx) * perTile + i) % span + span) % span, gy = (((_py + ty) * perTile + j) % span + span) % span;
                             int h = Hash(gx, gy, 61 + spacing);
-                            // Big peaks wander more than small crowns.
-                            int jitter = perTile == 1 ? 6 : 2;
+                            // Big peaks wander more than crowns.
+                            int jitter = perTile == 1 ? 6 : 4;
                             float x = tx * T + spacing / 2 + spacing * i + h % (2 * jitter + 1) - jitter + (shifted ? 8 : -4);
                             float y = ty * T + spacing / 2 + spacing * j + h / 10 % (2 * jitter + 1) - jitter;
                             yield return (x, y, h);
@@ -418,7 +418,7 @@ public static partial class ArtGenerator
     private static void ForestRangeTile(PixelCanvas c, int mask, int parity, int frame)
     {
         int sway = frame switch { 1 => 1, 3 => -1, _ => 0 };
-        var range = new Range(mask, parity);
+        var range = new Range(mask, parity, ArtLayout.ForestPeriod);
         GrassTile(c, 30 + parity);
         var crowns = new System.Collections.Generic.List<(float X, float Y, float R, int Hash)>();
         foreach (var (x, y, h) in range.Points(16))

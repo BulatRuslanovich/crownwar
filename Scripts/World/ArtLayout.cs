@@ -21,17 +21,17 @@ public static class ArtLayout
     /// <summary>Animated: the coasts of land cells, the water biting into them, by the 8-bit mask of the water around them (laid out as the shores).</summary>
     public const int CoastRow = ShoreRow + 16 * TileFrames;
     /// <summary>
-    /// Woods (animated: four positions modulo 2 in x and y, each <see cref="TileFrames"/> rows) and mountain ranges
-    /// (sixteen positions modulo 4), by neighbour mask.
+    /// Woods (animated: sixteen positions modulo 4 in x and y, each <see cref="TileFrames"/> rows, after the coasts) and
+    /// mountain ranges (sixteen positions modulo 4), by neighbour mask.
     /// </summary>
-    public const int ForestRangeRow = 51, MountainRangeRow = 11;
+    public const int ForestRangeRow = CoastRow + 16 * TileFrames, MountainRangeRow = 11;
     /// <summary>Tiles before the woods' and the ranges' patterns repeat (the rows per position).</summary>
-    public const int ForestPeriod = 2, MountainPeriod = 4;
+    public const int ForestPeriod = 4, MountainPeriod = 4;
     /// <summary>First of 16 rows of a biome's ground blending into a neighbouring cell of another biome (8-bit neighbour mask).</summary>
     public const int BiomeBlendRow = 27;
     /// <summary>Decor: small things lying about on open ground, one kind a column over two rows.</summary>
     public const int DecorRow = 67, DecorKinds = 32;
-    public const int TerrainRows = CoastRow + 16 * TileFrames;
+    public const int TerrainRows = ForestRangeRow + ForestPeriod * ForestPeriod * TileFrames;
 
     /// <summary>Where the shore of a water cell with land round it by <paramref name="mask"/> (8-bit) is in the atlas.</summary>
     public static Vector2I ShoreTile(int mask) => new(mask % 16, ShoreRow + mask / 16 * TileFrames);
@@ -48,7 +48,7 @@ public static class ArtLayout
         yield return (WaterRow, TerrainVariants, waves, false);
         for (int row = 0; row < 32; row++)
             yield return (ShoreRow + row * TileFrames, 16, waves, false); // shores, then coasts
-        for (int parity = 0; parity < 4; parity++)
+        for (int parity = 0; parity < ForestPeriod * ForestPeriod; parity++)
             yield return (ForestRangeRow + parity * TileFrames, 16, new[] { 1.4f, 0.45f, 1.1f, 0.45f }, false);
     }
 
