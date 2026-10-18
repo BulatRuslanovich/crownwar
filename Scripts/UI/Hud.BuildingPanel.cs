@@ -29,6 +29,7 @@ public partial class Hud
         bool own = building.FactionId == _match.LocalFactionId;
         UpdateBuildingInfo(building, own);
         UpdateRecruitButtons(building, own);
+        UpdateDoctrine(building, own);
         UpdateUpgrade(building, own);
         UpdateDemolish(building, own);
         UpdateQueue(building, own);
@@ -53,8 +54,9 @@ public partial class Hud
         _info.Text = string.Format(Tr("HUD_HEALTH"), building.Health, building.MaxHealth) + "\n" + status;
     }
 
-    /// <summary>What each recruit button last showed: why it is refused (if it is), in which language.</summary>
-    private readonly List<(RecruitError Error, int Text)> _recruitShown = new();
+    /// <summary>What each recruit button last showed: why it is refused (if it is), the price (the doctrine changes it),
+    /// in which language.</summary>
+    private readonly List<(RecruitError Error, int Cost, int Text)> _recruitShown = new();
 
     private void UpdateRecruitButtons(Building building, bool own)
     {
@@ -66,11 +68,11 @@ public partial class Hud
             var (button, typeId) = _recruitButtons[i];
             // Buttons stay clickable: the simulation is the judge and explains a refusal with a message.
             var error = _match.Sim.CanRecruit(_match.LocalFactionId, building.Id, typeId);
+            var type = _match.Sim.UnitTypeFor(_match.LocalFactionId, typeId); // as the player's doctrine trains it
             var shown = _recruitShown[i];
-            if (!Changed(ref shown, (error, _textVersion)))
+            if (!Changed(ref shown, (error, type.Cost, _textVersion)))
                 continue;
             _recruitShown[i] = shown;
-            var type = _match.Sim.Rules.Units.Get(typeId);
             // A kind not opened yet (too few barracks) is not shown at all.
             button.Visible = error != RecruitError.Locked;
             button.Text = $"{type.Cost}{Tr("HUD_GOLD_SHORT")}";
@@ -209,7 +211,7 @@ public partial class Hud
             };
             _recruitRow.AddChild(button);
             _recruitButtons.Add((button, typeId));
-            _recruitShown.Add(((RecruitError)(-1), -1));
+            _recruitShown.Add(((RecruitError)(-1), -1, -1));
         }
     }
 }

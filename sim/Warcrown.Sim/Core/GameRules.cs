@@ -23,7 +23,8 @@ public sealed class GameRules
         float daySeconds = 0f, float nightSeconds = 0f, float nightSightFactor = 1f,
         float peaceOfferSeconds = DefaultPeaceOfferSeconds, float warWarningSeconds = DefaultWarWarningSeconds,
         DefenseRules? defense = null, VeterancyRules? veterancy = null,
-        int upkeepSurchargeFrom = 0, int upkeepSurchargePercent = 0, int mineRaidPercent = 0)
+        int upkeepSurchargeFrom = 0, int upkeepSurchargePercent = 0, int mineRaidPercent = 0,
+        IReadOnlyList<Doctrine>? doctrines = null, int doctrineBarracks = 0)
     {
         if (startingGold < 0)
             throw new ArgumentOutOfRangeException(nameof(startingGold));
@@ -57,6 +58,19 @@ public sealed class GameRules
         MineRaidPercent = mineRaidPercent;
         UpkeepSurchargeFrom = upkeepSurchargeFrom;
         UpkeepSurchargePercent = upkeepSurchargePercent;
+        Doctrines = doctrines ?? Array.Empty<Doctrine>();
+        DoctrineBarracks = doctrineBarracks;
+        if (doctrineBarracks < 0)
+            throw new ArgumentOutOfRangeException(nameof(doctrineBarracks));
+        foreach (var doctrine in Doctrines)
+            doctrine.Validate();
+        if (Doctrines.Select(d => d.Id).Distinct().Count() != Doctrines.Count)
+            throw new ArgumentException("Duplicate doctrine id.");
+        foreach (var unit in units.All)
+        {
+            if (unit.Doctrine != null && FindDoctrine(unit.Doctrine) == null)
+                throw new ArgumentException($"Unit type '{unit.Id}' belongs to unknown doctrine '{unit.Doctrine}'.");
+        }
         DemolishRefundPercent = demolishRefundPercent;
         DaySeconds = daySeconds;
         NightSeconds = nightSeconds;
@@ -139,6 +153,14 @@ public sealed class GameRules
     /// </summary>
     public int UpkeepSurchargeFrom { get; }
     public int UpkeepSurchargePercent { get; }
+
+    /// <summary>The doctrines a faction may choose from (none: every kind of unit is open to everyone).</summary>
+    public IReadOnlyList<Doctrine> Doctrines { get; }
+
+    /// <summary>Finished barracks a faction needs before it may choose its doctrine.</summary>
+    public int DoctrineBarracks { get; }
+
+    public Doctrine? FindDoctrine(string? id) => id == null ? null : Doctrines.FirstOrDefault(d => d.Id == id);
 
     /// <summary>Share (percent) of what a building cost that its owner gets back for pulling it down.</summary>
     public int DemolishRefundPercent { get; }
@@ -226,8 +248,20 @@ public sealed class GameRules
             veterancy,
             OptionalInt(root, "upkeepSurchargeFrom"),
             OptionalInt(root, "upkeepSurchargePercent"),
-            OptionalInt(root, "mineRaidPercent"));
+            OptionalInt(root, "mineRaidPercent"),
+            root.TryGetProperty("doctrines", out var doctrines) ? doctrines.EnumerateArray().Select(ParseDoctrine).ToList() : null,
+            OptionalInt(root, "doctrineBarracks"));
     }
+
+    private static Doctrine ParseDoctrine(JsonElement d) => new(
+        RequiredString(d, "id"),
+        RequiredString(d, "name"),
+        OptionalSingle(d, "speed", 1f),
+        OptionalSingle(d, "health", 1f),
+        OptionalSingle(d, "damage", 1f),
+        OptionalSingle(d, "cost", 1f),
+        OptionalSingle(d, "upkeep", 1f),
+        OptionalSingle(d, "buildTime", 1f));
 
     private static VeterancyRules ParseVeterancy(JsonElement v) => new(v.GetProperty("ranks").EnumerateArray()
         .Select(r => new VeteranRank(
@@ -284,7 +318,8 @@ public sealed class GameRules
         BarracksRequired: OptionalInt(u, "barracksRequired"),
         IsFlying: OptionalBool(u, "flying"),
         HitsAir: OptionalBool(u, "antiAir"),
-        SplashRadius: OptionalSingle(u, "splash"));
+        SplashRadius: OptionalSingle(u, "splash"),
+        Doctrine: u.TryGetProperty("doctrine", out var doctrine) ? doctrine.GetString() : null);
 
     private static BuildingType ParseBuilding(JsonElement b)
     {

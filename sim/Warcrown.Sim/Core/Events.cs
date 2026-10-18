@@ -24,6 +24,17 @@ public enum RecruitError
     ArmyCapReached,
 }
 
+public enum DoctrineError
+{
+    None,
+    UnknownDoctrine,
+    NotOwner,
+    /// <summary>The faction already committed to a doctrine: the choice is for the whole match.</summary>
+    AlreadyChosen,
+    /// <summary>Fewer finished barracks than the rules' DoctrineBarracks.</summary>
+    NeedsBarracks,
+}
+
 public enum UpgradeError
 {
     None,
@@ -173,3 +184,8 @@ public sealed record SplashLanded(int FactionId, int SourceId, Vector2 Position,
 /// <paramref name="Fire"/>) from <paramref name="Position"/>.
 /// </summary>
 public sealed record ProjectileFired(int FactionId, Vector2 Position, bool Splash = false, bool Fire = false) : SimEvent(FactionId);
+
+/// <summary>The faction committed to <paramref name="DoctrineId"/>: its units open and every new recruit follows it.</summary>
+public sealed record DoctrineChosen(int FactionId, string DoctrineId) : SimEvent(FactionId);
+
+public sealed record DoctrineRejected(int FactionId, string DoctrineId, DoctrineError Reason) : SimEvent(FactionId);

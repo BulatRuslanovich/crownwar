@@ -45,5 +45,8 @@ public sealed record AnswerPeaceCommand(int FactionId, int OtherFactionId, bool 
 /// <summary>Break the peace with another faction: war begins after the rules' warning time.</summary>
 public sealed record DeclareWarCommand(int FactionId, int OtherFactionId) : Command(FactionId);
 
+/// <summary>Commit to a doctrine for the rest of the match (once, with enough barracks).</summary>
+public sealed record ChooseDoctrineCommand(int FactionId, string DoctrineId) : Command(FactionId);
+
 /// <summary>Pay for a building and start constructing it with its top-left corner at <paramref name="Anchor"/>.</summary>
 public sealed record BuildCommand(int FactionId, string BuildingTypeId, Cell Anchor) : Command(FactionId);

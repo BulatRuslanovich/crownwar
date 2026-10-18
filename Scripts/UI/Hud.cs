@@ -87,6 +87,7 @@ public partial class Hud : CanvasLayer
         _title = GetNode<Label>("BuildingPanel/Rows/Title");
         _info = GetNode<Label>("BuildingPanel/Rows/Info");
         _recruitRow = GetNode<Container>("BuildingPanel/Rows/RecruitButtons");
+        CreateDoctrineRow(GetNode("BuildingPanel/Rows"), _recruitRow);
         _queue = GetNode<Label>("BuildingPanel/Rows/Queue");
         _progress = GetNode<ProgressBar>("BuildingPanel/Rows/Progress");
         _upgradeTitle = GetNode<Label>("BuildingPanel/Rows/UpgradeTitle");

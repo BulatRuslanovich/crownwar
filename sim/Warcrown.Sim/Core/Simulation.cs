@@ -160,11 +160,13 @@ public sealed partial class Simulation
         CheckEliminations();
     }
 
-    public Unit SpawnUnit(string typeId, int factionId, Vector2 position)
+    /// <summary>A unit of the kind as its faction trains it (its doctrine applied).</summary>
+    public Unit SpawnUnit(string typeId, int factionId, Vector2 position) => SpawnUnit(UnitTypeFor(factionId, typeId), factionId, position);
+
+    private Unit SpawnUnit(UnitType type, int factionId, Vector2 position)
     {
         if (!Map.IsWalkable(Cell.FromPosition(position)))
             throw new ArgumentException($"Cannot spawn a unit on a blocked tile at {position}.");
-        var type = Rules.Units.Get(typeId);
         var unit = new Unit(_nextEntityId++, type, factionId, position);
         _units.Add(unit);
         _entitiesById.Add(unit.Id, unit);
@@ -220,6 +222,9 @@ public sealed partial class Simulation
                 break;
             case DeclareWarCommand war:
                 ApplyDeclareWar(war);
+                break;
+            case ChooseDoctrineCommand doctrine:
+                ApplyChooseDoctrine(doctrine);
                 break;
             default:
                 throw new NotSupportedException($"Unhandled command type {command.GetType().Name}.");

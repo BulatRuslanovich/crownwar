@@ -15,6 +15,12 @@ public partial class Hud
             case RecruitRejected rejected when rejected.FactionId == player:
                 ShowMessage(HudText.Describe(rejected.Reason));
                 break;
+            case DoctrineChosen chosen when chosen.FactionId == player && _match.Sim.Rules.FindDoctrine(chosen.DoctrineId) is { } doctrine:
+                ShowMessage(string.Format(Tr("MSG_DOCTRINE_CHOSEN"), Tr(HudText.DoctrineKey(doctrine))));
+                break;
+            case DoctrineRejected rejected when rejected.FactionId == player:
+                ShowMessage(HudText.Describe(rejected.Reason, _match.Sim.Rules.DoctrineBarracks));
+                break;
             case BuildRejected rejected when rejected.FactionId == player:
                 ShowMessage(HudText.DescribePlacement(rejected.Reason));
                 break;

@@ -108,6 +108,42 @@ public static class HudText
         return string.Join("\n", lines);
     }
 
+    /// <summary>The translation key of a doctrine's name (DOCTRINE_RAID…); its description is the key with _DESC.</summary>
+    public static string DoctrineKey(Doctrine doctrine) => "DOCTRINE_" + doctrine.Id.ToUpperInvariant();
+
+    /// <summary>A doctrine button's tooltip: what it is about, how it changes recruits, which kinds it opens.</summary>
+    public static string DescribeDoctrine(Simulation sim, Doctrine doctrine)
+    {
+        var lines = new List<string> { T(DoctrineKey(doctrine)), T(DoctrineKey(doctrine) + "_DESC") };
+        void Factor(string key, float factor)
+        {
+            if (!Mathf.IsEqualApprox(factor, 1f))
+                lines.Add(string.Format(T(key), (factor - 1f) * 100f));
+        }
+        Factor("DOCTRINE_SPEED", doctrine.SpeedFactor);
+        Factor("DOCTRINE_HEALTH", doctrine.HealthFactor);
+        Factor("DOCTRINE_DAMAGE", doctrine.DamageFactor);
+        Factor("DOCTRINE_COST", doctrine.CostFactor);
+        Factor("DOCTRINE_UPKEEP", doctrine.UpkeepFactor);
+        Factor("DOCTRINE_TRAINING", doctrine.BuildTimeFactor);
+        var kinds = new List<string>();
+        foreach (var type in sim.Rules.Units.All)
+            if (type.Doctrine == doctrine.Id)
+                kinds.Add(Names.Of(type));
+        if (kinds.Count > 0)
+            lines.Add(string.Format(T("DOCTRINE_OPENS"), string.Join(", ", kinds)));
+        lines.Add(T("DOCTRINE_ONCE"));
+        return string.Join("\n", lines);
+    }
+
+    public static string Describe(DoctrineError error, int barracks) => error switch
+    {
+        DoctrineError.NeedsBarracks => string.Format(T("ERR_DOCTRINE_BARRACKS"), barracks),
+        DoctrineError.AlreadyChosen => T("ERR_DOCTRINE_CHOSEN"),
+        DoctrineError.UnknownDoctrine => T("ERR_UNKNOWN_BUILDING"),
+        _ => T("ERR_NOT_OWNER"),
+    };
+
     private static string DescribeDeposit(GoldDeposit d, int levelBonus)
     {
         if (d.IsExhausted)

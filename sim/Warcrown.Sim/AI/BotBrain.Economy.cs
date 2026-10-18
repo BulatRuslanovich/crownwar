@@ -68,7 +68,7 @@ public sealed partial class BotBrain
                 gold -= barracksCost;
                 _lastBarracksTick = _sim.Tick;
             }
-            else if (capped || !behind)
+            else if (capped || !behind || barracks < _sim.Rules.DoctrineBarracks) // the doctrine is worth saving for even when behind
             {
                 reserve += barracksCost;
             }
@@ -159,13 +159,13 @@ public sealed partial class BotBrain
 
     private UnitType ChooseUnitType(Building producer)
     {
-        var options = producer.Type.Recruits.Select(_sim.Rules.Units.Get).Where(t => _sim.IsUnlocked(FactionId, t)).ToList();
+        var options = producer.Type.Recruits.Select(id => _sim.UnitTypeFor(FactionId, id)).Where(t => _sim.IsUnlocked(FactionId, t)).ToList();
         if (options.Count == 0)
-            return producer.Type.Recruits.Select(_sim.Rules.Units.Get).OrderBy(t => t.BarracksRequired).First();
-        // Siege engines come once there is an army to escort them: about one per four soldiers (towers do not fall
+            return producer.Type.Recruits.Select(id => _sim.UnitTypeFor(FactionId, id)).OrderBy(t => t.BarracksRequired).First();
+        // Siege engines come once there is an army to escort them: about one per five soldiers (towers do not fall
         // to swords); a monk per eight.
         var army = _sim.Units.Where(u => u.FactionId == FactionId).ToList();
-        bool wantRam = army.Count >= SoldiersPerRam && army.Count(u => u.Type.IsSiege) * SoldiersPerRam < army.Count;
+        bool wantRam = army.Count >= SiegeFromArmy && army.Count(u => u.Type.IsSiege) * SoldiersPerRam < army.Count;
         bool wantMonk = army.Count >= MonkEvery && army.Count(u => u.Type.IsHealer) * MonkEvery < army.Count;
         int siegeKinds = Math.Max(1, options.Count(t => t.IsSiege));
         var weights = options.Select(t => t.IsSiege ? (wantRam ? 0.35f / siegeKinds : 0f)
@@ -213,14 +213,34 @@ public sealed partial class BotBrain
         }
         return options[^1];
 
-        static float Bonus(UnitType attacker, UnitType target) =>
-            attacker.BonusAgainst != null && attacker.BonusAgainst.TryGetValue(target.Id, out float bonus) ? bonus : 1f;
-
         // A fixed mix: mostly infantry, some archers and heavies.
         // Flyers are a seasoning: a griffin now and then, a dragon more rarely.
         static float BaseWeight(UnitType t) => t.IsFlying ? (t.IsRanged ? 0.08f : 0.12f)
             : t.IsRanged ? 0.25f : t.RangedArmor > 0f ? 0.25f : 0.5f;
     }
+
+    /// <summary>
+    /// Commits to a doctrine as soon as the rules allow. Thinking bots take the one whose own kinds hit what the enemies
+    /// field hardest (by the rules' counters); the easy one picks at random.
+    /// </summary>
+    private void ChooseDoctrine(Faction me)
+    {
+        if (me.Doctrine != null)
+            return;
+        var open = _sim.Rules.Doctrines.Where(d => _sim.CanChooseDoctrine(FactionId, d.Id) == DoctrineError.None).ToList();
+        if (open.Count == 0)
+            return;
+        var pick = open[_rng.Next(open.Count)];
+        var enemies = _sim.Units.Where(u => u.FactionId >= 0 && _sim.AreEnemies(FactionId, u.FactionId)).ToList();
+        if (_profile.ReadsDoctrine && enemies.Count > 0)
+            pick = open.OrderByDescending(d => _sim.Rules.Units.All.Where(t => t.Doctrine == d.Id)
+                    .Sum(t => enemies.Average(e => Bonus(t, e.Type) - 1f)))
+                .First();
+        Issue(new ChooseDoctrineCommand(FactionId, pick.Id));
+    }
+
+    private static float Bonus(UnitType attacker, UnitType target) =>
+        attacker.BonusAgainst != null && attacker.BonusAgainst.TryGetValue(target.Id, out float bonus) ? bonus : 1f;
 
     /// <summary>
     /// Nearest free deposit that is closer to our castle than to any enemy castle and not guarded; while

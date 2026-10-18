@@ -91,7 +91,7 @@ public static class NetCodec
 
     private enum CommandTag : byte
     {
-        Move = 1, Attack, Recruit, Build, Upgrade, Demolish, Rally, ProposePeace, AnswerPeace, DeclareWar,
+        Move = 1, Attack, Recruit, Build, Upgrade, Demolish, Rally, ProposePeace, AnswerPeace, DeclareWar, ChooseDoctrine,
     }
 
     public static byte[] Encode(NetMessage message)
@@ -285,6 +285,9 @@ public static class NetCodec
                 case DeclareWarCommand c:
                     w.Write((byte)CommandTag.DeclareWar); w.Write(c.FactionId); w.Write(c.OtherFactionId);
                     break;
+                case ChooseDoctrineCommand c:
+                    w.Write((byte)CommandTag.ChooseDoctrine); w.Write(c.FactionId); WriteString(w, c.DoctrineId);
+                    break;
                 case SetRallyCommand c:
                     w.Write((byte)CommandTag.Rally); w.Write(c.FactionId); w.Write(c.BuildingId);
                     w.Write(c.Point.HasValue);
@@ -314,6 +317,7 @@ public static class NetCodec
                 CommandTag.ProposePeace => new ProposePeaceCommand(r.ReadInt32(), r.ReadInt32()),
                 CommandTag.AnswerPeace => new AnswerPeaceCommand(r.ReadInt32(), r.ReadInt32(), r.ReadBoolean()),
                 CommandTag.DeclareWar => new DeclareWarCommand(r.ReadInt32(), r.ReadInt32()),
+                CommandTag.ChooseDoctrine => new ChooseDoctrineCommand(r.ReadInt32(), ReadString(r)),
                 var tag => throw new FormatException($"Unknown command tag {(byte)tag}."),
             });
         }

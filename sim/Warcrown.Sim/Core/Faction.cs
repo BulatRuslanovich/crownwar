@@ -43,6 +43,9 @@ public sealed class Faction
 
     public bool IsEliminated { get; internal set; }
 
+    /// <summary>The doctrine the faction committed to (see <see cref="Units.Doctrine"/>), or null while it has none.</summary>
+    public string? Doctrine { get; internal set; }
+
     /// <summary>Started with a capital, so it competes for victory and is eliminated without one.</summary>
     internal bool IsContender => CapitalId != 0;
 }

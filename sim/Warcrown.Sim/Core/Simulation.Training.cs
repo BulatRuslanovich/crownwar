@@ -25,11 +25,12 @@ public sealed partial class Simulation
             return RecruitError.NotComplete;
         if (!building.Type.Recruits.Contains(unitTypeId))
             return RecruitError.CannotRecruitType;
-        if (!IsUnlocked(factionId, Rules.Units.Get(unitTypeId)))
+        var type = UnitTypeFor(factionId, unitTypeId);
+        if (!IsUnlocked(factionId, type))
             return RecruitError.Locked;
         if (PopulationOf(factionId) >= faction.ArmyCap)
             return RecruitError.ArmyCapReached;
-        if (!faction.Treasury.CanAfford(Rules.Units.Get(unitTypeId).Cost))
+        if (!faction.Treasury.CanAfford(type.Cost))
             return RecruitError.NotEnoughGold;
         return RecruitError.None;
     }
@@ -49,8 +50,10 @@ public sealed partial class Simulation
         return level;
     }
 
-    /// <summary>Whether the faction may train this kind now.</summary>
-    public bool IsUnlocked(int factionId, UnitType type) => type.BarracksRequired <= UnlockLevel(factionId);
+    /// <summary>Whether the faction may train this kind now: enough barracks, and its doctrine if the kind has one.</summary>
+    public bool IsUnlocked(int factionId, UnitType type) =>
+        type.BarracksRequired <= UnlockLevel(factionId)
+        && (type.Doctrine == null || GetFaction(factionId)?.Doctrine == type.Doctrine);
 
     private void ApplyRecruit(RecruitCommand recruit)
     {
@@ -63,7 +66,7 @@ public sealed partial class Simulation
             return;
         }
 
-        var type = Rules.Units.Get(recruit.UnitTypeId);
+        var type = UnitTypeFor(recruit.FactionId, recruit.UnitTypeId);
         var faction = GetFaction(recruit.FactionId)!;
         faction.Treasury.TrySpend(type.Cost);
         faction.Population++;
@@ -100,7 +103,7 @@ public sealed partial class Simulation
             building.AdvanceProduction(count, _finished);
             foreach (var type in _finished)
             {
-                var unit = SpawnUnit(type.Id, building.FactionId, FreeSpotNear(building, type.Radius));
+                var unit = SpawnUnit(type, building.FactionId, FreeSpotNear(building, type.Radius)); // as it was paid for
                 SendToRally(unit, building);
                 _events.Add(new UnitRecruited(building.FactionId, building.Id, unit.Id));
             }

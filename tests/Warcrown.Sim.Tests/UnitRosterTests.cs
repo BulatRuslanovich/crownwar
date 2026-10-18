@@ -47,7 +47,11 @@ public class UnitRosterTests
         Assert.That(sim.CanRecruit(0, first.Id, "infantry"), Is.EqualTo(RecruitError.CannotRecruitType), "barracks train nobody");
 
         BuildBarracks(sim, new Cell(6, 5));
-        Assert.That(sim.CanRecruit(0, castle.Id, "cavalry"), Is.EqualTo(RecruitError.None), "the second opens cavalry");
+        Assert.That(sim.CanRecruit(0, castle.Id, "cavalry"), Is.EqualTo(RecruitError.Locked), "the second opens the doctrines' first kinds");
+        sim.Issue(new ChooseDoctrineCommand(0, "raid"));
+        sim.Step();
+        Assert.That(sim.CanRecruit(0, castle.Id, "cavalry"), Is.EqualTo(RecruitError.None), "the raiders' cavalry");
+        Assert.That(sim.CanRecruit(0, castle.Id, "crossbowman"), Is.EqualTo(RecruitError.Locked), "not the fortress's crossbows");
 
         CombatSystem.ApplyDamage(first, first.MaxHealth, ranged: false, attackerFactionId: 1);
         sim.Step();

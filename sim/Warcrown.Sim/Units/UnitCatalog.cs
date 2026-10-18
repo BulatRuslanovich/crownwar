@@ -16,6 +16,7 @@ namespace Warcrown.Sim.Units;
 /// <item>A <see cref="IsFlying"/> unit (a griffin, a dragon) flies straight over water, mountains and buildings; only
 /// those that <see cref="HitsAir"/> (archers, crossbowmen) and shooting buildings with an anti-air attack can hurt it.</item>
 /// <item>A missile with a <see cref="SplashRadius"/> (a dragon's fire) also burns every enemy on the ground that close to its target.</item>
+/// <item>A kind with a <see cref="Doctrine"/> is only open to factions that chose that doctrine (see <see cref="Units.Doctrine"/>).</item>
 /// </list>
 /// </summary>
 public sealed record UnitType(
@@ -41,7 +42,8 @@ public sealed record UnitType(
     int BarracksRequired = 0,
     bool IsFlying = false,
     bool HitsAir = false,
-    float SplashRadius = 0f)
+    float SplashRadius = 0f,
+    string? Doctrine = null)
 {
     public bool IsRanged => ProjectileSpeed > 0f;
 

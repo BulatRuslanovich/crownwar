@@ -21,6 +21,7 @@ public class NetCodecTests
             new AnswerPeaceCommand(2, 0, Accept: true),
             new AnswerPeaceCommand(1, 0, Accept: false),
             new DeclareWarCommand(3, 1),
+            new ChooseDoctrineCommand(2, "fortress"),
         };
         yield return new HelloMessage("1.0+abc", "Игрок");
         yield return new HelloMessage("1.0+abc", "Игрок", "a1b2c3");

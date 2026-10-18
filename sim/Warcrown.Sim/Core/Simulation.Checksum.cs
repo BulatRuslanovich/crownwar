@@ -52,6 +52,7 @@ public sealed partial class Simulation
             hash.Add(faction.Treasury.Gold);
             hash.Add(faction.Treasury.Remainder);
             hash.Add(faction.IsEliminated ? 1 : 0);
+            hash.Add(faction.Doctrine is { } doctrine ? IndexOfDoctrine(doctrine) + 1 : 0);
         }
         HashDiplomacy(ref hash);
         HashPlans(ref hash);

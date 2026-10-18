@@ -35,7 +35,9 @@ public sealed partial class BotBrain
     private const float DefenceRadius = 8f;
     /// <summary>Worth credited to a tower when judging how well a target is defended.</summary>
     private const int TowerDefenceValue = 250;
-    private const int SoldiersPerRam = 4;
+    private const int SoldiersPerRam = 5;
+    /// <summary>No siege engines for a smaller army: they are useless in the field and only needed to break walls.</summary>
+    private const int SiegeFromArmy = 10;
     private const int MonkEvery = 8;
     private const int TowersPerMine = 1;
     /// <summary>An army worth less than this share of the strongest enemy one counts as outmatched.</summary>
@@ -128,6 +130,7 @@ public sealed partial class BotBrain
 
         // Outmatched: troops first; towers and upgrades wait until the army has caught up.
         bool behind = armyValue < StrongestEnemyArmy() * BehindShare;
+        ChooseDoctrine(me);
         int reserve = PlanConstruction(me, capital, army, threatened: threats.Count > 0, behind);
         if (threats.Count == 0 && !behind)
             reserve += PlanUpgrades(me, reserve, armyValue);

@@ -26,6 +26,7 @@ public enum BotDifficulty
 /// at a pace a new player can match.</param>
 /// <param name="MaxUpgrades">Mine levels it buys at most.</param>
 /// <param name="UpgradeAfter">Seconds into the match before it upgrades anything.</param>
+/// <param name="ReadsDoctrine">Chooses its doctrine against what the enemies field (by the counters) instead of at random.</param>
 public sealed record BotProfile(
     float ThinkInterval,
     int AttackArmyValue,
@@ -39,7 +40,8 @@ public sealed record BotProfile(
     float FirstMineDelay = 0f,
     float MineInterval = 0f,
     int MaxUpgrades = 0,
-    float UpgradeAfter = 0f)
+    float UpgradeAfter = 0f,
+    bool ReadsDoctrine = false)
 {
     public static BotProfile For(BotDifficulty difficulty) => difficulty switch
     {
@@ -48,9 +50,9 @@ public sealed record BotProfile(
             AttackAdvantage: 1f, MaxMines: 2, FirstMineDelay: 60f, MineInterval: 60f),
         BotDifficulty.Hard => new(ThinkInterval: 0.5f, AttackArmyValue: 700, CapitalAssaultValue: 1500,
             RetreatFraction: 0.45f, BuildsTowers: true, MaxBarracks: 7, CountersComposition: true,
-            AttackAdvantage: 1.6f, MaxMines: int.MaxValue, MaxUpgrades: int.MaxValue, UpgradeAfter: 90f),
+            AttackAdvantage: 1.6f, MaxMines: int.MaxValue, MaxUpgrades: int.MaxValue, UpgradeAfter: 90f, ReadsDoctrine: true),
         _ => new(ThinkInterval: 1f, AttackArmyValue: 800, CapitalAssaultValue: 1700,
             RetreatFraction: 0.35f, BuildsTowers: true, MaxBarracks: 5, CountersComposition: false,
-            AttackAdvantage: 1.3f, MaxMines: 3, FirstMineDelay: 20f, MineInterval: 30f, MaxUpgrades: 3, UpgradeAfter: 150f),
+            AttackAdvantage: 1.3f, MaxMines: 3, FirstMineDelay: 20f, MineInterval: 30f, MaxUpgrades: 3, UpgradeAfter: 150f, ReadsDoctrine: true),
     };
 }
