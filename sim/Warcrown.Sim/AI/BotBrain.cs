@@ -35,7 +35,7 @@ public sealed partial class BotBrain
     private const float DefenceRadius = 8f;
     /// <summary>Worth credited to a tower when judging how well a target is defended.</summary>
     private const int TowerDefenceValue = 250;
-    private const int SoldiersPerRam = 6;
+    private const int SoldiersPerRam = 4;
     private const int MonkEvery = 8;
     private const int TowersPerMine = 1;
     /// <summary>An army worth less than this share of the strongest enemy one counts as outmatched.</summary>

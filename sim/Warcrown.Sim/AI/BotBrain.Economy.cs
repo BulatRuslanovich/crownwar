@@ -162,12 +162,13 @@ public sealed partial class BotBrain
         var options = producer.Type.Recruits.Select(_sim.Rules.Units.Get).Where(t => _sim.IsUnlocked(FactionId, t)).ToList();
         if (options.Count == 0)
             return producer.Type.Recruits.Select(_sim.Rules.Units.Get).OrderBy(t => t.BarracksRequired).First();
-        // Siege engines come once there is an army to escort them: about one per six soldiers; a monk per eight.
+        // Siege engines come once there is an army to escort them: about one per four soldiers (towers do not fall
+        // to swords); a monk per eight.
         var army = _sim.Units.Where(u => u.FactionId == FactionId).ToList();
         bool wantRam = army.Count >= SoldiersPerRam && army.Count(u => u.Type.IsSiege) * SoldiersPerRam < army.Count;
         bool wantMonk = army.Count >= MonkEvery && army.Count(u => u.Type.IsHealer) * MonkEvery < army.Count;
         int siegeKinds = Math.Max(1, options.Count(t => t.IsSiege));
-        var weights = options.Select(t => t.IsSiege ? (wantRam ? 0.2f / siegeKinds : 0f)
+        var weights = options.Select(t => t.IsSiege ? (wantRam ? 0.35f / siegeKinds : 0f)
             : t.IsHealer ? (wantMonk ? 0.15f : 0f)
             : BaseWeight(t)).ToArray();
 
