@@ -61,8 +61,8 @@ ERR_UPGRADE_BUSY,Already being upgraded,Уже улучшается
 ERR_UPGRADE_MAX,Highest level already,Уже максимальный уровень
 HUD_UNDER_CONSTRUCTION,Under construction: {0:0}%,Строится: {0:0}%
 HUD_HEALTH,Health {0}/{1},Прочность {0}/{1}
-HUD_TRAINING,Training {0},Обучается: {0}
-HUD_QUEUED,(+{0} queued),(+{0} в очереди)
+HUD_TRAINING,Training: {0},Обучается: {0}
+HUD_QUEUED," · queued: {0}"," · в очереди: {0}"
 BUILD_OK,ok,можно строить
 BUILD_ERR_NO_UNITS,your troops must be nearby,рядом должны быть ваши войска
 BUILD_ERR_NEEDS_DEPOSIT,mines must stand on a gold deposit,шахта ставится только на месторождение

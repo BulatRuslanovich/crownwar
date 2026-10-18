@@ -82,9 +82,9 @@ public partial class Hud
         }
     }
 
-    private (int Count, int Active, string? First, int Text) _queueShown;
+    private (int Count, int Active, int Text) _queueShown;
 
-    /// <summary>Who is training (several side by side, a place per barracks) and how many wait.</summary>
+    /// <summary>How many are training (several side by side, a place per barracks) and how many wait: just the counts, one short line.</summary>
     private void UpdateQueue(Building building, bool own)
     {
         bool training = own && building.Queue.Count > 0;
@@ -94,13 +94,10 @@ public partial class Hud
             return;
         _progress.Value = building.Queue[0].Progress * 100f;
         int active = Mathf.Min(_match.Sim.TrainingSlots(building), building.Queue.Count);
-        if (!Changed(ref _queueShown, (building.Queue.Count, active, building.Queue[0].Type.Id, _textVersion)))
+        if (!Changed(ref _queueShown, (building.Queue.Count, active, _textVersion)))
             return;
-        // Grouped by kind ("Infantry ×3, Archer"), so the line stays short however many train at once.
-        string names = string.Join(", ", building.Queue.Take(active).GroupBy(item => item.Type)
-            .Select(g => g.Count() > 1 ? $"{Names.Of(g.Key)} ×{g.Count()}" : Names.Of(g.Key)));
-        _queue.Text = string.Format(Tr("HUD_TRAINING"), names) +
-            (building.Queue.Count > active ? "  " + string.Format(Tr("HUD_QUEUED"), building.Queue.Count - active) : "");
+        int waiting = building.Queue.Count - active;
+        _queue.Text = string.Format(Tr("HUD_TRAINING"), active) + (waiting > 0 ? string.Format(Tr("HUD_QUEUED"), waiting) : "");
     }
 
     /// <summary>
