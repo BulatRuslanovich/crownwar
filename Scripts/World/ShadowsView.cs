@@ -72,10 +72,13 @@ public partial class ShadowsView : CanvasGroup
             var (body, team, frame, size) = view.Picture;
             var region = new Rect2(frame * size.X, 0, size.X, size.Y);
             var rect = new Rect2(-size.X / 2f, -size.Y, size.X, size.Y);
-            // A footing of shade where the walls meet the ground, then the cast shadow.
-            float half = view.Building.Type.Size * SimConvert.TileSize / 2f;
-            _drawer.DrawSetTransform(view.Position + new Vector2(0, -4), 0f, new Vector2(1f, 0.3f));
-            _drawer.DrawCircle(Vector2.Zero, half + 4f, Colors.Black);
+            // A footing of shade where the walls meet the ground (a mine's rocks bring their own), then the cast shadow.
+            if (!view.Building.Type.IsMine)
+            {
+                float half = view.Building.Type.Size * SimConvert.TileSize / 2f;
+                _drawer.DrawSetTransform(view.Position + new Vector2(0, -4), 0f, new Vector2(1f, 0.3f));
+                _drawer.DrawCircle(Vector2.Zero, half + 4f, Colors.Black);
+            }
             _drawer.DrawSetTransformMatrix(new Transform2D(Vector2.Right, shear, view.Position));
             _drawer.DrawTextureRectRegion(body, rect, region, Colors.Black);
             _drawer.DrawTextureRectRegion(team, rect, region, Colors.Black);

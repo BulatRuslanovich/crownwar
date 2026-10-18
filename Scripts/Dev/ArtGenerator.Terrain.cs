@@ -237,7 +237,7 @@ public static partial class ArtGenerator
                     float local = (-0.55f * nx - 0.62f * ny + 0.56f * nz) * 2.4f - 0.5f;
                     float gx = (x + 0.5f - cx) / r, gy = (y + 0.5f - cy) / r;
                     float global = -0.9f * gx - 1.1f * gy;
-                    float leaves = (Hash(x / 2, y / 2, salt) % 5 - 2) * 0.22f;
+                    float leaves = (Hash(x / 2, y / 2, salt) % 5 - 2) * 0.1f;
                     float light = local * 0.55f + global * 0.6f + leaves - 0.15f;
                     if (d > 0.72f && nx + ny > 0.2f)
                         light = Mathf.Min(light, -1.4f); // where the clump tucks under its neighbour
@@ -246,15 +246,19 @@ public static partial class ArtGenerator
         }
     }
 
-    /// <summary>A fir: tiers of drooping boughs, each lit on the left, snow along their tops in the winter.</summary>
-    private static void Fir(PixelCanvas c, float cx, float top, float height, int salt, int sway, Func<int, int, bool>? clip = null)
+    /// <summary>
+    /// A fir: tiers of drooping boughs, each lit on the left and shadowed along its hem by the tier below; in the winter
+    /// an unbroken cap of snow lies along each tier's top, its lower edge gently wavy. The widest tier reaches no more
+    /// than <paramref name="maxHalf"/> to either side, so a fir in a wood keeps to its own room.
+    /// </summary>
+    private static void Fir(PixelCanvas c, float cx, float top, float height, int salt, int sway, Func<int, int, bool>? clip = null, float maxHalf = float.MaxValue)
     {
         var leaf = Land.Leaf;
         int tiers = 4;
         for (int t = 0; t < tiers; t++)
         {
             float ty = top + t * height / (tiers + 1);
-            float half = 3.5f + t * height / 6.5f;
+            float half = (3.5f + t * height / 6.5f) * Mathf.Min(1f, maxHalf / (3.5f + (tiers - 1) * height / 6.5f));
             for (int y = (int)ty; y < (int)(ty + height / 3f); y++)
             {
                 float k = (y - ty) / (height / 3f);
@@ -267,11 +271,11 @@ public static partial class ArtGenerator
                     float across = (x + 0.5f - (cx - w)) / (2f * w);
                     if (across < 0f || across > 1f)
                         continue;
-                    bool snow = Land.Conifers && k < 0.3f && Hash(x, t, salt) % 3 != 0;
-                    if (snow)
-                        c.Shade(px, y, Land.Cap, across < 0.5f ? 0.8f : -0.4f, solid: false);
+                    float snowLine = 0.3f + 0.1f * Mathf.Sin(x * 1.1f + t * 2.3f + salt);
+                    if (Land.Conifers && k < snowLine)
+                        c.Px(px, y, across < 0.6f ? Land.Cap.Light : Land.Cap.Shade, solid: false);
                     else
-                        c.Shade(px, y, leaf, 1f - 3f * Mathf.Abs(across - 0.3f) - k * 0.6f + (k > 0.85f ? -0.8f : 0f), solid: false);
+                        c.Shade(px, y, leaf, 0.9f - 2.6f * Mathf.Abs(across - 0.3f) - k * 0.5f + (k > 0.85f ? -0.6f : 0f), solid: false);
                 }
             }
         }
@@ -452,7 +456,7 @@ public static partial class ArtGenerator
         foreach (var k in crowns)
         {
             if (Land.Conifers)
-                Fir(c, k.X, k.Y - k.R * 1.3f, k.R * 2.9f, k.Hash, sway, InTile);
+                Fir(c, k.X, k.Y - k.R * 1.1f, k.R * 2.5f, k.Hash, sway, InTile, maxHalf: k.R - 0.5f);
             else if (Land.Palms)
                 Palm(c, k.X, k.Y + k.R, k.R * 1.6f, k.Hash, sway, InTile);
             else

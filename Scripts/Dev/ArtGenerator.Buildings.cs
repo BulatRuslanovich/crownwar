@@ -9,7 +9,7 @@ namespace Warcrown.Dev;
 /// soldiers' three-quarter view: the fronts of walls and towers face the viewer and the tops (wall-walks, platforms,
 /// roofs) are seen from above, foreshortened by half, so a building stands on the front part of its footprint and rises
 /// over the rest. The look is grim and weathered: dark, cool stone in uneven courses, grimy and mossy at the foot, dark
-/// timber and iron, roofs of slate stained in the owner's colours with a grey slate here and there, and the full
+/// timber and iron, roofs of slate stained in the owner's colours, and the full
 /// faction colour kept for banners and flags.
 /// </summary>
 public static partial class ArtGenerator
@@ -37,7 +37,6 @@ public static partial class ArtGenerator
     private static readonly Ramp DoorR = Ramp.Of(new Color("4e3320"), mood: BuildingMood);
     private static readonly Ramp RockR = Ramp.Of(new Color("6c655f"), mood: BuildingMood);
     private static readonly Ramp OreR = Ramp.Of(new Color("e9b93c"), mood: BuildingMood);
-    private static readonly Ramp QuartzR = Ramp.Of(new Color("d8d2c4"), 0.8f, mood: BuildingMood);
 
     /// <summary>
     /// A building's sheet: <see cref="ArtLayout.BuildingFrames"/> frames of <paramref name="w"/>×<paramref name="h"/>
@@ -82,21 +81,18 @@ public static partial class ArtGenerator
         if (joint)
             return -1.25f;
         int h = Hash(block, course, salt + 2);
-        return (h % 7 - 3) * 0.11f + (h % 11 == 0 ? -0.45f : 0f) + (row == 3 ? 0.45f : row == 1 ? -0.2f : 0f)
+        return (h % 5 - 2) * 0.07f + (h % 17 == 0 ? -0.3f : 0f) + (row == 3 ? 0.4f : row == 1 ? -0.15f : 0f)
                + (along == start + 1 ? 0.2f : 0f);
     }
 
     /// <summary>
-    /// Weathering of a wall face at (x, y), <paramref name="up"/> px above the ground: grime darkening the last courses,
-    /// streaks run down by the rain. Returns the light to add; <paramref name="moss"/> says whether moss grows there.
+    /// Weathering of a wall face at (x, y), <paramref name="up"/> px above the ground: grime darkening the last courses.
+    /// Returns the light to add; <paramref name="moss"/> says whether moss grows there.
     /// </summary>
     private static float Weathering(int x, int y, int up, int salt, out bool moss)
     {
-        moss = up < 2 + Hash(x / 3, salt, 7) % 4 && Hash(x, y, salt + 5) % 3 != 0;
-        float grime = -Mathf.Max(0f, 7 - up) * 0.1f;
-        if (Hash(x, salt, 9) % 13 == 0 && up < Hash(x, salt, 10) % 40)
-            grime -= 0.35f; // a streak
-        return grime;
+        moss = up < 1 + Hash(x / 4, salt, 7) % 3 && Hash(x / 2, y, salt + 5) % 3 != 0;
+        return -Mathf.Max(0f, 6 - up) * 0.1f;
     }
 
     /// <summary>A flat face of masonry from (x, y), <paramref name="w"/>×<paramref name="h"/>, its foot on the ground (grimy, mossy) unless <paramref name="grime"/> is false.</summary>
@@ -248,7 +244,7 @@ public static partial class ArtGenerator
     /// <summary>
     /// A cone roof seen from the front and above: the eaves an ellipse of radius <paramref name="r"/> centred at
     /// (cx, eaves), the apex <paramref name="tall"/> above. Rows of slates follow the eaves round, lit like a cylinder
-    /// from the left; in the owner's colours stained dark, with a grey slate here and there, or in
+    /// from the left; in the owner's colours stained dark, or in
     /// <paramref name="material"/>; the eaves' edge dark, or gilded.
     /// </summary>
     private static void ConeRoof(PixelCanvas c, float cx, float eaves, float r, float tall, Ramp? material = null, bool gilded = false, int salt = 0)
@@ -280,7 +276,7 @@ public static partial class ArtGenerator
                 float inRow = rows - row;
                 int tab = (int)Mathf.Floor((Mathf.Asin(sin) * r * t + row % 2 * 1.5f) / 3f);
                 int h = Hash(tab, row, salt + 31);
-                float light = CylinderShade(sin) + 0.3f + (inRow > 0.72f ? -0.8f : inRow < 0.3f ? 0.25f : 0f) + (h % 3 - 1) * 0.15f;
+                float light = CylinderShade(sin) + 0.3f + (inRow > 0.72f ? -0.8f : inRow < 0.3f ? 0.25f : 0f) + (h % 3 - 1) * 0.07f;
                 bool eave = y >= yBottom - 1;
                 if (eave && gilded)
                     c.Shade(x, y, GoldR, light);
@@ -288,8 +284,6 @@ public static partial class ArtGenerator
                     c.Shade(x, y, m, eave ? -1.4f : light);
                 else if (eave)
                     c.Shade(x, y, SlateR, -1.2f);
-                else if (h % 9 == 0)
-                    c.Shade(x, y, SlateR, light - 0.3f);
                 else
                     c.TeamLit(x, y, light - RoofStain);
             }
@@ -301,7 +295,7 @@ public static partial class ArtGenerator
     /// <summary>
     /// One plane of a pitched roof, its eaves and ridge running across: from x0 to x1, between <paramref name="top"/>
     /// and <paramref name="bottom"/>. Rows of slates 3 px deep, staggered, lit by <paramref name="light"/>; stained in
-    /// the owner's colours with a grey slate here and there, the lower edge dark.
+    /// the owner's colours, the lower edge dark.
     /// </summary>
     private static void SlateRoof(PixelCanvas c, int x0, int x1, int top, int bottom, float light, int salt)
     {
@@ -313,11 +307,9 @@ public static partial class ArtGenerator
                 int tab = (x + row % 2 * 2) / 4;
                 int h = Hash(tab, row, salt + 70);
                 float l = light + (inRow == 0 ? 0.35f : inRow == 2 ? -0.7f : 0f) + ((x + row % 2 * 2) % 4 == 3 ? -0.4f : 0f)
-                          + (h % 3 - 1) * 0.15f - (x >= x1 - 2 ? 0.4f : 0f) + (x <= x0 + 1 ? 0.3f : 0f);
+                          + (h % 3 - 1) * 0.07f - (x >= x1 - 2 ? 0.4f : 0f) + (x <= x0 + 1 ? 0.3f : 0f);
                 if (y >= bottom - 1)
                     c.Shade(x, y, SlateR, -1.3f);
-                else if (h % 10 == 0)
-                    c.Shade(x, y, SlateR, l);
                 else
                     c.TeamLit(x, y, l - RoofStain);
             }
@@ -891,85 +883,70 @@ public static partial class ArtGenerator
     });
 
     /// <summary>
-    /// 64×80 frames, bottom-centre origin; footprint 2×2 tiles on a gold deposit. A hill of rock over the shaft with a
-    /// timbered tunnel mouth, a headframe whose wheel turns through the frames, a cart of gold glinting on its rails
-    /// (the view holds the first frame while the mine stands idle). Level 2: a tunnel framed in stone, a lantern, a
-    /// braced headframe, a second cart; level 3: a steel headframe with a gilded wheel, a retaining wall, a heap of gold.
+    /// 64×80 frames, bottom-centre origin; footprint 2×2 tiles on a gold deposit. The mine is dug into the deposit's own
+    /// outcrop (<see cref="GoldOutcrop"/>, the same rocks in the same places, so the vein visibly becomes the mine): a
+    /// timbered adit cut into its face with rails running out of it, a headframe on the rock over the shaft whose wheel
+    /// turns through the frames, a cart of gold (the view holds the first frame while the mine stands idle). The game
+    /// stops drawing the deposit under a finished mine. Level 2: the adit framed in stone, a lantern, a braced
+    /// headframe, a second cart; level 3: a steel headframe with a gilded wheel and a heap of gold at the adit.
     /// </summary>
     private static PixelCanvas Mine(int tier = 1) => Sheet(64, 80, (c, frame) =>
     {
+        const int foot = 16; // the footprint's top edge in the frame
         var glint = new Color("fff6c0");
-        Flag(c, 6, 0, frame, 11, pole: 24);
-        // The headframe over the shaft at the top of the hill: timber, then steel.
+        GoldOutcrop(c, foot, mined: true);
+        // The headframe on the big rock, over the shaft: timber, then steel. Two splayed legs and a crossbeam.
         var post = tier >= 3 ? SteelR : WoodR;
-        c.Stroke(14, 14, 18, 44, 3f, post);
-        c.Stroke(50, 14, 46, 44, 3f, tier >= 3 ? IronR : DarkWoodR);
-        c.Stroke(11, 13, 53, 13, 3f, tier >= 3 ? SteelR : DarkWoodR, 0.4f);
-        c.Stroke(16, 22, 30, 34, 2f, post, -0.2f);
-        c.Stroke(48, 22, 34, 34, 2f, post, -0.6f);
+        var far = tier >= 3 ? IronR : DarkWoodR;
+        c.Ball(32, foot + 18, 4f, 1.6f, GlassR, -1.6f); // the shaft's mouth
+        c.Stroke(32, 15, 32, foot + 18, 1f, RopeR, -0.3f);
+        c.Stroke(21, foot + 21, 28, 11, 2.6f, post);
+        c.Stroke(43, foot + 21, 36, 11, 2.6f, far);
+        c.Stroke(23, 11, 41, 11, 2.6f, far, 0.4f);
         if (tier >= 2)
-            c.Stroke(16, 38, 48, 24, 2f, post, -0.3f); // cross brace
-        // The hill: rock heaped up, lit from the upper left, in rough facets, stones lying on it.
-        for (int y = 36; y < 78; y++)
-        {
-            float k = (y - 36) / 42f;
-            float half = 9f + 22f * Mathf.Sqrt(k);
-            for (int x = (int)(32 - half); x < (int)(32 + half); x++)
-            {
-                float nx = (x + 0.5f - 32f) / half;
-                float facet = (Hash((x + 64) / 5, (y + 64) / 4, 21) % 5 - 2) * 0.22f;
-                float light = 0.9f - 1.6f * (nx + 0.35f) * (nx > -0.35f ? 1f : -0.6f) - k * 0.6f + facet;
-                if (k > 0.9f)
-                    light -= 0.6f; // in its own shadow at the foot
-                c.Shade(x, y, RockR, light);
-            }
-        }
-        foreach (var (x, y, r) in new[] { (12f, 66f, 3f), (54f, 70f, 2.5f), (20f, 52f, 2f), (46f, 50f, 2.2f) })
-            c.Ball(x, y, r * 1.3f, r, RockR, 0.3f);
-        // The shaft's mouth on the hilltop, the rope going down into it.
-        c.Ball(32, 40, 7f, 2.5f, GlassR, -1.5f);
-        c.Stroke(32, 26, 32, 40, 1f, RopeR, -0.3f);
-        // The wheel turning on the headframe: iron, gilded at the top level.
+            c.Stroke(24, foot + 14, 40, foot + 6, 1.6f, post, -0.3f); // a brace
         var wheel = tier >= 3 ? GoldR : IronR;
-        c.Ball(32, 20, 6.5f, 6.5f, wheel, 0.2f);
-        c.Ball(32, 20, 4.5f, 4.5f, tier >= 3 ? GoldR : DarkWoodR, -0.5f);
+        c.Ball(32, 15, 4.6f, 4.6f, wheel, 0.2f);
+        c.Ball(32, 15, 3f, 3f, tier >= 3 ? GoldR : DarkWoodR, -0.6f);
         float angle = frame * Mathf.Pi / 4f;
         for (int s = 0; s < 2; s++)
         {
             float a = angle + s * Mathf.Pi / 2f;
-            c.Stroke(32 - Mathf.Cos(a) * 4.5f, 20 - Mathf.Sin(a) * 4.5f, 32 + Mathf.Cos(a) * 4.5f, 20 + Mathf.Sin(a) * 4.5f, 1.2f, tier >= 3 ? GoldR : WoodR, 0.5f);
+            c.Stroke(32 - Mathf.Cos(a) * 3f, 15 - Mathf.Sin(a) * 3f, 32 + Mathf.Cos(a) * 3f, 15 + Mathf.Sin(a) * 3f, 1f, tier >= 3 ? GoldR : WoodR, 0.5f);
         }
-        c.Ball(32, 20, 1.4f, 1.4f, SteelR, 0.8f);
-        if (tier >= 3)
-            Ashlar(c, 4, 70, 56, 8, WallR, salt: 14); // a retaining wall
-        // The tunnel: timbered, then framed in stone; lamplight inside at night.
-        for (int y = 56; y < 78; y++)
-            for (int x = 23; x < 41; x++)
-                c.Shade(x, y, GlassR, y < 59 ? -1.8f : -1.2f + (x - 23) * 0.03f);
-        c.Lit(25, 60, 14, 12, new Color("b8641e"));
+        c.Ball(32, 15, 1.1f, 1.1f, SteelR, 0.8f);
+        Flag(c, 50, 8, frame, 10, pole: 22);
+        // The adit cut into the front rock: a dark mouth, a frame of timber (then stone) round it, lamplight at night.
+        const int left = 27, right = 38, top = foot + 35, bottom = foot + 49;
+        for (int y = top; y < bottom; y++)
+            for (int x = left; x < right; x++)
+                c.Shade(x, y, GlassR, y < top + 2 ? -2f : -1.3f);
+        c.Lit(left + 1, top + 3, right - left - 2, bottom - top - 4, new Color("b8641e"));
         var frameR = tier >= 2 ? WallLightR : WoodR;
-        c.Stroke(22, 55, 22, 77, 3f, frameR);
-        c.Stroke(41, 55, 41, 77, 3f, frameR, -0.6f);
-        c.Stroke(20, 54, 43, 54, 3f, frameR, 0.4f);
-        // Rails out of the tunnel.
-        c.Stroke(26, 78, 38, 66, 1f, IronR, 0.3f);
-        c.Stroke(31, 78, 41, 68, 1f, IronR, -0.2f);
+        c.Stroke(left - 1, top, left - 1, bottom, 2.4f, frameR);
+        c.Stroke(right, top, right, bottom, 2.4f, frameR, -0.7f);
+        c.Stroke(left - 3, top - 1, right + 2, top - 1, 2.6f, tier >= 3 ? GoldR : frameR, 0.4f);
+        // Rails out of the adit, sleepers across them.
+        for (int y = bottom - 4; y < 80; y += 3)
+            c.Rect(left + 1, y, right - left - 2, 1, DarkWoodR.Shade);
+        c.Stroke(left + 2, bottom - 6, left + 2, 79, 1f, IronR, 0.6f);
+        c.Stroke(right - 3, bottom - 6, right - 3, 79, 1f, IronR, 0.2f);
         if (tier >= 2)
         {
-            c.Stroke(16, 58, 16, 64, 1f, IronR);
-            c.Ball(16, 60, 1.8f, 2.2f, Ramp.Of(new Color("ffd25a"), mood: FigureMood), 0.8f); // a lantern by the entrance
-            c.Lit(13, 57, 7, 7, WindowGlow);
+            c.Stroke(left - 5, top + 1, left - 5, top + 6, 1f, IronR);
+            c.Ball(left - 5, top + 7, 1.6f, 2f, Ramp.Of(new Color("ffd25a"), mood: FigureMood), 0.8f); // a lantern by the adit
+            c.Lit(left - 8, top + 4, 7, 7, WindowGlow);
         }
-        // Carts full of gold: one, then two, then a heap beside them.
-        Cart(c, 44, 64, frame, glint, 0);
+        // Carts of gold beside the rails: one, then two; at the top level a heap of gold at the adit's mouth.
+        Cart(c, 44, 63, frame, glint, 0);
         if (tier >= 2)
-            Cart(c, 4, 64, frame, glint, 2);
+            Cart(c, 3, 63, frame, glint, 2);
         if (tier >= 3)
         {
-            c.Ball(32f, 72f, 8f, 3.5f, GoldR, 0.4f);
-            c.Ball(30f, 70f, 4f, 2.5f, GoldR, 1f);
+            c.Ball(32f, 75f, 7f, 3f, GoldR, 0.4f);
+            c.Ball(31f, 73.5f, 3.5f, 2f, GoldR, 1.1f);
             if (frame == 1)
-                c.Px(29, 68, glint);
+                c.Px(30, 72, glint);
         }
     });
 
@@ -987,41 +964,46 @@ public static partial class ArtGenerator
     }
 
     /// <summary>
-    /// 64×64 ore patch drawn on the 2×2 deposit footprint (top-left origin): a broken outcrop of rock in rough facets,
-    /// veins of gold and quartz across them, nuggets and grit about.
+    /// 64×64 ore patch drawn on the 2×2 deposit footprint (top-left origin): one outcrop of rock (<see cref="GoldOutcrop"/>)
+    /// with gold veins across it and nuggets at its foot.
     /// </summary>
     private static PixelCanvas Deposit()
     {
         var c = new PixelCanvas(64, 64);
-        var rocks = new (float X, float Y, float W, float H, int Seed)[]
-        {
-            (40, 17, 11, 10, 1), (17, 20, 10, 9, 2), (8, 33, 5, 5, 3), (45, 38, 9, 9, 4), (22, 42, 13, 12, 5), (35, 55, 7, 5, 6), (57, 54, 4, 3, 7),
-        };
-        // Grit and loose nuggets under the rocks.
-        for (int k = 0; k < 40; k++)
-        {
-            int x = 4 + Hash(k, 1, 33) % 56, y = 6 + Hash(1, k, 34) % 54;
-            c.Px(x, y, k % 5 == 0 ? OreR.Light : RockR.Shade, solid: false);
-        }
-        foreach (var (x, y, w, h, seed) in rocks)
-        {
-            c.GroundShadow(x + 3, y + h * 0.75f, w * 1.15f, h * 0.45f, 0.35f);
-            Outcrop(c, x, y, w, h, seed);
-        }
-        foreach (var (x, y) in new[] { (31, 31), (35, 33), (12, 50), (55, 28), (44, 52), (28, 12) })
-        {
-            c.Ball(x, y, 1.7f, 1.4f, OreR, 0.9f);
-            c.Px(x - 1, y - 1, new Color("fff6c0"));
-        }
+        GoldOutcrop(c, 0, mined: false);
         c.SelOut(SilhouetteRim);
         return c;
     }
 
     /// <summary>
-    /// A rock of the outcrop at (cx, cy): roughly round, broken into flat facets — a broad top lit by the sun, faces
-    /// turning into shade to the right and below — crossed by a vein of gold and a streak of quartz.
+    /// The outcrop of a gold deposit on its 2×2 footprint, whose top edge is <paramref name="top"/> px down the canvas:
+    /// a big rock at the back, two at the sides and a broad face in front, gathered into one mound on a patch of
+    /// shadow, gold veins across them. The mine (<paramref name="mined"/>) is dug into the same rocks; its nuggets are
+    /// carted off.
     /// </summary>
-    private static void Outcrop(PixelCanvas c, float cx, float cy, float w, float h, int seed)
+    private static void GoldOutcrop(PixelCanvas c, int top, bool mined)
+    {
+        c.GroundShadow(34, top + 44, 28f, 9f, 0.3f);
+        var rocks = new (float X, float Y, float W, float H, int Seed)[]
+        {
+            (32, 22, 14, 11, 1), (15, 34, 10, 9, 2), (49, 33, 10, 9, 4), (32, 40, 13, 11, 5), (8, 51, 3, 2, 6), (57, 50, 3, 2, 7),
+        };
+        foreach (var (x, y, w, h, seed) in rocks)
+            Outcrop(c, x, top + y, w, h, seed, veins: w > 5);
+        if (mined)
+            return;
+        foreach (var (x, y) in new[] { (18, 50), (43, 53), (29, 56) })
+        {
+            c.Ball(x, top + y, 2.2f, 1.6f, OreR, 0.8f);
+            c.Px(x - 1, top + y - 1, new Color("fff6c0"));
+        }
+    }
+
+    /// <summary>
+    /// A rock of the outcrop at (cx, cy): roughly round, broken into flat facets — a broad top lit by the sun, faces
+    /// turning into shade to the right and below — crossed by a vein of gold.
+    /// </summary>
+    private static void Outcrop(PixelCanvas c, float cx, float cy, float w, float h, int seed, bool veins = true)
     {
         float turn = Hash(seed, 2, 35) % 100 / 100f * Mathf.Tau;
         for (int y = (int)Mathf.Floor(cy - h); y <= (int)Mathf.Ceil(cy + h); y++)
@@ -1044,22 +1026,20 @@ public static partial class ArtGenerator
                     float facing = (sector + 0.5f) * Mathf.Tau / 7f - turn;
                     light = -Mathf.Cos(facing) * 0.9f - Mathf.Sin(facing) * 1.2f - 0.2f;
                 }
-                light += (Hash(x, y, seed + 38) % 5 - 2) * 0.1f;
                 c.Shade(x, y, RockR, light);
             }
-        // A vein of gold and a streak of quartz across the face.
-        for (int v = 0; v < (seed % 2 == 0 ? 2 : 1); v++)
+        if (!veins)
+            return;
+        // A vein of gold zigzagging down across the face: a lit upper edge over a darker lower one, so it reads as a
+        // seam in the rock rather than specks; it fades into the rock's shadow on the right.
+        float vy = cy - h * 0.15f, slope = (seed % 2 == 0 ? 0.35f : -0.3f);
+        for (int i = -(int)(w * 0.8f); i <= (int)(w * 0.8f); i++)
         {
-            var vein = v == 0 ? OreR : QuartzR;
-            float vy = cy - h * 0.2f + v * h * 0.45f, slope = (Hash(seed, v, 39) % 5 - 2) * 0.15f;
-            for (int i = -(int)w; i <= (int)w; i++)
-            {
-                if (Hash(i, seed, v + 40) % 6 == 0)
-                    continue; // the vein breaks off now and then
-                int px = (int)cx + i, py = (int)Mathf.Round(vy + i * slope + (i / 3 % 2 == 0 ? 0f : 1f));
-                if (c.IsSolid(px, py) && !c.IsTeam(px, py))
-                    c.Shade(px, py, vein, (i % 3 == 0 ? 1.2f : 0.3f) - Mathf.Max(0f, i) / w);
-            }
+            int px = (int)cx + i, py = (int)Mathf.Round(vy + i * slope + (Mathf.Abs(i) / 3 % 2 == 0 ? 0f : 1f));
+            float light = 1.3f - Mathf.Max(0f, i) / w * 1.6f;
+            foreach (var (dy, d) in new[] { (0, 0f), (1, -1f) })
+                if (Mathf.Pow((px + 0.5f - cx) / w, 2) + Mathf.Pow((py + dy + 0.5f - cy) / h, 2) < 0.7f)
+                    c.Shade(px, py + dy, OreR, light + d);
         }
     }
 }
